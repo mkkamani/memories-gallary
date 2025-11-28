@@ -6,25 +6,29 @@ import PrimaryButton from '@/Components/PrimaryButton.vue';
 import TextInput from '@/Components/TextInput.vue';
 import { Head, useForm } from '@inertiajs/vue3';
 
+const props = defineProps({
+    album: Object,
+});
+
 const form = useForm({
-    title: '',
-    description: '',
-    type: 'festival',
-    event_date: '',
-    is_public: false,
+    title: props.album.title,
+    description: props.album.description,
+    type: props.album.type,
+    event_date: props.album.event_date,
+    is_public: props.album.is_public,
 });
 
 const submit = () => {
-    form.post(route('albums.store'));
+    form.put(route('albums.update', props.album.id));
 };
 </script>
 
 <template>
-    <Head title="Create Album" />
+    <Head title="Edit Album" />
 
     <AuthenticatedLayout>
         <template #header>
-            <h2 class="font-semibold text-xl text-gray-800 dark:text-gray-200 leading-tight">Create Album</h2>
+            <h2 class="font-semibold text-xl text-gray-800 dark:text-gray-200 leading-tight">Edit Album</h2>
         </template>
 
         <div class="py-12">
@@ -64,7 +68,7 @@ const submit = () => {
 
                         <div class="flex items-center justify-end">
                             <PrimaryButton class="ml-4 bg-brand-red hover:bg-brand-red-hover" :class="{ 'opacity-25': form.processing }" :disabled="form.processing">
-                                Create Album
+                                Update Album
                             </PrimaryButton>
                         </div>
                     </form>

@@ -2,6 +2,7 @@
 import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout.vue';
 import { Head, Link, router } from '@inertiajs/vue3';
 import { ref, watch } from 'vue';
+import Modal from '@/Components/Modal.vue';
 import debounce from 'lodash/debounce';
 
 const props = defineProps({
@@ -10,10 +11,50 @@ const props = defineProps({
 });
 
 const search = ref(props.filters.search || '');
+const showPreviewModal = ref(false);
+const previewMedia = ref(null);
+const currentIndex = ref(0);
 
 watch(search, debounce((value) => {
     router.get(route('dashboard'), { search: value }, { preserveState: true, replace: true });
 }, 300));
+
+const openPreview = (media) => {
+    const index = props.media.data.findIndex(m => m.id === media.id);
+    currentIndex.value = index;
+    previewMedia.value = media;
+    showPreviewModal.value = true;
+};
+
+const closePreview = () => {
+    showPreviewModal.value = false;
+    previewMedia.value = null;
+};
+
+const goToNext = () => {
+    if (currentIndex.value < props.media.data.length - 1) {
+        currentIndex.value++;
+        previewMedia.value = props.media.data[currentIndex.value];
+    }
+};
+
+const goToPrevious = () => {
+    if (currentIndex.value > 0) {
+        currentIndex.value--;
+        previewMedia.value = props.media.data[currentIndex.value];
+    }
+};
+
+const downloadMedia = () => {
+    if (previewMedia.value) {
+        const link = document.createElement('a');
+        link.href = '/storage/' + previewMedia.value.file_path;
+        link.download = previewMedia.value.file_name;
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+    }
+};
 </script>
 
 <template>
@@ -58,15 +99,14 @@ watch(search, debounce((value) => {
                                         </svg>
                                         {{ new Date(item.created_at).toLocaleDateString() }}
                                     </p>
-                                    <a :href="'/storage/' + item.file_path" 
-                                        target="_blank" 
+                                    <button @click.stop="openPreview(item)" 
                                         class="mt-2 inline-flex items-center justify-center gap-1 px-3 py-1.5 bg-brand-red hover:bg-brand-red-hover rounded-lg text-xs font-semibold transition-all duration-300 hover:scale-105">
                                         <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"></path>
                                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"></path>
                                         </svg>
                                         View
-                                    </a>
+                                    </button>
                                 </div>
                             </div>
                         </div>
@@ -82,5 +122,68 @@ watch(search, debounce((value) => {
                 </div>
             </div>
         </div>
+
+        <!-- Media Preview Modal -->
+        <Modal :show="showPreviewModal" @close="closePreview" max-width="6xl">
+            <div class="bg-black p-4 relative">
+                <div class="flex justify-between items-center mb-4">
+                    <h3 class="text-lg font-semibold text-white">{{ previewMedia?.file_name }}</h3>
+                    <div class="flex items-center gap-2">
+                        <button @click="downloadMedia" class="p-2 text-gray-400 hover:text-white transition" title="Download">
+                            <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"></path>
+                            </svg>
+                        </button>
+                        <button @click="closePreview" class="p-2 text-gray-400 hover:text-white transition" title="Close">
+                            <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path>
+                            </svg>
+                        </button>
+                    </div>
+                </div>
+                
+                <div class="relative flex items-center justify-center bg-gray-900 rounded-lg overflow-hidden" style="max-height: 80vh;">
+                    <!-- Previous Button -->
+                    <button 
+                        v-if="currentIndex > 0"
+                        @click="goToPrevious" 
+                        class="absolute left-4 z-10 p-3 bg-black/50 hover:bg-black/70 text-white rounded-full transition-all duration-200 hover:scale-110"
+                        title="Previous">
+                        <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7"></path>
+                        </svg>
+                    </button>
+
+                    <!-- Media Content -->
+                    <img v-if="previewMedia?.file_type === 'image'" 
+                        :src="'/storage/' + previewMedia?.file_path" 
+                        :alt="previewMedia?.file_name"
+                        class="max-w-full max-h-[80vh] object-contain" />
+                    
+                    <video v-else-if="previewMedia?.file_type === 'video'" 
+                        :src="'/storage/' + previewMedia?.file_path" 
+                        controls 
+                        class="max-w-full max-h-[80vh]">
+                    </video>
+
+                    <!-- Next Button -->
+                    <button 
+                        v-if="currentIndex < media.data.length - 1"
+                        @click="goToNext" 
+                        class="absolute right-4 z-10 p-3 bg-black/50 hover:bg-black/70 text-white rounded-full transition-all duration-200 hover:scale-110"
+                        title="Next">
+                        <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"></path>
+                        </svg>
+                    </button>
+                </div>
+
+                <div class="mt-4 flex justify-between items-center text-sm text-gray-400">
+                    <span>Uploaded by {{ previewMedia?.user?.name }}</span>
+                    <span>{{ currentIndex + 1 }} / {{ media.data.length }}</span>
+                    <span>{{ previewMedia?.created_at ? new Date(previewMedia.created_at).toLocaleDateString() : '' }}</span>
+                </div>
+            </div>
+        </Modal>
     </AuthenticatedLayout>
 </template>

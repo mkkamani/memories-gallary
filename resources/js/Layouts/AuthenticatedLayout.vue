@@ -24,7 +24,7 @@ const showingNavigationDropdown = ref(false);
                             <div class="flex shrink-0 items-center">
                                 <Link :href="route('dashboard')">
                                     <ApplicationLogo
-                                        class="block h-9 w-auto fill-current text-gray-800 dark:text-gray-200"
+                                        class="block text-xl text-gray-800 dark:text-gray-200"
                                     />
                                 </Link>
                             </div>
@@ -50,6 +50,13 @@ const showingNavigationDropdown = ref(false);
                                     :active="route().current('recycle-bin.*')"
                                 >
                                     Recycle Bin
+                                </NavLink>
+                                <NavLink
+                                    v-if="$page.props.auth.user.role === 'admin'"
+                                    :href="route('users.index')"
+                                    :active="route().current('users.*')"
+                                >
+                                    Users
                                 </NavLink>
                             </div>
                         </div>
@@ -169,6 +176,13 @@ const showingNavigationDropdown = ref(false);
                             :active="route().current('recycle-bin.*')"
                         >
                             Recycle Bin
+                        </ResponsiveNavLink>
+                        <ResponsiveNavLink
+                            v-if="$page.props.auth.user.role === 'admin'"
+                            :href="route('users.index')"
+                            :active="route().current('users.*')"
+                        >
+                            Users
                         </ResponsiveNavLink>
                     </div>
 

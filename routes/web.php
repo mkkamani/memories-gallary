@@ -30,6 +30,8 @@ Route::middleware(['auth', 'verified'])->group(function () {
     Route::delete('/recycle-bin/media/{id}', [RecycleBinController::class, 'forceDeleteMedia'])->name('recycle-bin.force-delete-media');
     Route::post('/recycle-bin/albums/{id}/restore', [RecycleBinController::class, 'restoreAlbum'])->name('recycle-bin.restore-album');
     Route::delete('/recycle-bin/albums/{id}', [RecycleBinController::class, 'forceDeleteAlbum'])->name('recycle-bin.force-delete-album');
+    Route::get('/albums/system/{type}', [AlbumController::class, 'showSystemAlbum'])->name('albums.system');
+    Route::resource('users', \App\Http\Controllers\UserController::class);
 });
 
 Route::middleware('auth')->group(function () {

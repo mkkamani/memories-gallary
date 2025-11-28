@@ -1,5 +1,6 @@
 <script setup>
 import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout.vue';
+import Modal from '@/Components/Modal.vue';
 import { Head, useForm, router } from '@inertiajs/vue3';
 import { ref, computed } from 'vue';
 
@@ -14,6 +15,9 @@ const uploadForm = useForm({
 });
 
 const selectedMedia = ref([]);
+const showPreviewModal = ref(false);
+const previewMedia = ref(null);
+const currentIndex = ref(0);
 
 const toggleSelection = (id) => {
     if (selectedMedia.value.includes(id)) {
@@ -81,6 +85,43 @@ const handleUpload = (e) => {
         preserveScroll: true,
     });
 };
+
+const openPreview = (media) => {
+    const index = props.album.media.findIndex(m => m.id === media.id);
+    currentIndex.value = index;
+    previewMedia.value = media;
+    showPreviewModal.value = true;
+};
+
+const closePreview = () => {
+    showPreviewModal.value = false;
+    previewMedia.value = null;
+};
+
+const goToNext = () => {
+    if (currentIndex.value < props.album.media.length - 1) {
+        currentIndex.value++;
+        previewMedia.value = props.album.media[currentIndex.value];
+    }
+};
+
+const goToPrevious = () => {
+    if (currentIndex.value > 0) {
+        currentIndex.value--;
+        previewMedia.value = props.album.media[currentIndex.value];
+    }
+};
+
+const downloadMedia = () => {
+    if (previewMedia.value) {
+        const link = document.createElement('a');
+        link.href = '/storage/' + previewMedia.value.file_path;
+        link.download = previewMedia.value.file_name;
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+    }
+};
 </script>
 
 <template>
@@ -100,11 +141,13 @@ const handleUpload = (e) => {
                         <button @click="bulkDelete" class="px-3 py-1 bg-red-600 hover:bg-red-700 text-white text-sm rounded transition">Delete</button>
                     </div>
 
-                    <input type="file" multiple class="hidden" ref="fileInput" @change="handleUpload" accept="image/*,video/*" />
-                    <button @click="triggerUpload" class="px-4 py-2 bg-brand-red hover:bg-brand-red-hover text-white rounded-md transition flex items-center gap-2" :disabled="uploadForm.processing">
-                        <span v-if="uploadForm.processing">Uploading...</span>
-                        <span v-else>Upload Media</span>
-                    </button>
+                    <div v-if="!album.is_system">
+                        <input type="file" multiple class="hidden" ref="fileInput" @change="handleUpload" accept="image/*,video/*" />
+                        <button @click="triggerUpload" class="px-4 py-2 bg-brand-red hover:bg-brand-red-hover text-white rounded-md transition flex items-center gap-2" :disabled="uploadForm.processing">
+                            <span v-if="uploadForm.processing">Uploading...</span>
+                            <span v-else>Upload Media</span>
+                        </button>
+                    </div>
                 </div>
             </div>
         </template>
@@ -165,16 +208,14 @@ const handleUpload = (e) => {
 
                             <div class="gallery-card-overlay pointer-events-none">
                                 <div class="absolute inset-0 flex items-center justify-center">
-                                    <a :href="'/storage/' + media.file_path" 
-                                        target="_blank" 
-                                        class="pointer-events-auto px-4 py-2 bg-white/90 hover:bg-white text-brand-black font-semibold rounded-lg shadow-xl transition-all duration-300 hover:scale-110 flex items-center gap-2"
-                                        @click.stop>
+                                    <button @click.stop="openPreview(media)" 
+                                        class="pointer-events-auto px-4 py-2 bg-white/90 hover:bg-white text-brand-black font-semibold rounded-lg shadow-xl transition-all duration-300 hover:scale-110 flex items-center gap-2">
                                         <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"></path>
                                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"></path>
                                         </svg>
                                         View Full
-                                    </a>
+                                    </button>
                                 </div>
                             </div>
                         </div>
@@ -196,5 +237,69 @@ const handleUpload = (e) => {
                 </div>
             </div>
         </div>
+
+        <!-- Media Preview Modal -->
+        <Modal :show="showPreviewModal" @close="closePreview" max-width="6xl">
+            <div class="bg-black p-4 relative">
+                <div class="flex justify-between items-center mb-4">
+                    <h3 class="text-lg font-semibold text-white">{{ previewMedia?.file_name }}</h3>
+                    <div class="flex items-center gap-2">
+                        <button @click="downloadMedia" class="p-2 text-gray-400 hover:text-white transition" title="Download">
+                            <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"></path>
+                            </svg>
+                        </button>
+                        <button @click="closePreview" class="p-2 text-gray-400 hover:text-white transition" title="Close">
+                            <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path>
+                            </svg>
+                        </button>
+                    </div>
+                </div>
+                
+                <div class="relative flex items-center justify-center bg-gray-900 rounded-lg overflow-hidden" style="max-height: 80vh;">
+                    <!-- Previous Button -->
+                    <button 
+                        v-if="currentIndex > 0"
+                        @click="goToPrevious" 
+                        class="absolute left-4 z-10 p-3 bg-black/50 hover:bg-black/70 text-white rounded-full transition-all duration-200 hover:scale-110"
+                        title="Previous">
+                        <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7"></path>
+                        </svg>
+                    </button>
+
+                    <!-- Media Content -->
+                    <img v-if="previewMedia?.file_type === 'image'" 
+                        :src="'/storage/' + previewMedia?.file_path" 
+                        :alt="previewMedia?.file_name"
+                        class="max-w-full max-h-[80vh] object-contain" />
+                    
+                    <video v-else-if="previewMedia?.file_type === 'video'" 
+                        :src="'/storage/' + previewMedia?.file_path" 
+                        controls 
+                        autoplay
+                        class="max-w-full max-h-[80vh]">
+                    </video>
+
+                    <!-- Next Button -->
+                    <button 
+                        v-if="currentIndex < album.media.length - 1"
+                        @click="goToNext" 
+                        class="absolute right-4 z-10 p-3 bg-black/50 hover:bg-black/70 text-white rounded-full transition-all duration-200 hover:scale-110"
+                        title="Next">
+                        <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"></path>
+                        </svg>
+                    </button>
+                </div>
+
+                <div class="mt-4 flex justify-between items-center text-sm text-gray-400">
+                    <span>{{ album.title }}</span>
+                    <span>{{ currentIndex + 1 }} / {{ album.media.length }}</span>
+                    <span>{{ previewMedia?.created_at ? new Date(previewMedia.created_at).toLocaleDateString() : '' }}</span>
+                </div>
+            </div>
+        </Modal>
     </AuthenticatedLayout>
 </template>
