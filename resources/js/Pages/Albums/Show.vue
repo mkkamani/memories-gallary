@@ -6,6 +6,7 @@ import { ref, computed } from 'vue';
 
 const props = defineProps({
     album: Object,
+    breadcrumbs: Array,
 });
 
 const fileInput = ref(null);
@@ -129,24 +130,47 @@ const downloadMedia = () => {
 
     <AuthenticatedLayout>
         <template #header>
-            <div class="flex justify-between items-center">
-                <div>
-                    <h2 class="font-semibold text-xl text-gray-800 dark:text-gray-200 leading-tight">{{ album.title }}</h2>
-                    <p class="text-sm text-gray-400 mt-1">{{ album.description }}</p>
+            <div class="flex flex-col gap-4">
+                <!-- Breadcrumbs -->
+                <div class="flex items-center gap-2 text-sm text-gray-400">
+                    <Link :href="route('albums.index')" class="hover:text-brand-red transition-colors">
+                        Home
+                    </Link>
+                    <template v-if="breadcrumbs && breadcrumbs.length > 0">
+                        <template v-for="(crumb, index) in breadcrumbs" :key="crumb.id">
+                            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"></path>
+                            </svg>
+                            <Link :href="route('albums.show', crumb.id)" class="hover:text-brand-red transition-colors">
+                                {{ crumb.title }}
+                            </Link>
+                        </template>
+                    </template>
+                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"></path>
+                    </svg>
+                    <span class="text-white">{{ album.title }}</span>
                 </div>
-                <div class="flex items-center gap-2">
-                    <div v-if="selectedMedia.length > 0" class="flex items-center gap-2 mr-4">
-                        <span class="text-white text-sm">{{ selectedMedia.length }} selected</span>
-                        <button @click="bulkDownload" class="px-3 py-1 bg-blue-600 hover:bg-blue-700 text-white text-sm rounded transition">Download</button>
-                        <button @click="bulkDelete" class="px-3 py-1 bg-red-600 hover:bg-red-700 text-white text-sm rounded transition">Delete</button>
-                    </div>
 
-                    <div v-if="!album.is_system">
-                        <input type="file" multiple class="hidden" ref="fileInput" @change="handleUpload" accept="image/*,video/*" />
-                        <button @click="triggerUpload" class="px-4 py-2 bg-brand-red hover:bg-brand-red-hover text-white rounded-md transition flex items-center gap-2" :disabled="uploadForm.processing">
-                            <span v-if="uploadForm.processing">Uploading...</span>
-                            <span v-else>Upload Media</span>
-                        </button>
+                <div class="flex justify-between items-center">
+                    <div>
+                        <h2 class="font-semibold text-xl text-gray-800 dark:text-gray-200 leading-tight">{{ album.title }}</h2>
+                        <p class="text-sm text-gray-400 mt-1">{{ album.description }}</p>
+                    </div>
+                    <div class="flex items-center gap-2">
+                        <div v-if="selectedMedia.length > 0" class="flex items-center gap-2 mr-4">
+                            <span class="text-white text-sm">{{ selectedMedia.length }} selected</span>
+                            <button @click="bulkDownload" class="px-3 py-1 bg-blue-600 hover:bg-blue-700 text-white text-sm rounded transition">Download</button>
+                            <button @click="bulkDelete" class="px-3 py-1 bg-red-600 hover:bg-red-700 text-white text-sm rounded transition">Delete</button>
+                        </div>
+
+                        <div v-if="!album.is_system">
+                            <input type="file" multiple class="hidden" ref="fileInput" @change="handleUpload" accept="image/*,video/*" />
+                            <button @click="triggerUpload" class="px-4 py-2 bg-brand-red hover:bg-brand-red-hover text-white rounded-md transition flex items-center gap-2" :disabled="uploadForm.processing">
+                                <span v-if="uploadForm.processing">Uploading...</span>
+                                <span v-else>Upload Media</span>
+                            </button>
+                        </div>
                     </div>
                 </div>
             </div>
@@ -162,6 +186,31 @@ const downloadMedia = () => {
                     </div>
                 </div>
                 
+                <!-- Child Albums Section -->
+                <div v-if="album.children && album.children.length > 0" class="mb-8">
+                    <h3 class="text-lg font-semibold text-gray-200 mb-4 flex items-center gap-2">
+                        <svg class="w-5 h-5 text-purple-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 7v10a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-6l-2-2H5a2 2 0 00-2 2z"></path>
+                        </svg>
+                        Sub-Albums ({{ album.children.length }})
+                    </h3>
+                    <div class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-4 mb-8">
+                        <Link v-for="child in album.children" :key="child.id" 
+                            :href="route('albums.show', child.id)"
+                            class="gallery-card aspect-video cursor-pointer group">
+                            <div class="relative w-full h-full bg-gradient-to-br from-purple-900 to-purple-700 rounded-lg overflow-hidden">
+                                <div class="absolute inset-0 flex flex-col items-center justify-center p-4 text-center">
+                                    <svg class="w-12 h-12 text-white mb-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 7v10a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-6l-2-2H5a2 2 0 00-2 2z"></path>
+                                    </svg>
+                                    <h4 class="text-white font-semibold text-sm line-clamp-2 group-hover:text-purple-200 transition-colors">{{ child.title }}</h4>
+                                    <p class="text-purple-200 text-xs mt-1">{{ child.media_count || 0 }} items</p>
+                                </div>
+                            </div>
+                        </Link>
+                    </div>
+                </div>
+
                 <div class="mb-6 flex items-center justify-between" v-if="album.media.length > 0">
                     <button @click="selectAll" class="text-sm font-medium text-brand-red hover:text-white transition-colors duration-300 flex items-center gap-2">
                         <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">

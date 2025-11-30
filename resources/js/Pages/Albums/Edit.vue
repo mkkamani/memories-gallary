@@ -8,6 +8,7 @@ import { Head, useForm } from '@inertiajs/vue3';
 
 const props = defineProps({
     album: Object,
+    availableParents: Array,
 });
 
 const form = useForm({
@@ -16,6 +17,7 @@ const form = useForm({
     type: props.album.type,
     event_date: props.album.event_date,
     is_public: props.album.is_public,
+    parent_id: props.album.parent_id || null,
 });
 
 const submit = () => {
@@ -45,6 +47,18 @@ const submit = () => {
                             <InputLabel for="description" value="Description" />
                             <textarea id="description" class="mt-1 block w-full bg-brand-gray border-gray-700 text-white rounded-md shadow-sm focus:border-brand-red focus:ring-brand-red" v-model="form.description" rows="3"></textarea>
                             <InputError class="mt-2" :message="form.errors.description" />
+                        </div>
+
+                        <div>
+                            <InputLabel for="parent_album" value="Parent Album (Optional)" />
+                            <select id="parent_album" class="mt-1 block w-full bg-brand-gray border-gray-700 text-white rounded-md shadow-sm focus:border-brand-red focus:ring-brand-red" v-model="form.parent_id">
+                                <option :value="null">None (Root Level)</option>
+                                <option v-for="album in availableParents" :key="album.id" :value="album.id">
+                                    {{ album.title }}
+                                </option>
+                            </select>
+                            <InputError class="mt-2" :message="form.errors.parent_id" />
+                            <p class="mt-1 text-xs text-gray-500">Cannot select this album or its children as parent</p>
                         </div>
 
                         <div class="grid grid-cols-2 gap-4">

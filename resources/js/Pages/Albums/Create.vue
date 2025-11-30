@@ -6,12 +6,18 @@ import PrimaryButton from '@/Components/PrimaryButton.vue';
 import TextInput from '@/Components/TextInput.vue';
 import { Head, useForm } from '@inertiajs/vue3';
 
+const props = defineProps({
+    availableParents: Array,
+    defaultParentId: Number,
+});
+
 const form = useForm({
     title: '',
     description: '',
     type: 'festival',
     event_date: '',
     is_public: false,
+    parent_id: props.defaultParentId || null,
 });
 
 const submit = () => {
@@ -41,6 +47,17 @@ const submit = () => {
                             <InputLabel for="description" value="Description" />
                             <textarea id="description" class="mt-1 block w-full bg-brand-gray border-gray-700 text-white rounded-md shadow-sm focus:border-brand-red focus:ring-brand-red" v-model="form.description" rows="3"></textarea>
                             <InputError class="mt-2" :message="form.errors.description" />
+                        </div>
+
+                        <div>
+                            <InputLabel for="parent_album" value="Parent Album (Optional)" />
+                            <select id="parent_album" class="mt-1 block w-full bg-brand-gray border-gray-700 text-white rounded-md shadow-sm focus:border-brand-red focus:ring-brand-red" v-model="form.parent_id">
+                                <option :value="null">None (Root Level)</option>
+                                <option v-for="album in availableParents" :key="album.id" :value="album.id">
+                                    {{ album.title }}
+                                </option>
+                            </select>
+                            <InputError class="mt-2" :message="form.errors.parent_id" />
                         </div>
 
                         <div class="grid grid-cols-2 gap-4">

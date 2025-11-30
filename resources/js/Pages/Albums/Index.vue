@@ -10,6 +10,7 @@ import debounce from 'lodash/debounce';
 const props = defineProps({
     albums: Array,
     filters: Object,
+    breadcrumbs: Array,
 });
 
 const search = ref(props.filters.search || '');
@@ -51,21 +52,38 @@ const userAlbums = computed(() => {
 
     <AuthenticatedLayout>
         <template #header>
-            <div class="flex flex-col sm:flex-row justify-between items-center gap-4">
-                <h2 class="font-semibold text-xl text-gray-800 dark:text-gray-200 leading-tight">Albums</h2>
-                
-                <div class="flex items-center gap-4 w-full sm:w-auto">
-                    <input v-model="search" type="text" placeholder="Search albums..." class="bg-brand-gray border-gray-700 text-white rounded-md shadow-sm focus:border-brand-red focus:ring-brand-red w-full sm:w-64" />
-                    
-                    <select v-model="type" class="bg-brand-gray border-gray-700 text-white rounded-md shadow-sm focus:border-brand-red focus:ring-brand-red">
-                        <option value="">All Types</option>
-                        <option value="festival">Festival</option>
-                        <option value="event">Event</option>
-                    </select>
-
-                    <Link :href="route('albums.create')" class="px-4 py-2 bg-brand-red hover:bg-brand-red-hover text-white rounded-md transition whitespace-nowrap">
-                        Create Album
+            <div class="flex flex-col gap-4">
+                <!-- Breadcrumbs -->
+                <div v-if="breadcrumbs && breadcrumbs.length > 0" class="flex items-center gap-2 text-sm text-gray-400">
+                    <Link :href="route('albums.index')" class="hover:text-brand-red transition-colors">
+                        Home
                     </Link>
+                    <template v-for="(crumb, index) in breadcrumbs" :key="crumb.id">
+                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"></path>
+                        </svg>
+                        <Link :href="route('albums.index', { parent_id: crumb.id })" class="hover:text-brand-red transition-colors">
+                            {{ crumb.title }}
+                        </Link>
+                    </template>
+                </div>
+
+                <div class="flex flex-col sm:flex-row justify-between items-center gap-4">
+                    <h2 class="font-semibold text-xl text-gray-800 dark:text-gray-200 leading-tight">Albums</h2>
+                    
+                    <div class="flex items-center gap-4 w-full sm:w-auto">
+                        <input v-model="search" type="text" placeholder="Search albums..." class="bg-brand-gray border-gray-700 text-white rounded-md shadow-sm focus:border-brand-red focus:ring-brand-red w-full sm:w-64" />
+                        
+                        <select v-model="type" class="bg-brand-gray border-gray-700 text-white rounded-md shadow-sm focus:border-brand-red focus:ring-brand-red">
+                            <option value="">All Types</option>
+                            <option value="festival">Festival</option>
+                            <option value="event">Event</option>
+                        </select>
+
+                        <Link :href="route('albums.create')" class="px-4 py-2 bg-brand-red hover:bg-brand-red-hover text-white rounded-md transition whitespace-nowrap">
+                            Create Album
+                        </Link>
+                    </div>
                 </div>
             </div>
         </template>
@@ -160,9 +178,14 @@ const userAlbums = computed(() => {
                                                 <span class="text-sm font-medium bg-brand-red px-3 py-1 rounded-full uppercase tracking-wide">
                                                     {{ album.type }}
                                                 </span>
-                                                <span class="text-sm bg-black/50 px-3 py-1 rounded-full">
-                                                    {{ album.media_count || 0 }} items
-                                                </span>
+                                                <div class="flex items-center gap-2">
+                                                    <span class="text-sm bg-black/50 px-3 py-1 rounded-full">
+                                                        {{ album.media_count || 0 }} items
+                                                    </span>
+                                                    <span v-if="album.children_count > 0" class="text-sm bg-purple-600 px-3 py-1 rounded-full">
+                                                        {{ album.children_count }} sub-albums
+                                                    </span>
+                                                </div>
                                             </div>
                                         </div>
                                     </div>
@@ -226,7 +249,7 @@ const userAlbums = computed(() => {
                 </h2>
 
                 <p class="mt-1 text-sm text-gray-600 dark:text-gray-400">
-                    Are you sure you want to delete "{{ albumToDelete?.title }}"? This will move the album to the recycle bin.
+                    Are you sure you want to delete "{{ albumToDelete?.title }}"?<span v-if="albumToDelete?.children_count > 0" class="font-semibold text-brand-red"> This will also delete {{ albumToDelete.children_count }} nested album(s) inside it.</span> This will move the album to the recycle bin.
                 </p>
 
                 <div class="mt-6 flex justify-end">
