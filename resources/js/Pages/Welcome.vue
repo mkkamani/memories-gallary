@@ -24,35 +24,9 @@ defineProps({
     
     <div class="min-h-screen bg-black text-white selection:bg-brand-red selection:text-white overflow-hidden font-sans">
         <!-- Navbar -->
-        <nav class="absolute top-0 w-full z-50 px-6 py-6 flex justify-between items-center max-w-7xl mx-auto left-0 right-0">
+        <nav class="absolute top-0 w-full z-50 px-6 py-6 flex justify-center items-center max-w-7xl mx-auto left-0 right-0">
             <div class="text-2xl font-bold tracking-tighter">
                 <span class="text-transparent bg-clip-text bg-gradient-to-r from-red-500 via-rose-500 to-red-600">CX</span> Memories
-            </div>
-            <div v-if="canLogin" class="flex gap-4">
-                <Link
-                    v-if="$page.props.auth.user"
-                    :href="route('dashboard')"
-                    class="px-4 py-2 rounded-full text-sm font-medium transition-all duration-300 hover:bg-white/10"
-                >
-                    Dashboard
-                </Link>
-
-                <template v-else>
-                    <Link
-                        :href="route('login')"
-                        class="px-4 py-2 rounded-full text-sm font-medium transition-all duration-300 hover:bg-white/10"
-                    >
-                        Log in
-                    </Link>
-
-                    <Link
-                        v-if="canRegister"
-                        :href="route('register')"
-                        class="px-4 py-2 rounded-full bg-white text-black text-sm font-medium transition-all duration-300 hover:bg-gray-200 hover:scale-105"
-                    >
-                        Register
-                    </Link>
-                </template>
             </div>
         </nav>
 
@@ -82,24 +56,23 @@ defineProps({
 
                 <div class="flex flex-col sm:flex-row gap-4 justify-center items-center animate-fade-in-up opacity-0" style="animation-delay: 0.7s;">
                     <Link
-                        v-if="canRegister"
-                        :href="route('register')"
+                        v-if="$page.props.auth.user"
+                        :href="route('dashboard')"
                         class="px-8 py-4 rounded-full bg-gradient-to-r from-red-600 via-rose-600 to-red-800 text-white font-bold text-lg transition-all duration-300 hover:shadow-[0_0_30px_rgba(225,29,72,0.6)] hover:scale-105 ring-1 ring-white/10"
                     >
-                        Start Your Gallery
+                        Go to Dashboard
                     </Link>
-                    <button class="px-8 py-4 rounded-full border border-white/20 text-white font-medium text-lg transition-all duration-300 hover:bg-white/10 backdrop-blur-sm hover:shadow-lg">
-                        Explore Features
-                    </button>
+                    <Link
+                        v-else
+                        :href="route('login')"
+                        class="px-8 py-4 rounded-full bg-gradient-to-r from-red-600 via-rose-600 to-red-800 text-white font-bold text-lg transition-all duration-300 hover:shadow-[0_0_30px_rgba(225,29,72,0.6)] hover:scale-105 ring-1 ring-white/10"
+                    >
+                        Sign In to Your Gallery
+                    </Link>
                 </div>
             </div>
             
-            <!-- Scroll Indicator -->
-            <div class="absolute bottom-10 left-1/2 transform -translate-x-1/2 animate-bounce opacity-50">
-                <svg class="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 14l-7 7m0 0l-7-7m7 7V3"></path>
-                </svg>
-            </div>
+
         </main>
     </div>
 </template>

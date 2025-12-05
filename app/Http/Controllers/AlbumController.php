@@ -170,9 +170,23 @@ class AlbumController extends Controller
     public function show(Album $album)
     {
         $this->authorize('view', $album);
-        $album->load(['media', 'children' => function ($query) {
-            $query->withCount('media');
-        }]);
+        $album->load([
+            'media',
+            'children' => function ($query) {
+                $query->with(['media' => function ($q) {
+                    $q->orderBy('created_at', 'asc')->limit(1);
+                }])
+                ->withCount(['media', 'children']);
+            }
+        ]);
+        
+        // Transform children to include thumbnail
+        if ($album->children) {
+            $album->children->transform(function ($child) {
+                $child->thumbnail = $child->media->first() ? '/storage/' . $child->media->first()->file_path : null;
+                return $child;
+            });
+        }
         
         // Get breadcrumbs
         $breadcrumbs = $album->ancestors()->reverse()->map(function ($ancestor) {
