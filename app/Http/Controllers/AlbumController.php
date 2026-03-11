@@ -41,6 +41,13 @@ class AlbumController extends Controller
             $query->where('type', $request->type);
         }
 
+        $userLocation = auth()->user()->location;
+        $locationFilter = $request->has('location') ? $request->location : $userLocation;
+
+        if ($locationFilter && $locationFilter !== 'all') {
+            $query->where('location', $locationFilter);
+        }
+
         $albums = $query->latest()->get()->map(function ($album) {
             return [
                 'id' => $album->id,
@@ -55,6 +62,7 @@ class AlbumController extends Controller
                 'children_count' => $album->children_count,
                 'thumbnail' => $album->media->first() ? '/storage/' . $album->media->first()->file_path : null,
                 'is_system' => false,
+                'location' => $album->location,
             ];
         });
 
@@ -126,7 +134,10 @@ class AlbumController extends Controller
             
         return Inertia::render('Albums/Index', [
             'albums' => $allAlbums,
-            'filters' => $request->only(['search', 'type', 'parent_id']),
+            'filters' => array_merge(
+                $request->only(['search', 'type', 'parent_id', 'location']),
+                ['location' => $locationFilter]
+            ),
             'breadcrumbs' => $breadcrumbs,
         ]);
     }
@@ -159,12 +170,92 @@ class AlbumController extends Controller
             'description' => 'nullable|string',
             'is_public' => 'boolean',
             'parent_id' => 'nullable|exists:albums,id',
+            'location' => 'nullable|string|in:Rajkot,Ahmedabad',
         ]);
 
         $album = $albumService->create($data, auth()->user());
         $logService->logAlbumCreated($album);
 
         return redirect()->route('albums.index');
+    }
+
+    public function import(Request $request, AlbumService $albumService, \App\Services\MediaService $mediaService)
+    {
+        $request->validate([
+            'zip_file' => 'required|file|mimes:zip',
+            'parent_id' => 'nullable|exists:albums,id',
+            'location' => 'nullable|string|in:Ahmedabad,Rajkot'
+        ]);
+
+        $zipPath = $request->file('zip_file')->getRealPath();
+        $zip = new \ZipArchive();
+        
+        if ($zip->open($zipPath) !== true) {
+            return back()->with('error', 'Unable to open the ZIP file.');
+        }
+
+        $baseAlbumTitle = pathinfo($request->file('zip_file')->getClientOriginalName(), PATHINFO_FILENAME);
+        // create base album
+        $baseAlbum = $albumService->create([
+            'title' => $baseAlbumTitle,
+            'parent_id' => $request->parent_id,
+            'location' => $request->location ?? auth()->user()->location,
+            'type' => 'event',
+            'is_public' => false
+        ], auth()->user());
+
+        $extractPath = storage_path('app/temp/zip_' . uniqid());
+        \Illuminate\Support\Facades\File::makeDirectory($extractPath, 0755, true);
+        $zip->extractTo($extractPath);
+        $zip->close();
+
+        // clean up hidden __MACOSX directories and system files like .DS_Store
+        if (\Illuminate\Support\Facades\File::exists($extractPath . '/__MACOSX')) {
+            \Illuminate\Support\Facades\File::deleteDirectory($extractPath . '/__MACOSX');
+        }
+
+        // Process files and folders
+        $this->processExtractedFolder($extractPath, $baseAlbum, $albumService, $mediaService);
+
+        // cleanup temp extract path
+        \Illuminate\Support\Facades\File::deleteDirectory($extractPath);
+
+        return redirect()->route('albums.show', $baseAlbum)->with('success', 'Album imported successfully.');
+    }
+
+    protected function processExtractedFolder($folderPath, $parentAlbum, $albumService, $mediaService)
+    {
+        $files = \Illuminate\Support\Facades\File::directories($folderPath);
+        foreach ($files as $dir) {
+            $dirName = basename($dir);
+            $newAlbum = $albumService->create([
+                'title' => $dirName,
+                'parent_id' => $parentAlbum->id,
+                'location' => $parentAlbum->location,
+                'type' => 'event',
+                'is_public' => false
+            ], auth()->user());
+
+            $this->processExtractedFolder($dir, $newAlbum, $albumService, $mediaService);
+        }
+
+        $allFiles = \Illuminate\Support\Facades\File::files($folderPath);
+        foreach ($allFiles as $file) {
+            if ($file->getFilename() === '.DS_Store') continue;
+
+            $mime = mime_content_type($file->getRealPath());
+            if ($mime && (str_starts_with($mime, 'image') || str_starts_with($mime, 'video'))) {
+                $uploadedFile = new \Illuminate\Http\UploadedFile(
+                    $file->getRealPath(),
+                    $file->getFilename(),
+                    $mime,
+                    null,
+                    true
+                );
+                
+                $mediaService->upload($uploadedFile, auth()->user(), $parentAlbum);
+            }
+        }
     }
 
     public function show(Album $album)
@@ -234,6 +325,7 @@ class AlbumController extends Controller
             'description' => 'nullable|string',
             'is_public' => 'boolean',
             'parent_id' => 'nullable|exists:albums,id',
+            'location' => 'nullable|string|in:Rajkot,Ahmedabad',
         ]);
 
         $album = $albumService->update($album, $data);

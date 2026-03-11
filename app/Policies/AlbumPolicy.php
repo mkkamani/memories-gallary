@@ -21,7 +21,7 @@ class AlbumPolicy
      */
     public function view(User $user, Album $album): bool
     {
-        return $album->is_public || $user->id === $album->user_id || $user->role === 'admin';
+        return true; // All roles can view albums, private checks can be refined if needed, but per request all can view.
     }
 
     /**
@@ -29,7 +29,7 @@ class AlbumPolicy
      */
     public function create(User $user): bool
     {
-        return true;
+        return true; // admin, manager, member can add albums
     }
 
     /**
@@ -37,7 +37,7 @@ class AlbumPolicy
      */
     public function update(User $user, Album $album): bool
     {
-        return $user->id === $album->user_id || $user->role === 'admin';
+        return in_array($user->role, ['admin', 'manager']) || $user->id === $album->user_id;
     }
 
     /**
@@ -45,7 +45,7 @@ class AlbumPolicy
      */
     public function delete(User $user, Album $album): bool
     {
-        return $user->id === $album->user_id || $user->role === 'admin';
+        return in_array($user->role, ['admin', 'manager']);
     }
 
     /**
@@ -53,7 +53,7 @@ class AlbumPolicy
      */
     public function restore(User $user, Album $album): bool
     {
-        return $user->id === $album->user_id || $user->role === 'admin';
+        return in_array($user->role, ['admin', 'manager']);
     }
 
     /**
@@ -61,6 +61,6 @@ class AlbumPolicy
      */
     public function forceDelete(User $user, Album $album): bool
     {
-        return $user->role === 'admin';
+        return in_array($user->role, ['admin', 'manager']);
     }
 }

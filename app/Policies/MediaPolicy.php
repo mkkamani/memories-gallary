@@ -21,7 +21,7 @@ class MediaPolicy
      */
     public function view(User $user, Media $media): bool
     {
-        return ($media->album && $media->album->is_public) || $user->id === $media->user_id || $user->role === 'admin';
+        return true;
     }
 
     /**
@@ -37,7 +37,7 @@ class MediaPolicy
      */
     public function update(User $user, Media $media): bool
     {
-        return $user->id === $media->user_id || $user->role === 'admin';
+        return in_array($user->role, ['admin', 'manager']) || $user->id === $media->user_id;
     }
 
     /**
@@ -45,7 +45,7 @@ class MediaPolicy
      */
     public function delete(User $user, Media $media): bool
     {
-        return $user->id === $media->user_id || $user->role === 'admin';
+        return in_array($user->role, ['admin', 'manager']) || $user->id === $media->user_id;
     }
 
     /**
@@ -53,7 +53,7 @@ class MediaPolicy
      */
     public function restore(User $user, Media $media): bool
     {
-        return $user->id === $media->user_id || $user->role === 'admin';
+        return in_array($user->role, ['admin', 'manager']) || $user->id === $media->user_id;
     }
 
     /**
@@ -61,6 +61,6 @@ class MediaPolicy
      */
     public function forceDelete(User $user, Media $media): bool
     {
-        return $user->role === 'admin';
+        return in_array($user->role, ['admin', 'manager']) || $user->id === $media->user_id;
     }
 }

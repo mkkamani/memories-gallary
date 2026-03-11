@@ -50,10 +50,10 @@ class RecycleBinController extends Controller
         return back();
     }
 
-    public function forceDeleteAlbum($id)
+    public function forceDeleteAlbum($id, \App\Services\AlbumService $albumService, MediaService $mediaService)
     {
         $album = Album::onlyTrashed()->where('user_id', auth()->id())->findOrFail($id);
-        $album->forceDelete();
+        $albumService->forceDelete($album, $mediaService);
         return back();
     }
 }

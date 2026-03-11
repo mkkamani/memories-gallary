@@ -16,6 +16,7 @@ class Album extends Model
     protected $fillable = [
         'user_id',
         'parent_id',
+        'drive_folder_id',
         'title',
         'slug',
         'description',
@@ -23,6 +24,7 @@ class Album extends Model
         'type',
         'event_date',
         'is_public',
+        'location',
     ];
 
     protected $casts = [

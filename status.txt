@@ -1,0 +1,48 @@
+﻿ M app/Models/Album.php
+ M composer.json
+ M composer.lock
+ M resources/js/Components/Checkbox.vue
+ M resources/js/Components/DangerButton.vue
+ M resources/js/Components/Dropdown.vue
+ M resources/js/Components/DropdownLink.vue
+ M resources/js/Components/InputError.vue
+ M resources/js/Components/InputLabel.vue
+ M resources/js/Components/Modal.vue
+ M resources/js/Components/NavLink.vue
+ M resources/js/Components/PrimaryButton.vue
+ M resources/js/Components/ResponsiveNavLink.vue
+ M resources/js/Components/SecondaryButton.vue
+ M resources/js/Components/TextInput.vue
+ M resources/js/Layouts/AuthenticatedLayout.vue
+ M resources/js/Layouts/GuestLayout.vue
+ M resources/js/Pages/Albums/Create.vue
+ M resources/js/Pages/Albums/Edit.vue
+ M resources/js/Pages/Albums/Index.vue
+ M resources/js/Pages/Albums/Show.vue
+ M resources/js/Pages/Auth/ConfirmPassword.vue
+ M resources/js/Pages/Auth/ForgotPassword.vue
+ M resources/js/Pages/Auth/Login.vue
+ M resources/js/Pages/Auth/Register.vue
+ M resources/js/Pages/Auth/VerifyEmail.vue
+ M resources/js/Pages/Dashboard.vue
+ M resources/js/Pages/Profile/Edit.vue
+ M resources/js/Pages/Profile/Partials/DeleteUserForm.vue
+ M resources/js/Pages/Profile/Partials/UpdatePasswordForm.vue
+ M resources/js/Pages/Profile/Partials/UpdateProfileInformationForm.vue
+ M resources/js/Pages/RecycleBin/Index.vue
+ M resources/js/Pages/Users/Index.vue
+ D storage.zip
+?? app/Console/
+?? app/Services/GoogleDriveImportService.php
+?? app/Services/R2StorageService.php
+?? app/Services/StorageServiceInterface.php
+?? backup_laravel/
+?? credentials.json
+?? database/migrations/2025_12_29_000001_add_drive_folder_id_to_albums_table.php
+?? docs/
+?? public/build.zip
+?? public/images/baseball-bat-isolated-on-transparent-600nw-2636612707.webp
+?? "public/images/logo-main (1).svg"
+?? public/images/windows-11-4k-0vy8rx8hvd9k0frx.jpg
+?? status.txt
+?? template/

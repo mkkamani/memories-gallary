@@ -20,6 +20,7 @@ Route::get('/', function () {
 
 Route::middleware(['auth', 'verified'])->group(function () {
     Route::get('/dashboard', [DashboardController::class, 'index'])->name('dashboard');
+    Route::post('/albums/import', [AlbumController::class, 'import'])->name('albums.import');
     Route::resource('albums', AlbumController::class);
     Route::resource('media', MediaController::class)->only(['store', 'destroy']);
     Route::post('/media/bulk-delete', [MediaController::class, 'bulkDelete'])->name('media.bulk-delete');

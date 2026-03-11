@@ -6,13 +6,19 @@ use App\Models\Media;
 use App\Models\Album;
 use App\Models\User;
 use Illuminate\Http\UploadedFile;
-use Illuminate\Support\Facades\Storage;
 
 class MediaService
 {
+    protected $storageService;
+
+    public function __construct(StorageServiceInterface $storageService)
+    {
+        $this->storageService = $storageService;
+    }
+
     public function upload(UploadedFile $file, User $user, ?Album $album = null)
     {
-        $path = $file->store('uploads', 'public');
+        $path = $this->storageService->uploadFile($file, 'uploads');
         
         return Media::create([
             'user_id' => $user->id,
@@ -29,7 +35,7 @@ class MediaService
     public function delete(Media $media)
     {
         if ($media->trashed()) {
-            Storage::disk('public')->delete($media->file_path);
+            $this->storageService->deleteFile($media->file_path);
             return $media->forceDelete();
         }
         return $media->delete();

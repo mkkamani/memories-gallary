@@ -88,4 +88,24 @@ class AlbumService
 
         return $album;
     }
+
+    /**
+     * Force delete an album including its nested albums and media
+     */
+    public function forceDelete(Album $album, MediaService $mediaService)
+    {
+        // Force delete media from this album
+        $mediaIds = $album->media()->withTrashed()->get();
+        foreach ($mediaIds as $media) {
+            $mediaService->delete($media); // if trashed, MediaService deletes the file and force deletes
+        }
+
+        // Recursively handle nested child albums
+        $children = $album->children()->withTrashed()->get();
+        foreach ($children as $child) {
+            $this->forceDelete($child, $mediaService);
+        }
+
+        return $album->forceDelete();
+    }
 }
