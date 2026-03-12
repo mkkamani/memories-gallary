@@ -171,9 +171,19 @@ class AlbumController extends Controller
             'is_public' => 'boolean',
             'parent_id' => 'nullable|exists:albums,id',
             'location' => 'nullable|string|in:Rajkot,Ahmedabad',
+            'files' => 'nullable|array',
+            'files.*' => 'file|mimes:jpeg,png,jpg,gif,mp4,mov,avi|max:102400',
         ]);
 
-        $album = $albumService->create($data, auth()->user());
+        $album = $albumService->create($request->except('files'), auth()->user());
+        
+        if ($request->hasFile('files')) {
+            $mediaService = app(\App\Services\MediaService::class);
+            foreach ($request->file('files') as $file) {
+                $mediaService->upload($file, auth()->user(), $album);
+            }
+        }
+        
         $logService->logAlbumCreated($album);
 
         return redirect()->route('albums.index');

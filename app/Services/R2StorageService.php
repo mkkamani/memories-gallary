@@ -20,8 +20,8 @@ class R2StorageService implements StorageServiceInterface
         $filename = uniqid() . '_' . $file->getClientOriginalName();
         $fullPath = rtrim($path, '/') . '/' . $filename;
         
-        // Push the file directly to the R2 bucket
-        Storage::disk($this->disk)->put($fullPath, file_get_contents($file));
+        // Push the file directly to the R2 bucket via stream (avoids out-of-memory errors for large videos)
+        Storage::disk($this->disk)->putFileAs(rtrim($path, '/'), $file, $filename);
         
         return $fullPath;
     }

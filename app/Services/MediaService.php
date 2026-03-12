@@ -18,7 +18,8 @@ class MediaService
 
     public function upload(UploadedFile $file, User $user, ?Album $album = null)
     {
-        $path = $this->storageService->uploadFile($file, 'uploads');
+        $albumPath = $album ? 'albums/' . str_replace(' ', '_', strtolower($album->title)) . '_' . $album->id : 'uploads';
+        $path = $this->storageService->uploadFile($file, $albumPath);
         
         return Media::create([
             'user_id' => $user->id,
