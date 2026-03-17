@@ -66,7 +66,7 @@ const createFolder = () => {
         title: newFolder.value.title,
         description: newFolder.value.description,
         parent_id: props.album.id,
-        is_public: props.album.is_public,
+        location: props.album.location,
     }, {
         onSuccess: () => {
             showNewFolderModal.value = false;
@@ -76,17 +76,24 @@ const createFolder = () => {
 };
 
 const handleUpload = () => {
-    if (uploadFiles.value.length === 0) return;
+    const files = uploadFiles.value;
+    if (!files || files.length === 0) return;
+
     const formData = new FormData();
     formData.append('album_id', props.album.id);
-    for (let i = 0; i < uploadFiles.value.length; i++) {
-        formData.append('files[]', uploadFiles.value[i]);
+    for (let i = 0; i < files.length; i++) {
+        formData.append('files[]', files[i]);
     }
+
     router.post(route('media.store'), formData, {
+        forceFormData: true,
         onSuccess: () => {
             showUploadModal.value = false;
             uploadFiles.value = [];
-        }
+        },
+        onError: (errors) => {
+            console.error('Upload failed:', errors);
+        },
     });
 };
 
@@ -99,7 +106,7 @@ const confirmDelete = (item, type) => {
 
 const deleteItem = () => {
     if (!itemToDelete.value) return;
-    
+
     if (deleteType.value === 'album') {
         router.delete(route('albums.destroy', itemToDelete.value.id), {
             onSuccess: () => {
@@ -133,8 +140,9 @@ const handleAction = (action, type, item) => {
     } else if (action === 'Download') {
         if (type === 'media') {
             const link = document.createElement('a');
-            link.href = '/storage/' + item.file_path;
+            link.href = item.url;
             link.download = item.file_name;
+            link.target = '_blank';
             document.body.appendChild(link);
             link.click();
             document.body.removeChild(link);
@@ -178,29 +186,29 @@ const goToPrevious = () => {
 
     <AuthenticatedLayout>
         <div class="py-12 animate-fade-in max-w-7xl mx-auto sm:px-6 lg:px-8 space-y-6" @click="closeActionMenu">
-            
+
             <!-- Header with Breadcrumbs and New Button -->
             <div class="flex flex-col md:flex-row md:items-center justify-between gap-4">
                 <div class="flex items-center gap-2 overflow-x-auto pb-2 md:pb-0 scrollbar-hide flex-1">
                     <Link :href="album.parent_id ? route('albums.show', album.parent_id) : route('albums.index')" class="p-2 rounded-full hover:bg-bg-hover text-muted-foreground transition-all shrink-0">
                         <svg class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 19l-7-7m0 0l7-7m-7 7h18"/></svg>
                     </Link>
-                    
+
                     <div class="flex items-center gap-1 text-sm text-muted-foreground whitespace-nowrap min-w-0 flex-1">
                         <Link :href="route('albums.index')" class="hover:text-foreground cursor-pointer transition-colors">Albums</Link>
-                        
+
                         <template v-for="crumb in breadcrumbs" :key="crumb.id">
                             <svg class="w-4 h-4 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/></svg>
                             <Link :href="route('albums.show', crumb.id)" class="hover:text-foreground cursor-pointer transition-colors truncate">
                                 {{ crumb.title }}
                             </Link>
                         </template>
-                        
+
                         <svg class="w-4 h-4 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/></svg>
                         <span class="text-foreground font-bold truncate">{{ album.title }}</span>
 
                         <!-- Pin Button -->
-                        <button v-if="!album.is_system" @click="togglePin" class="ml-3 p-1.5 rounded-full transition-all shrink-0 shadow-sm border" 
+                        <button v-if="!album.is_system" @click="togglePin" class="ml-3 p-1.5 rounded-full transition-all shrink-0 shadow-sm border"
                                 :class="isPinned ? 'bg-primary border-primary text-primary-foreground' : 'hover:bg-bg-hover text-muted-foreground border-border'">
                             <svg class="w-4 h-4" :class="isPinned ? 'fill-current' : ''" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 5a2 2 0 012-2h10a2 2 0 012 2v16l-7-3.5L5 21V5z"/></svg>
                         </button>
@@ -213,7 +221,7 @@ const goToPrevious = () => {
                             <svg class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/></svg>
                             New
                         </button>
-                        
+
                         <div v-if="showNewMenu" class="absolute right-0 mt-2 w-56 bg-bg-card border border-border rounded-xl shadow-2xl py-2 z-50 animate-scale-in" @click.stop>
                             <button @click="showNewFolderModal = true; showNewMenu = false" class="w-full flex items-center gap-3 px-4 py-2.5 text-sm text-foreground hover:bg-bg-hover transition-colors">
                                 <svg class="w-4 h-4 text-primary" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 13h6m-3-3v6m-9 1V7a2 2 0 012-2h6l2 2h6a2 2 0 012 2v8a2 2 0 01-2 2H5a2 2 0 01-2-2z"/></svg>
@@ -265,7 +273,7 @@ const goToPrevious = () => {
                             <p class="text-sm font-bold text-foreground truncate">{{ folder.title }}</p>
                             <p class="text-[10px] text-muted-foreground mt-0.5">{{ folder.media_count }} files</p>
                         </div>
-                        
+
                         <div class="relative" @click.stop>
                             <button @click="toggleActionMenu($event, 'folder-'+folder.id)" class="opacity-0 group-hover:opacity-100 p-2 rounded-full hover:bg-bg-elevated text-muted-foreground transition-all">
                                 <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 12h.01M12 12h.01M19 12h.01M6 12a1 1 0 11-2 0 1 1 0 012 0zm7 0a1 1 0 11-2 0 1 1 0 012 0zm7 0a1 1 0 11-2 0 1 1 0 012 0z"/></svg>
@@ -288,20 +296,20 @@ const goToPrevious = () => {
             <!-- Files Section -->
             <div v-if="filteredFiles.length > 0" class="space-y-4">
                 <h3 class="text-sm font-bold text-foreground">Files</h3>
-                
+
                 <div v-if="viewMode === 'grid'" class="columns-2 sm:columns-3 lg:columns-4 xl:columns-5 gap-4 space-y-4">
-                    <div v-for="(file, index) in filteredFiles" :key="file.id" @click="openPreview(file)" 
+                    <div v-for="(file, index) in filteredFiles" :key="file.id" @click="openPreview(file)"
                          class="group relative inline-block w-full break-inside-avoid rounded-2xl overflow-hidden border border-border bg-bg-elevated cursor-pointer hover:border-primary/50 transition-all shadow-sm hover:shadow-xl animate-fade-in-up">
                         <div class="relative">
-                            <img v-if="file.file_type === 'image'" :src="'/storage/' + file.file_path" class="w-full h-auto object-cover transition-transform duration-700 group-hover:scale-105" :alt="file.file_name" />
-                            <video v-else :src="'/storage/' + file.file_path" class="w-full h-auto object-cover transition-transform duration-700 group-hover:scale-105"></video>
-                            
+                            <img v-if="file.file_type === 'image'" :src="file.url" class="w-full h-auto object-cover transition-transform duration-700 group-hover:scale-105" :alt="file.file_name" />
+                            <video v-else :src="file.url" class="w-full h-auto object-cover transition-transform duration-700 group-hover:scale-105"></video>
+
                             <div v-if="file.file_type === 'video'" class="absolute inset-0 flex items-center justify-center bg-black/10">
                                 <div class="w-12 h-12 rounded-full bg-black/40 backdrop-blur-md flex items-center justify-center text-white scale-90 group-hover:scale-100 transition-transform">
                                     <svg class="w-6 h-6 fill-current ml-0.5" viewBox="0 0 20 20"><path d="M6.3 2.841A1.5 1.5 0 004 4.11V15.89a1.5 1.5 0 002.3 1.269l9.344-5.89a1.5 1.5 0 000-2.538L6.3 2.84z"></path></svg>
                                 </div>
                             </div>
-                            
+
                             <div class="absolute inset-0 bg-gradient-to-t from-black/60 via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-all duration-300">
                                 <div class="absolute top-3 right-3 flex flex-col gap-2">
                                     <button @click="toggleActionMenu($event, 'file-'+file.id)" class="w-10 h-10 rounded-full bg-white/10 backdrop-blur-md text-white flex items-center justify-center hover:bg-white/20 transition-all">
@@ -344,8 +352,8 @@ const goToPrevious = () => {
                         <div v-for="file in filteredFiles" :key="file.id" @click="openPreview(file)" class="grid grid-cols-[1fr_200px_100px] items-center px-6 py-4 hover:bg-bg-hover transition-colors cursor-pointer group">
                             <div class="flex items-center gap-4 min-w-0">
                                 <div class="w-12 h-12 rounded-lg overflow-hidden border border-border shrink-0">
-                                    <img v-if="file.file_type === 'image'" :src="'/storage/' + file.file_path" class="w-full h-full object-cover" />
-                                    <video v-else :src="'/storage/' + file.file_path" class="w-full h-full object-cover"></video>
+                                    <img v-if="file.file_type === 'image'" :src="file.url" class="w-full h-full object-cover" />
+                                    <video v-else :src="file.url" class="w-full h-full object-cover"></video>
                                 </div>
                                 <div class="min-w-0">
                                     <p class="text-sm font-medium text-foreground truncate">{{ file.file_name }}</p>
@@ -381,7 +389,7 @@ const goToPrevious = () => {
                 <h3 class="text-xl font-bold text-foreground">This album is empty</h3>
                 <p class="text-muted-foreground mt-1 text-center">Click New to add folders and upload media<br/>All members can contribute</p>
             </div>
-            
+
         </div>
 
         <!-- Lightbox -->
@@ -395,18 +403,18 @@ const goToPrevious = () => {
                     <svg class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg>
                 </button>
             </div>
-            
+
             <button v-if="currentIndex > 0" @click="goToPrevious" class="absolute left-4 w-12 h-12 rounded-full bg-white/10 hover:bg-white/20 text-white flex items-center justify-center transition-colors backdrop-blur-md">
                 <svg class="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7"/></svg>
             </button>
-            
+
             <button v-if="currentIndex < filteredFiles.length - 1" @click="goToNext" class="absolute right-4 w-12 h-12 rounded-full bg-white/10 hover:bg-white/20 text-white flex items-center justify-center transition-colors backdrop-blur-md">
                 <svg class="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/></svg>
             </button>
-            
+
             <div class="flex items-center justify-center w-full max-w-5xl max-h-[85vh] px-16">
-                <img v-if="previewMedia?.file_type === 'image'" :src="'/storage/' + previewMedia.file_path" class="max-w-full max-h-[85vh] object-contain" />
-                <video v-else-if="previewMedia?.file_type === 'video'" :src="'/storage/' + previewMedia.file_path" controls autoplay class="max-w-full max-h-[85vh]"></video>
+                <img v-if="previewMedia?.file_type === 'image'" :src="previewMedia.url" class="max-w-full max-h-[85vh] object-contain" />
+                <video v-else-if="previewMedia?.file_type === 'video'" :src="previewMedia.url" controls autoplay class="max-w-full max-h-[85vh]"></video>
             </div>
         </div>
 
@@ -419,13 +427,13 @@ const goToPrevious = () => {
                     </div>
                     <h2 class="text-xl font-bold text-foreground">Create New Folder</h2>
                 </div>
-                
+
                 <form @submit.prevent="createFolder" class="space-y-6">
                     <div class="space-y-2">
                         <label class="text-xs font-bold text-muted-foreground uppercase tracking-wider">Folder Name</label>
                         <input type="text" v-model="newFolder.title" placeholder="e.g. Stage Performances" class="w-full h-12 px-4 rounded-xl bg-bg-elevated border border-border text-sm text-foreground focus:outline-none focus:border-primary transition-all shadow-inner" required />
                     </div>
-                    
+
                     <div class="flex justify-end gap-3 pt-4">
                         <button type="button" @click="showNewFolderModal = false" class="h-11 px-6 rounded-pill text-sm font-bold text-foreground hover:bg-bg-hover transition-all">Cancel</button>
                         <button type="submit" class="h-11 px-8 rounded-pill bg-primary text-primary-foreground text-sm font-bold shadow-lg shadow-primary/20 hover:scale-105 active:scale-95 transition-all">Create Folder</button>
@@ -443,7 +451,7 @@ const goToPrevious = () => {
                     </div>
                     <h2 class="text-xl font-bold text-foreground">Upload Files</h2>
                 </div>
-                
+
                 <div class="space-y-6">
                     <div class="border-2 border-dashed border-border rounded-xl p-8 text-center bg-bg-elevated/50 hover:bg-bg-elevated transition-colors cursor-pointer relative">
                         <input type="file" multiple accept="image/*,video/*" class="absolute inset-0 w-full h-full opacity-0 cursor-pointer" @change="handleFileSelect" />
@@ -454,7 +462,7 @@ const goToPrevious = () => {
                     <div v-if="uploadFiles.length > 0" class="text-sm">
                          {{ uploadFiles.length }} file(s) selected
                     </div>
-                    
+
                     <div class="flex justify-end gap-3 pt-4">
                         <button type="button" @click="showUploadModal = false" class="h-11 px-6 rounded-pill text-sm font-bold text-foreground hover:bg-bg-hover transition-all">Cancel</button>
                         <button type="button" @click="handleUpload" class="h-11 px-8 rounded-pill bg-primary text-primary-foreground text-sm font-bold shadow-lg shadow-primary/20 hover:scale-105 active:scale-95 transition-all">Upload</button>

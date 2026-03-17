@@ -8,76 +8,117 @@ use Illuminate\Support\Str;
 
 class AlbumService
 {
-    public function create(array $data, User $user)
-    {
-        $data['user_id'] = $user->id;
-        
-        // Validate parent if provided
-        if (!empty($data['parent_id'])) {
-            $this->validateParent($data['parent_id'], $user);
-        }
-        
-        if (empty($data['slug'])) {
-            $data['slug'] = Str::slug($data['title']) . '-' . Str::random(6);
-        }
-        
-        return Album::create($data);
-    }
+    public function __construct(
+        protected StorageServiceInterface $storageService,
+    ) {}
 
-    public function update(Album $album, array $data)
+    /**
+     * Create a new album, compute its R2 directory path, and create the
+     * corresponding directory placeholder in the R2 bucket.
+     */
+    public function create(array $data, User $user): Album
     {
-        // Validate parent if being changed
-        if (isset($data['parent_id'])) {
-            if ($data['parent_id'] !== null) {
-                $this->validateParent($data['parent_id'], $album->user, $album);
+        $data["user_id"] = $user->id;
+        $data["is_public"] = true; // albums are always public
+
+        // Default type when not provided
+        if (empty($data["type"])) {
+            $data["type"] = "event";
+        }
+
+        // Validate parent if provided
+        if (!empty($data["parent_id"])) {
+            $this->validateParent($data["parent_id"], $user);
+
+            // Inherit location from parent when caller did not supply one
+            if (empty($data["location"])) {
+                $parent = Album::find($data["parent_id"]);
+                if ($parent) {
+                    $data["location"] = $parent->location;
+                }
             }
         }
-        
-        if (isset($data['title']) && $album->title !== $data['title']) {
-            $data['slug'] = Str::slug($data['title']) . '-' . Str::random(6);
+
+        if (empty($data["slug"])) {
+            $data["slug"] = Str::slug($data["title"]) . "-" . Str::random(6);
         }
-        
+
+        // Create the album row (r2_path is computed after we have the id)
+        $album = Album::create($data);
+
+        // Compute and persist the R2 directory path
+        $r2Path = $this->computeR2Path($album);
+        $album->update(["r2_path" => $r2Path]);
+
+        // Create the directory placeholder in R2
+        try {
+            $this->storageService->createDirectory($r2Path);
+        } catch (\Throwable $e) {
+            \Log::error("AlbumService: failed to create R2 directory.", [
+                "album_id" => $album->id,
+                "r2_path" => $r2Path,
+                "error" => $e->getMessage(),
+            ]);
+        }
+
+        return $album->fresh();
+    }
+
+    /**
+     * Update an existing album.
+     */
+    public function update(Album $album, array $data): Album
+    {
+        // Always keep albums public
+        $data["is_public"] = true;
+
+        // Validate parent if being changed
+        if (isset($data["parent_id"])) {
+            if ($data["parent_id"] !== null) {
+                $this->validateParent($data["parent_id"], $album->user, $album);
+            }
+        }
+
+        if (isset($data["title"]) && $album->title !== $data["title"]) {
+            $data["slug"] = Str::slug($data["title"]) . "-" . Str::random(6);
+        }
+
         $album->update($data);
         return $album;
     }
 
-    public function delete(Album $album)
+    /**
+     * Soft-delete an album.
+     */
+    public function delete(Album $album): bool
     {
-        // Delete associated media files if needed, or rely on cascade
         return $album->delete();
     }
 
     /**
-     * Validate that the parent album is valid for this user and doesn't create circular reference
+     * Force-delete an album including all its media and nested child albums.
      */
-    protected function validateParent($parentId, User $user, ?Album $currentAlbum = null)
+    public function forceDelete(Album $album, MediaService $mediaService): bool
     {
-        $parent = Album::find($parentId);
-
-        if (!$parent) {
-            throw new \InvalidArgumentException('Parent album not found.');
+        // Permanently remove every media file in this album from R2 and the DB.
+        // purge() is used instead of delete() so that files are always deleted
+        // from R2 regardless of whether the individual media record is trashed.
+        foreach ($album->media()->withTrashed()->get() as $media) {
+            $mediaService->purge($media);
         }
 
-        // Check if user has access to parent album
-        if ($parent->user_id !== $user->id && !$parent->is_public) {
-            throw new \InvalidArgumentException('You do not have access to this parent album.');
+        // Recursively handle nested child albums
+        foreach ($album->children()->withTrashed()->get() as $child) {
+            $this->forceDelete($child, $mediaService);
         }
 
-        // Check for circular reference (prevent album from being its own ancestor)
-        if ($currentAlbum && $parent->isDescendantOf($currentAlbum)) {
-            throw new \InvalidArgumentException('Cannot set parent album: this would create a circular reference.');
-        }
-
-        // Also check if trying to set self as parent
-        if ($currentAlbum && $parent->id === $currentAlbum->id) {
-            throw new \InvalidArgumentException('An album cannot be its own parent.');
-        }
+        return $album->forceDelete();
     }
 
     /**
-     * Move an album to a different parent
+     * Move an album to a different parent (or to root level when $newParentId is null).
      */
-    public function move(Album $album, ?int $newParentId)
+    public function move(Album $album, ?int $newParentId): Album
     {
         if ($newParentId !== null) {
             $this->validateParent($newParentId, $album->user, $album);
@@ -89,23 +130,73 @@ class AlbumService
         return $album;
     }
 
+    // -------------------------------------------------------------------------
+    // Helpers
+    // -------------------------------------------------------------------------
+
     /**
-     * Force delete an album including its nested albums and media
+     * Compute the R2 storage path for an album.
+     *
+     * Root album  → albums/{safe-title}_{id}
+     * Child album → {parent_r2_path}/{safe-title}_{id}
+     *
+     * The parent's r2_path is used directly when available; otherwise we fall
+     * back to re-computing it recursively so that legacy albums (created before
+     * the r2_path column existed) are handled gracefully.
      */
-    public function forceDelete(Album $album, MediaService $mediaService)
+    protected function computeR2Path(Album $album): string
     {
-        // Force delete media from this album
-        $mediaIds = $album->media()->withTrashed()->get();
-        foreach ($mediaIds as $media) {
-            $mediaService->delete($media); // if trashed, MediaService deletes the file and force deletes
+        $safeName = preg_replace(
+            "/[^a-z0-9]+/",
+            "_",
+            strtolower($album->title),
+        );
+        $safeName = trim($safeName, "_");
+        $segment = $safeName . "_" . $album->id;
+
+        if ($album->parent_id) {
+            $parent = Album::find($album->parent_id);
+
+            if ($parent) {
+                $parentPath = $parent->r2_path ?? $this->computeR2Path($parent);
+                return $parentPath . "/" . $segment;
+            }
         }
 
-        // Recursively handle nested child albums
-        $children = $album->children()->withTrashed()->get();
-        foreach ($children as $child) {
-            $this->forceDelete($child, $mediaService);
+        return "albums/" . $segment;
+    }
+
+    /**
+     * Validate that the given parent album is accessible to the user and does
+     * not create a circular reference.
+     */
+    protected function validateParent(
+        int $parentId,
+        User $user,
+        ?Album $currentAlbum = null,
+    ): void {
+        $parent = Album::find($parentId);
+
+        if (!$parent) {
+            throw new \InvalidArgumentException("Parent album not found.");
         }
 
-        return $album->forceDelete();
+        if ($parent->user_id !== $user->id && !$parent->is_public) {
+            throw new \InvalidArgumentException(
+                "You do not have access to this parent album.",
+            );
+        }
+
+        if ($currentAlbum && $parent->isDescendantOf($currentAlbum)) {
+            throw new \InvalidArgumentException(
+                "Cannot set parent album: this would create a circular reference.",
+            );
+        }
+
+        if ($currentAlbum && $parent->id === $currentAlbum->id) {
+            throw new \InvalidArgumentException(
+                "An album cannot be its own parent.",
+            );
+        }
     }
 }

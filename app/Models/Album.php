@@ -14,22 +14,23 @@ class Album extends Model
     use HasFactory, SoftDeletes;
 
     protected $fillable = [
-        'user_id',
-        'parent_id',
-        'drive_folder_id',
-        'title',
-        'slug',
-        'description',
-        'cover_image',
-        'type',
-        'event_date',
-        'is_public',
-        'location',
+        "user_id",
+        "parent_id",
+        "drive_folder_id",
+        "title",
+        "slug",
+        "description",
+        "cover_image",
+        "type",
+        "event_date",
+        "is_public",
+        "location",
+        "r2_path",
     ];
 
     protected $casts = [
-        'event_date' => 'date',
-        'is_public' => 'boolean',
+        "event_date" => "date",
+        "is_public" => "boolean",
     ];
 
     public function user()
@@ -44,18 +45,18 @@ class Album extends Model
 
     public function tags()
     {
-        return $this->morphToMany(Tag::class, 'taggable');
+        return $this->morphToMany(Tag::class, "taggable");
     }
 
     // Parent-child relationships for nested albums
     public function parent()
     {
-        return $this->belongsTo(Album::class, 'parent_id');
+        return $this->belongsTo(Album::class, "parent_id");
     }
 
     public function children()
     {
-        return $this->hasMany(Album::class, 'parent_id');
+        return $this->hasMany(Album::class, "parent_id");
     }
 
     // Get all ancestors (parent, grandparent, etc.)

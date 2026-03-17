@@ -11,6 +11,23 @@
         <link rel="preconnect" href="https://fonts.bunny.net">
         <link href="https://fonts.bunny.net/css?family=figtree:400,500,600&display=swap" rel="stylesheet" />
 
+        <!-- Blocking theme script: runs before any paint to prevent white flash -->
+        <script>
+            (function () {
+                try {
+                    var saved = localStorage.getItem('theme');
+                    // Default to dark when no preference is stored
+                    var theme = (saved === 'light') ? 'light' : 'dark';
+                    var html = document.documentElement;
+                    html.classList.remove('dark', 'light');
+                    html.classList.add(theme);
+                } catch (e) {
+                    // localStorage unavailable (private browsing etc.) – fall back to dark
+                    document.documentElement.classList.add('dark');
+                }
+            })();
+        </script>
+
         <!-- Scripts -->
         @routes
         @vite(['resources/js/app.js', "resources/js/Pages/{$page['component']}.vue"])

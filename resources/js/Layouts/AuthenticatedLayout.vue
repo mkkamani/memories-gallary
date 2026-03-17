@@ -67,7 +67,7 @@ onMounted(() => {
     } else if (window.matchMedia('(prefers-color-scheme: light)').matches) {
         theme.value = 'light';
     }
-    
+
     if (theme.value === 'dark') {
         document.documentElement.classList.add('dark');
         document.documentElement.classList.remove('light');
@@ -105,10 +105,10 @@ const navItems = computed(() => {
     const items = [
         { label: 'Dashboard', path: route('dashboard'), icon: LayoutDashboard },
         { label: 'Albums', path: route('albums.index'), routeName: 'albums.*', icon: FolderOpen },
-        { label: 'Recycle Bin', path: route('recycle-bin.index'), routeName: 'recycle-bin.*', icon: Activity },
     ];
 
     if (role === 'admin') {
+        items.push({ label: 'Recycle Bin', path: route('recycle-bin.index'), routeName: 'recycle-bin.*', icon: Activity });
         items.push({ label: 'Users', path: route('users.index'), routeName: 'users.*', icon: Users });
     }
 
@@ -126,7 +126,7 @@ const isActive = (item) => {
 
 <template>
     <div class="min-h-full bg-background flex flex-col font-sans text-foreground">
-        
+
         <!-- Sidebar -->
         <aside
             class="hidden md:flex flex-col fixed left-0 top-0 bottom-0 z-[60] border-r border-border bg-card transition-all duration-300"
@@ -136,7 +136,7 @@ const isActive = (item) => {
             <div class="h-16 shrink-0 flex items-center border-b border-border px-4 transition-all" :class="collapsed ? 'justify-center px-2' : ''">
                 <Link :href="route('dashboard')" class="flex items-center w-full" :class="collapsed ? 'justify-center' : ''">
                     <img v-if="collapsed" src="/favicon.ico" alt="Icon" class="w-8 h-8 rounded-lg" />
-                    <img v-else :src="theme === 'dark' ? '/images/cx-logo-dark.svg' : '/images/cx-logo-light.svg'" alt="Logo" class="h-5" />
+                    <img v-else :src="theme === 'dark' ? '/images/cx-logo-light.svg' : '/images/cx-logo-dark.svg'" alt="Logo" class="h-5" />
                 </Link>
             </div>
 
@@ -256,7 +256,7 @@ const isActive = (item) => {
                         <div class="px-3 py-2 border-b border-border mb-2">
                             <p class="text-sm font-bold text-foreground">{{ authUser?.name }}</p>
                             <p class="text-xs text-muted-foreground">{{ authUser?.email }}</p>
-                            <span class="inline-block mt-2 text-[10px] px-2 py-0.5 rounded capitalize font-bold" 
+                            <span class="inline-block mt-2 text-[10px] px-2 py-0.5 rounded capitalize font-bold"
                                    :class="authUser?.role === 'admin' ? 'bg-primary/20 text-primary' : (authUser?.role === 'manager' ? 'bg-info/20 text-info' : 'bg-success/20 text-success')">
                                  {{ authUser?.role }}
                              </span>

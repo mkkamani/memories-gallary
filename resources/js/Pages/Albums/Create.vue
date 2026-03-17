@@ -2,22 +2,11 @@
 import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout.vue';
 import InputError from '@/Components/InputError.vue';
 import InputLabel from '@/Components/InputLabel.vue';
-import PrimaryButton from '@/Components/PrimaryButton.vue';
-import TextInput from '@/Components/TextInput.vue';
 import { Head, useForm, Link } from '@inertiajs/vue3';
-
-const props = defineProps({
-    availableParents: Array,
-    defaultParentId: Number,
-});
 
 const form = useForm({
     title: '',
     description: '',
-    type: 'festival',
-    event_date: '',
-    is_public: false,
-    parent_id: props.defaultParentId || null,
     location: '',
 });
 
@@ -31,14 +20,17 @@ const submit = () => {
 
     <AuthenticatedLayout>
         <div class="py-12 animate-fade-in text-foreground max-w-7xl mx-auto sm:px-6 lg:px-8 space-y-6">
-            
+
             <div class="flex flex-col md:flex-row md:items-center justify-between gap-4">
                 <div>
                     <h1 class="font-heading font-bold text-3xl">Create Album</h1>
                     <p class="text-sm text-muted-foreground mt-1">Add a new collection to your gallery</p>
                 </div>
-                
-                <Link :href="route('albums.index')" class="flex items-center gap-2 h-11 px-6 rounded-pill bg-bg-elevated border border-border text-foreground font-bold text-sm shadow-sm hover:translate-y-[-2px] transition-all whitespace-nowrap">
+
+                <Link
+                    :href="route('albums.index')"
+                    class="flex items-center gap-2 h-11 px-6 rounded-pill bg-bg-elevated border border-border text-foreground font-bold text-sm shadow-sm hover:translate-y-[-2px] transition-all whitespace-nowrap"
+                >
                     Back to Albums
                 </Link>
             </div>
@@ -46,61 +38,74 @@ const submit = () => {
             <div class="max-w-3xl">
                 <div class="bg-bg-card border border-border sm:rounded-2xl p-6 sm:p-8 shadow-sm">
                     <form @submit.prevent="submit" class="space-y-6">
+
+                        <!-- Album Title -->
                         <div>
                             <InputLabel for="title" value="Album Title" class="text-foreground" />
-                            <input id="title" type="text" class="mt-2 h-11 block w-full bg-bg-input border-border text-foreground rounded-lg shadow-sm focus:border-primary focus:ring-1 focus:ring-primary px-4" v-model="form.title" required autofocus />
+                            <input
+                                id="title"
+                                type="text"
+                                class="mt-2 h-11 block w-full bg-bg-input border-border text-foreground rounded-lg shadow-sm focus:border-primary focus:ring-1 focus:ring-primary px-4"
+                                v-model="form.title"
+                                placeholder="e.g. Diwali 2024"
+                                required
+                                autofocus
+                            />
                             <InputError class="mt-2" :message="form.errors.title" />
                         </div>
 
+                        <!-- Description (optional) -->
                         <div>
-                            <InputLabel for="description" value="Description" class="text-foreground" />
-                            <textarea id="description" class="mt-2 block w-full bg-bg-input border-border text-foreground rounded-lg shadow-sm focus:border-primary focus:ring-1 focus:ring-primary p-4" v-model="form.description" rows="3"></textarea>
+                            <InputLabel for="description" value="Description (optional)" class="text-foreground" />
+                            <textarea
+                                id="description"
+                                class="mt-2 block w-full bg-bg-input border-border text-foreground rounded-lg shadow-sm focus:border-primary focus:ring-1 focus:ring-primary p-4"
+                                v-model="form.description"
+                                rows="3"
+                                placeholder="A short description of this album…"
+                            ></textarea>
                             <InputError class="mt-2" :message="form.errors.description" />
                         </div>
 
-                        <div>
-                            <InputLabel for="parent_album" value="Parent Album (Optional)" class="text-foreground" />
-                            <select id="parent_album" class="mt-2 h-11 block w-full bg-bg-input border-border text-foreground rounded-lg shadow-sm focus:border-primary focus:ring-1 focus:ring-primary px-4 appearance-none" v-model="form.parent_id">
-                                <option :value="null">None (Root Level)</option>
-                                <option v-for="album in availableParents" :key="album.id" :value="album.id">
-                                    {{ album.title }}
-                                </option>
-                            </select>
-                            <InputError class="mt-2" :message="form.errors.parent_id" />
-                        </div>
-
-                        <div class="grid grid-cols-1 sm:grid-cols-2 gap-6">
-                            <div>
-                                <InputLabel for="type" value="Type" class="text-foreground" />
-                                <select id="type" class="mt-2 h-11 block w-full bg-bg-input border-border text-foreground rounded-lg shadow-sm focus:border-primary focus:ring-1 focus:ring-primary px-4 appearance-none" v-model="form.type">
-                                    <option value="festival">Festival</option>
-                                    <option value="event">Event</option>
-                                </select>
-                            </div>
-                            <div>
-                                <InputLabel for="event_date" value="Event Date" class="text-foreground" />
-                                <input id="event_date" type="date" class="mt-2 h-11 block w-full bg-bg-input border-border text-foreground rounded-lg shadow-sm focus:border-primary focus:ring-1 focus:ring-primary px-4 color-scheme-dark" v-model="form.event_date" />
-                            </div>
-                        </div>
-
+                        <!-- Location -->
                         <div>
                             <InputLabel for="location" value="Location" class="text-foreground" />
-                            <select id="location" class="mt-2 h-11 block w-full bg-bg-input border-border text-foreground rounded-lg shadow-sm focus:border-primary focus:ring-1 focus:ring-primary px-4 appearance-none" v-model="form.location" required>
-                                <option value="" disabled>Select Location...</option>
+                            <select
+                                id="location"
+                                class="mt-2 h-11 block w-full bg-bg-input border-border text-foreground rounded-lg shadow-sm focus:border-primary focus:ring-1 focus:ring-primary px-4 appearance-none"
+                                v-model="form.location"
+                                required
+                            >
+                                <option value="" disabled>Select Location…</option>
                                 <option value="Ahmedabad">Ahmedabad</option>
                                 <option value="Rajkot">Rajkot</option>
                             </select>
                             <InputError class="mt-2" :message="form.errors.location" />
                         </div>
 
-                        <div class="flex items-center bg-bg-elevated p-4 rounded-lg border border-border/50 transition-colors hover:border-primary/50 cursor-pointer" @click="form.is_public = !form.is_public">
-                            <input id="is_public" type="checkbox" class="rounded w-5 h-5 bg-bg-input border-border text-primary shadow-sm focus:ring-primary" v-model="form.is_public" @click.stop />
-                            <label for="is_public" class="ml-3 text-sm font-medium text-foreground cursor-pointer" @click.stop>Make this album public</label>
-                            <span class="ml-auto text-xs text-muted-foreground mr-2 hidden sm:block">Anyone can view this</span>
+                        <!-- Info banner: albums are always public -->
+                        <div class="flex items-center gap-3 bg-primary/5 border border-primary/20 rounded-lg px-4 py-3">
+                            <svg class="w-5 h-5 text-primary shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                    d="M3.055 11H5a2 2 0 012 2v1a2 2 0 002 2 2 2 0 012 2v2.945M8 3.935V5.5A2.5 2.5 0 0010.5 8h.5a2 2 0 012 2 2 2 0 104 0 2 2 0 012-2h1.064M15 20.488V18a2 2 0 012-2h3.064M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/>
+                            </svg>
+                            <p class="text-sm text-primary font-medium">
+                                All albums are <span class="font-bold">public</span> — visible to everyone in your team.
+                            </p>
                         </div>
 
+                        <!-- Submit -->
                         <div class="flex items-center justify-end pt-4 border-t border-border">
-                            <button type="submit" class="flex items-center gap-2 h-11 px-8 rounded-pill bg-gradient-to-r from-primary to-accent-hover text-primary-foreground font-bold text-sm shadow-lg hover:translate-y-[-2px] transition-all whitespace-nowrap" :class="{ 'opacity-50 cursor-not-allowed': form.processing }" :disabled="form.processing">
+                            <button
+                                type="submit"
+                                class="flex items-center gap-2 h-11 px-8 rounded-pill bg-gradient-to-r from-primary to-accent-hover text-primary-foreground font-bold text-sm shadow-lg hover:translate-y-[-2px] transition-all whitespace-nowrap"
+                                :class="{ 'opacity-50 cursor-not-allowed': form.processing }"
+                                :disabled="form.processing"
+                            >
+                                <svg v-if="form.processing" class="animate-spin w-4 h-4" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                                    <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"/>
+                                    <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"/>
+                                </svg>
                                 Create Album
                             </button>
                         </div>
