@@ -14,7 +14,8 @@ import {
   Moon,
   ChevronLeft,
   ChevronRight,
-  FolderOpen
+  FolderOpen,
+  Trash2,
 } from 'lucide-vue-next';
 
 // Shared state
@@ -108,7 +109,7 @@ const navItems = computed(() => {
     ];
 
     if (role === 'admin') {
-        items.push({ label: 'Recycle Bin', path: route('recycle-bin.index'), routeName: 'recycle-bin.*', icon: Activity });
+        items.push({ label: 'Recycle Bin', path: route('recycle-bin.index'), routeName: 'recycle-bin.*', icon: Trash2 });
         items.push({ label: 'Users', path: route('users.index'), routeName: 'users.*', icon: Users });
     }
 
@@ -125,7 +126,7 @@ const isActive = (item) => {
 </script>
 
 <template>
-    <div class="min-h-full bg-background flex flex-col font-sans text-foreground">
+    <div class="min-h-screen bg-background flex flex-col font-sans text-foreground">
 
         <!-- Sidebar -->
         <aside
@@ -257,9 +258,9 @@ const isActive = (item) => {
                             <p class="text-sm font-bold text-foreground">{{ authUser?.name }}</p>
                             <p class="text-xs text-muted-foreground">{{ authUser?.email }}</p>
                             <span class="inline-block mt-2 text-[10px] px-2 py-0.5 rounded capitalize font-bold"
-                                   :class="authUser?.role === 'admin' ? 'bg-primary/20 text-primary' : (authUser?.role === 'manager' ? 'bg-info/20 text-info' : 'bg-success/20 text-success')">
-                                 {{ authUser?.role }}
-                             </span>
+                                :class="authUser?.role === 'admin' ? 'bg-primary/20 text-primary' : (authUser?.role === 'manager' ? 'bg-info/20 text-info' : 'bg-success/20 text-success')">
+                                {{ authUser?.role }}
+                            </span>
                         </div>
                         <Link :href="route('profile.edit')" class="w-full flex items-center gap-2 px-3 py-2 text-sm font-medium text-muted-foreground hover:bg-muted/40 rounded-lg transition-colors">
                             <User class="w-4 h-4" /> Profile
@@ -273,8 +274,8 @@ const isActive = (item) => {
         </header>
 
         <!-- Main Content area -->
-        <main class="flex-1 flex flex-col pt-16 pb-16 md:pb-0 transition-all duration-300 min-h-screen" :class="collapsed ? 'md:pl-16' : 'md:pl-56'">
-            <div class="flex-1 p-4 lg:p-6 w-full max-w-full overflow-hidden">
+        <main class="flex-1 flex flex-col pt-16 pb-16 md:pb-0 transition-all duration-300" :class="collapsed ? 'md:pl-16' : 'md:pl-56'">
+            <div class="flex-1 p-4 lg:p-6 w-full max-w-full overflow-y-auto">
                 <!-- Page Heading (Optional, can be used for secondary headers) -->
                 <header v-if="$slots.header" class="mb-4 hidden md:block">
                     <slot name="header" />
@@ -282,6 +283,11 @@ const isActive = (item) => {
                 <slot />
             </div>
         </main>
+
+        <!-- Footer -->
+        <footer class="mt-auto p-3 lg:px-6 border-t border-border text-center text-xs text-muted-foreground transition-all duration-300" :class="collapsed ? 'md:ml-16' : 'md:ml-56'">
+            <p>&copy; 2026 <b>Cypherox Technologies</b>. All Rights Reserved.</p>
+        </footer>
     </div>
 </template>
 

@@ -1,5 +1,5 @@
 <script setup>
-import { computed } from 'vue';
+import { computed, ref, onMounted } from 'vue';
 import { Head, Link, useForm } from '@inertiajs/vue3';
 import { Mail } from 'lucide-vue-next';
 import ParticleBackground from '@/Components/ParticleBackground.vue';
@@ -19,6 +19,16 @@ const submit = () => {
 const verificationLinkSent = computed(
     () => props.status === 'verification-link-sent',
 );
+
+const theme = ref('dark');
+
+onMounted(() => {
+    // Reinforce dark theme on public pages (no AuthenticatedLayout present)
+    const saved = localStorage.getItem('theme');
+    theme.value = saved === 'light' ? 'light' : 'dark';
+    document.documentElement.classList.remove('dark', 'light');
+    document.documentElement.classList.add(theme.value);
+});
 </script>
 
 <template>
@@ -26,12 +36,12 @@ const verificationLinkSent = computed(
 
     <div class="min-h-screen flex items-center justify-center relative overflow-hidden bg-background text-foreground font-sans">
         <ParticleBackground />
-        <div class="perspective-grid" />
+        <div class="public-perspective-grid" />
 
-        <div class="relative z-10 w-full max-w-md mx-4 animate-fade-in-up">
-            <div class="glass-card-static p-8">
+        <div class="w-full max-w-md mx-4 animate-fade-in-up">
+            <div class="public-panel p-8">
                 <div class="text-center mb-8 flex flex-col items-center">
-                    <img src="/images/cx-logo-light.svg" alt="CypherFrame" class="h-6 mb-3" />
+                    <img :src="theme === 'dark' ? '/images/cx-logo-light.svg' : '/images/cx-logo-dark.svg'" alt="Cypherox Technologies" class="h-6 mb-3" />
                     <h2 class="font-bold text-xl mb-2">Verify your email</h2>
                     <p class="text-sm text-muted-foreground font-medium px-4">
                         Thanks for signing up! Before getting started, could you verify
@@ -73,41 +83,9 @@ const verificationLinkSent = computed(
 
 <style>
 .rounded-pill { border-radius: 9999px; }
-.glass-card-static {
-    background: hsla(220, 40%, 15%, 0.4);
-    backdrop-filter: blur(24px);
-    border: 1px solid hsla(220, 20%, 30%, 0.3);
-    border-radius: 1.5rem;
-    box-shadow: inset 0 0 0 1px hsla(0, 0%, 100%, 0.05),
-                0 10px 40px -10px rgba(0, 0, 0, 0.5);
-}
-.perspective-grid {
-    position: absolute;
-    inset: -50%;
-    background-image: 
-        linear-gradient(to right, hsla(220, 20%, 50%, 0.05) 1px, transparent 1px),
-        linear-gradient(to bottom, hsla(220, 20%, 50%, 0.05) 1px, transparent 1px);
-    background-size: 50px 50px;
-    transform: perspective(1000px) rotateX(60deg) translateY(-100px) translateZ(-200px);
-    animation: gridMove 20s linear infinite;
-    pointer-events: none;
-    z-index: 1;
-}
-@keyframes gridMove {
-    0% { transform: perspective(1000px) rotateX(60deg) translateY(0) translateZ(-200px); }
-    100% { transform: perspective(1000px) rotateX(60deg) translateY(50px) translateZ(-200px); }
-}
 .animate-fade-in-up { animation: fadeInUp 0.6s cubic-bezier(0.16, 1, 0.3, 1) forwards; }
 @keyframes fadeInUp {
     from { opacity: 0; transform: translateY(20px); }
     to { opacity: 1; transform: translateY(0); }
-}
-.light .glass-card-static {
-    background: hsla(0, 0%, 100%, 0.6);
-    border: 1px solid hsla(220, 20%, 80%, 0.6);
-    box-shadow: inset 0 0 0 1px hsla(0, 0%, 100%, 0.5), 0 10px 40px -10px rgba(0, 0, 0, 0.1);
-}
-.light .perspective-grid {
-    background-image: linear-gradient(to right, hsla(220, 20%, 50%, 0.15) 1px, transparent 1px), linear-gradient(to bottom, hsla(220, 20%, 50%, 0.15) 1px, transparent 1px);
 }
 </style>

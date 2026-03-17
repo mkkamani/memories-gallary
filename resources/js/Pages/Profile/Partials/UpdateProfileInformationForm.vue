@@ -1,9 +1,7 @@
 <script setup>
 import InputError from '@/Components/InputError.vue';
-import InputLabel from '@/Components/InputLabel.vue';
-import PrimaryButton from '@/Components/PrimaryButton.vue';
-import TextInput from '@/Components/TextInput.vue';
 import { Link, useForm, usePage } from '@inertiajs/vue3';
+import { computed } from 'vue';
 
 defineProps({
     mustVerifyEmail: {
@@ -20,31 +18,29 @@ const form = useForm({
     name: user.name,
     email: user.email,
 });
+
+const roleLabel = computed(() => user.role || 'Member');
 </script>
 
 <template>
     <section>
-        <header>
-            <h2 class="text-lg font-medium text-gray-100">
-                Profile Information
+        <header class="pb-4 border-b border-border/80">
+            <h2 class="text-2xl font-heading font-bold text-foreground flex items-center gap-2">
+                <svg class="w-5 h-5 text-primary" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"/></svg>
+                Personal Details
             </h2>
-
-            <p class="mt-1 text-sm text-gray-400">
-                Update your account's profile information and email address.
-            </p>
         </header>
 
         <form
             @submit.prevent="form.patch(route('profile.update'))"
-            class="mt-6 space-y-6"
+            class="mt-6 space-y-5"
         >
             <div>
-                <InputLabel for="name" value="Name" />
-
-                <TextInput
+                <label for="name" class="block mb-2 text-xs font-extrabold uppercase tracking-wide text-muted-foreground">Full Name</label>
+                <input
                     id="name"
                     type="text"
-                    class="mt-1 block w-full"
+                    class="w-full h-12 rounded-xl border border-border bg-bg-secondary px-4 text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary/25 focus:border-primary"
                     v-model="form.name"
                     required
                     autofocus
@@ -55,12 +51,11 @@ const form = useForm({
             </div>
 
             <div>
-                <InputLabel for="email" value="Email" />
-
-                <TextInput
+                <label for="email" class="block mb-2 text-xs font-extrabold uppercase tracking-wide text-muted-foreground">Email Address</label>
+                <input
                     id="email"
                     type="email"
-                    class="mt-1 block w-full"
+                    class="w-full h-12 rounded-xl border border-border bg-bg-secondary px-4 text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary/25 focus:border-primary"
                     v-model="form.email"
                     required
                     autocomplete="username"
@@ -69,14 +64,34 @@ const form = useForm({
                 <InputError class="mt-2" :message="form.errors.email" />
             </div>
 
+            <div>
+                <label class="block mb-2 text-xs font-extrabold uppercase tracking-wide text-muted-foreground">Department</label>
+                <input
+                    type="text"
+                    :value="roleLabel === 'admin' ? 'Management' : (roleLabel === 'manager' ? 'Operations' : 'Member Team')"
+                    readonly
+                    class="w-full h-12 rounded-xl border border-border bg-bg-secondary px-4 text-foreground/80"
+                />
+            </div>
+
+            <div>
+                <label class="block mb-2 text-xs font-extrabold uppercase tracking-wide text-muted-foreground">Designation</label>
+                <input
+                    type="text"
+                    :value="roleLabel.toUpperCase()"
+                    readonly
+                    class="w-full h-12 rounded-xl border border-border bg-bg-secondary px-4 text-foreground/80"
+                />
+            </div>
+
             <div v-if="mustVerifyEmail && user.email_verified_at === null">
-                <p class="mt-2 text-sm text-gray-200">
+                <p class="mt-2 text-sm text-muted-foreground">
                     Your email address is unverified.
                     <Link
                         :href="route('verification.send')"
                         method="post"
                         as="button"
-                        class="rounded-md text-sm text-gray-400 underline hover:text-gray-100 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 focus:ring-offset-gray-800"
+                        class="rounded-md text-sm text-primary underline hover:text-accent-hover focus:outline-none"
                     >
                         Click here to re-send the verification email.
                     </Link>
@@ -84,14 +99,20 @@ const form = useForm({
 
                 <div
                     v-show="status === 'verification-link-sent'"
-                    class="mt-2 text-sm font-medium text-green-400"
+                    class="mt-2 text-sm font-medium text-success"
                 >
                     A new verification link has been sent to your email address.
                 </div>
             </div>
 
-            <div class="flex items-center gap-4">
-                <PrimaryButton :disabled="form.processing">Save</PrimaryButton>
+            <div class="pt-6 mt-4 border-t border-border/80 flex items-center justify-end gap-4">
+                <button
+                    type="submit"
+                    :disabled="form.processing"
+                    class="h-11 px-8 rounded-pill bg-gradient-to-r from-primary to-accent-hover text-primary-foreground text-sm font-bold shadow-md hover:shadow-primary/25 transition-all disabled:opacity-60"
+                >
+                    Save Changes
+                </button>
 
                 <Transition
                     enter-active-class="transition ease-in-out"
@@ -101,7 +122,7 @@ const form = useForm({
                 >
                     <p
                         v-if="form.recentlySuccessful"
-                        class="text-sm text-gray-400"
+                        class="text-sm text-success"
                     >
                         Saved.
                     </p>

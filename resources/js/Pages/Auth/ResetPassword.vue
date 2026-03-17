@@ -1,7 +1,7 @@
 <script setup>
 import { Head, useForm, Link } from '@inertiajs/vue3';
 import { Mail, Lock, Eye, EyeOff } from 'lucide-vue-next';
-import { ref } from 'vue';
+import { ref, onMounted } from 'vue';
 import ParticleBackground from '@/Components/ParticleBackground.vue';
 
 const props = defineProps({
@@ -29,6 +29,15 @@ const submit = () => {
         onFinish: () => form.reset('password', 'password_confirmation'),
     });
 };
+const theme = ref('dark');
+
+onMounted(() => {
+    // Reinforce dark theme on public pages (no AuthenticatedLayout present)
+    const saved = localStorage.getItem('theme');
+    theme.value = saved === 'light' ? 'light' : 'dark';
+    document.documentElement.classList.remove('dark', 'light');
+    document.documentElement.classList.add(theme.value);
+});
 </script>
 
 <template>
@@ -36,12 +45,12 @@ const submit = () => {
 
     <div class="min-h-screen flex items-center justify-center relative overflow-hidden bg-background text-foreground font-sans">
         <ParticleBackground />
-        <div class="perspective-grid" />
+        <div class="public-perspective-grid" />
 
-        <div class="relative z-10 w-full max-w-md mx-4 animate-fade-in-up">
-            <div class="glass-card-static p-8">
+        <div class="w-full max-w-md mx-4 animate-fade-in-up">
+            <div class="public-panel p-8">
                 <div class="text-center mb-8 flex flex-col items-center">
-                    <img src="/images/cx-logo-light.svg" alt="CypherFrame" class="h-6 mb-3" />
+                    <img :src="theme === 'dark' ? '/images/cx-logo-light.svg' : '/images/cx-logo-dark.svg'" alt="Cypherox Technologies" class="h-6 mb-3" />
                     <h2 class="font-bold text-xl mb-2">Create New Password</h2>
                     <p class="text-sm text-muted-foreground font-medium px-4">
                         Please enter your new password below.
@@ -57,7 +66,7 @@ const submit = () => {
                             v-model="form.email"
                             required
                             readonly
-                            class="w-full h-11 pl-10 pr-4 rounded-pill bg-bg-input border border-border text-foreground placeholder:text-muted-foreground focus:outline-none transition-all font-sans opacity-70 cursor-not-allowed"
+                            class="public-form-control w-full h-11 pl-10 pr-4 rounded-pill text-sm text-foreground placeholder:text-muted-foreground focus:outline-none transition-all font-sans opacity-70 cursor-not-allowed"
                         />
                         <p v-if="form.errors.email" class="text-xs text-error mt-1 pl-3">{{ form.errors.email }}</p>
                     </div>
@@ -70,9 +79,9 @@ const submit = () => {
                             v-model="form.password"
                             required
                             autofocus
-                            class="w-full h-11 pl-10 pr-10 rounded-pill bg-bg-input border border-border text-foreground placeholder:text-muted-foreground focus:outline-none focus:border-primary focus:shadow-[0_0_15px_hsla(var(--primary),0.15)] transition-all font-sans"
+                            class="public-form-control w-full h-11 pl-10 pr-10 rounded-pill text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:shadow-[0_0_15px_hsla(var(--primary),0.15)] transition-all font-sans"
                         />
-                        <button type="button" @click="showPassword = !showPassword" class="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground relative z-10 w-6 h-6 flex items-center justify-center">
+                        <button type="button" @click="showPassword = !showPassword" class="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground w-6 h-6 flex items-center justify-center">
                             <EyeOff v-if="showPassword" class="w-4 h-4" />
                             <Eye v-else class="w-4 h-4" />
                         </button>
@@ -86,7 +95,7 @@ const submit = () => {
                             placeholder="Confirm New Password" 
                             v-model="form.password_confirmation"
                             required
-                            class="w-full h-11 pl-10 pr-10 rounded-pill bg-bg-input border border-border text-foreground placeholder:text-muted-foreground focus:outline-none focus:border-primary focus:shadow-[0_0_15px_hsla(var(--primary),0.15)] transition-all font-sans"
+                            class="public-form-control w-full h-11 pl-10 pr-10 rounded-pill text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:shadow-[0_0_15px_hsla(var(--primary),0.15)] transition-all font-sans"
                         />
                         <p v-if="form.errors.password_confirmation" class="text-xs text-error mt-1 pl-3">{{ form.errors.password_confirmation }}</p>
                     </div>
@@ -107,43 +116,11 @@ const submit = () => {
 
 <style>
 .rounded-pill { border-radius: 9999px; }
-.glass-card-static {
-    background: hsla(220, 40%, 15%, 0.4);
-    backdrop-filter: blur(24px);
-    border: 1px solid hsla(220, 20%, 30%, 0.3);
-    border-radius: 1.5rem;
-    box-shadow: inset 0 0 0 1px hsla(0, 0%, 100%, 0.05),
-                0 10px 40px -10px rgba(0, 0, 0, 0.5);
-}
-.perspective-grid {
-    position: absolute;
-    inset: -50%;
-    background-image: 
-        linear-gradient(to right, hsla(220, 20%, 50%, 0.05) 1px, transparent 1px),
-        linear-gradient(to bottom, hsla(220, 20%, 50%, 0.05) 1px, transparent 1px);
-    background-size: 50px 50px;
-    transform: perspective(1000px) rotateX(60deg) translateY(-100px) translateZ(-200px);
-    animation: gridMove 20s linear infinite;
-    pointer-events: none;
-    z-index: 1;
-}
-@keyframes gridMove {
-    0% { transform: perspective(1000px) rotateX(60deg) translateY(0) translateZ(-200px); }
-    100% { transform: perspective(1000px) rotateX(60deg) translateY(50px) translateZ(-200px); }
-}
 .animate-fade-in-up {
     animation: fadeInUp 0.6s cubic-bezier(0.16, 1, 0.3, 1) forwards;
 }
 @keyframes fadeInUp {
     from { opacity: 0; transform: translateY(20px); }
     to { opacity: 1; transform: translateY(0); }
-}
-.light .glass-card-static {
-    background: hsla(0, 0%, 100%, 0.6);
-    border: 1px solid hsla(220, 20%, 80%, 0.6);
-    box-shadow: inset 0 0 0 1px hsla(0, 0%, 100%, 0.5), 0 10px 40px -10px rgba(0, 0, 0, 0.1);
-}
-.light .perspective-grid {
-    background-image: linear-gradient(to right, hsla(220, 20%, 50%, 0.15) 1px, transparent 1px), linear-gradient(to bottom, hsla(220, 20%, 50%, 0.15) 1px, transparent 1px);
 }
 </style>

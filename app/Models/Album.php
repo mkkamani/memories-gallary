@@ -13,6 +13,11 @@ class Album extends Model
 {
     use HasFactory, SoftDeletes;
 
+    public function getRouteKeyName()
+    {
+        return 'slug';
+    }
+
     protected $fillable = [
         "user_id",
         "parent_id",

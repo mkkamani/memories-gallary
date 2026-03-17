@@ -22,7 +22,7 @@ export default {
         },
         extend: {
             fontFamily: {
-                sans: ['Figtree', ...defaultTheme.fontFamily.sans],
+                sans: ["var(--font-main)", ...defaultTheme.fontFamily.sans],
                 brand: ["var(--font-main)"],
                 heading: ["var(--font-main)"],
                 body: ["var(--font-main)"],

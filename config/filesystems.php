@@ -17,6 +17,22 @@ return [
 
     /*
     |--------------------------------------------------------------------------
+    | Media Filesystem Disk
+    |--------------------------------------------------------------------------
+    |
+    | This disk is used by the media upload flow. Default to the local public
+    | disk unless an explicit media disk is configured or a Cloudflare R2
+    | bucket is available.
+    |
+    */
+
+    'media_disk' => env(
+        'MEDIA_DISK',
+        env('CLOUDFLARE_R2_BUCKET') ? 'r2' : 'public',
+    ),
+
+    /*
+    |--------------------------------------------------------------------------
     | Filesystem Disks
     |--------------------------------------------------------------------------
     |

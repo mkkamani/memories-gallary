@@ -1,5 +1,6 @@
 <?php
 
+use Illuminate\Http\Exceptions\PostTooLargeException;
 use Illuminate\Console\Scheduling\Schedule;
 use Illuminate\Foundation\Application;
 use Illuminate\Foundation\Configuration\Exceptions;
@@ -42,6 +43,17 @@ return Application::configure(basePath: dirname(__DIR__))
             ->appendOutputTo(storage_path("logs/recycle-bin-purge.log"));
     })
     ->withExceptions(function (Exceptions $exceptions): void {
-        //
+        $exceptions->render(function (PostTooLargeException $e, $request) {
+            $postMax = ini_get("post_max_size");
+
+            return back()
+                ->withErrors([
+                    "files" => "The upload is too large for the server limit ({$postMax}). Please upload a smaller file or increase the server upload limit.",
+                ])
+                ->with(
+                    "error",
+                    "Upload failed because the request exceeded the server size limit.",
+                );
+        });
     })
     ->create();

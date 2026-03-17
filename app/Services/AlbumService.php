@@ -40,7 +40,7 @@ class AlbumService
         }
 
         if (empty($data["slug"])) {
-            $data["slug"] = Str::slug($data["title"]) . "-" . Str::random(6);
+            $data["slug"] = $this->generateUniqueSlug($data["title"]);
         }
 
         // Create the album row (r2_path is computed after we have the id)
@@ -80,7 +80,7 @@ class AlbumService
         }
 
         if (isset($data["title"]) && $album->title !== $data["title"]) {
-            $data["slug"] = Str::slug($data["title"]) . "-" . Str::random(6);
+            $data["slug"] = $this->generateUniqueSlug($data["title"], $album->id);
         }
 
         $album->update($data);
@@ -198,5 +198,29 @@ class AlbumService
                 "An album cannot be its own parent.",
             );
         }
+    }
+
+    protected function generateUniqueSlug(string $title, ?int $ignoreId = null): string
+    {
+        $base = Str::slug($title);
+
+        if ($base === '') {
+            $base = 'album';
+        }
+
+        $slug = $base;
+        $counter = 2;
+
+        while (
+            Album::query()
+                ->when($ignoreId, fn($q) => $q->where('id', '!=', $ignoreId))
+                ->where('slug', $slug)
+                ->exists()
+        ) {
+            $slug = $base . '-' . $counter;
+            $counter++;
+        }
+
+        return $slug;
     }
 }

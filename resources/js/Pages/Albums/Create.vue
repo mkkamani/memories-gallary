@@ -19,7 +19,7 @@ const submit = () => {
     <Head title="Create Album" />
 
     <AuthenticatedLayout>
-        <div class="py-12 animate-fade-in text-foreground max-w-7xl mx-auto sm:px-6 lg:px-8 space-y-6">
+        <div class="animate-fade-in text-foreground space-y-6">
 
             <div class="flex flex-col md:flex-row md:items-center justify-between gap-4">
                 <div>

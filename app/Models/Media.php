@@ -5,11 +5,33 @@ namespace App\Models;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\SoftDeletes;
+use Illuminate\Filesystem\FilesystemAdapter;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Storage;
 
 class Media extends Model
 {
     use HasFactory, SoftDeletes;
+
+    protected static function mediaDisk(): string
+    {
+        return (string) config('filesystems.media_disk', 'public');
+    }
+
+    protected function plainUrl(string $disk): string
+    {
+        if ($disk === 'public') {
+            return asset('storage/' . ltrim($this->file_path, '/'));
+        }
+
+        $baseUrl = (string) config("filesystems.disks.{$disk}.url", '');
+
+        if ($baseUrl !== '') {
+            return rtrim($baseUrl, '/') . '/' . ltrim($this->file_path, '/');
+        }
+
+        return asset('storage/' . ltrim($this->file_path, '/'));
+    }
 
     protected $fillable = [
         "album_id",
@@ -62,21 +84,31 @@ class Media extends Model
      */
     public function getUrlAttribute(): string
     {
+        $disk = self::mediaDisk();
+
         try {
-            return Storage::disk("r2")->temporaryUrl(
-                $this->file_path,
-                now()->addHours(6),
-            );
+            /** @var FilesystemAdapter $storage */
+            $storage = Storage::disk($disk);
+
+            if (method_exists($storage, 'temporaryUrl')) {
+                return $storage->temporaryUrl(
+                    $this->file_path,
+                    now()->addHours(6),
+                );
+            }
+
+            return $this->plainUrl($disk);
         } catch (\Throwable $e) {
-            \Log::warning("Media: failed to generate presigned URL.", [
+            Log::warning("Media: failed to generate presigned URL.", [
                 "media_id" => $this->id,
                 "file_path" => $this->file_path,
+                "disk" => $disk,
                 "error" => $e->getMessage(),
             ]);
 
             // Fall back to the plain (unsigned) URL so the attribute never
             // throws and the rest of the page can still render.
-            return Storage::disk("r2")->url($this->file_path);
+            return $this->plainUrl($disk);
         }
     }
 }

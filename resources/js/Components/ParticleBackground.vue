@@ -71,7 +71,7 @@ onMounted(() => {
 <template>
     <canvas
         ref="canvasRef"
-        class="fixed inset-0 pointer-events-none z-0"
+        class="fixed inset-0 pointer-events-none"
         style="opacity: 0.6"
     ></canvas>
 </template>

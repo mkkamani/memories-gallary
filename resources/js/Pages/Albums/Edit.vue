@@ -15,7 +15,7 @@ const form = useForm({
 });
 
 const submit = () => {
-    form.put(route('albums.update', props.album.id));
+    form.put(route('albums.update', props.album.slug || props.album.id));
 };
 </script>
 
@@ -23,7 +23,7 @@ const submit = () => {
     <Head title="Edit Album" />
 
     <AuthenticatedLayout>
-        <div class="py-12 animate-fade-in text-foreground max-w-7xl mx-auto sm:px-6 lg:px-8 space-y-6">
+        <div class="animate-fade-in text-foreground space-y-6">
 
             <div class="flex flex-col md:flex-row md:items-center justify-between gap-4">
                 <div>
@@ -32,7 +32,7 @@ const submit = () => {
                 </div>
 
                 <Link
-                    :href="route('albums.show', album.id)"
+                    :href="route('albums.show', album.slug || album.id)"
                     class="flex items-center gap-2 h-11 px-6 rounded-pill bg-bg-elevated border border-border text-foreground font-bold text-sm shadow-sm hover:translate-y-[-2px] transition-all whitespace-nowrap"
                 >
                     Back to Album

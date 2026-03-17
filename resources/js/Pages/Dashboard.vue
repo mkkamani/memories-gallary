@@ -1,7 +1,8 @@
 <script setup>
 import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout.vue';
-import { Head, Link, router } from '@inertiajs/vue3';
-import { ref, watch, computed } from 'vue';
+import { Head, Link } from '@inertiajs/vue3';
+import { ref, computed } from 'vue';
+import MediaPreviewOverlay from '@/Components/MediaPreviewOverlay.vue';
 
 const props = defineProps({
     stats: Object,
@@ -60,13 +61,50 @@ const handleAction = (e, action, id) => {
     e.stopPropagation();
     console.log(`${action} performed on asset ${id}`);
 };
+
+const parseStorageToTB = (value) => {
+    if (!value) return 0;
+    const match = String(value).match(/([\d.]+)\s*(B|KB|MB|GB|TB)?/i);
+    if (!match) return 0;
+
+    const amount = parseFloat(match[1]);
+    if (Number.isNaN(amount)) return 0;
+
+    const unit = (match[2] || 'B').toUpperCase();
+    const divisors = {
+        B: 1024 ** 4,
+        KB: 1024 ** 3,
+        MB: 1024 ** 2,
+        GB: 1024,
+        TB: 1,
+    };
+
+    return amount / (divisors[unit] || 1);
+};
+
+const storageUsedLabel = computed(() => {
+    if (props.userRole === 'member') return props.stats?.myStorageUsed || '0 TB';
+    return props.stats?.storageUsed || '0 TB';
+});
+
+const storageUsagePercent = computed(() => {
+    const usedTb = parseStorageToTB(storageUsedLabel.value);
+    const maxTb = props.userRole === 'member' ? 2 : 5;
+    return Math.min(100, Math.max(0, (usedTb / maxTb) * 100));
+});
+
+const membersUsed = computed(() => props.stats?.totalUsers || 0);
+const membersMax = computed(() => (props.userRole === 'admin' ? 200 : 100));
+const memberUsagePercent = computed(() => {
+    return Math.min(100, Math.max(0, (membersUsed.value / membersMax.value) * 100));
+});
 </script>
 
 <template>
     <Head title="Dashboard" />
 
     <AuthenticatedLayout>
-        <div class="py-12 animate-fade-in text-foreground max-w-7xl mx-auto sm:px-6 lg:px-8 space-y-8">
+        <div class="animate-fade-in text-foreground space-y-8 py-2">
 
             <div class="flex items-center justify-between">
                 <div>
@@ -95,65 +133,65 @@ const handleAction = (e, action, id) => {
             <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
                 <!-- Admin Stats -->
                 <template v-if="userRole === 'admin'">
-                    <div class="glass-card flex items-center justify-between">
+                    <div class="dash-card flex items-center justify-between">
                         <div><p class="text-xs font-bold text-muted-foreground uppercase tracking-widest">Total Users</p><h3 class="text-3xl font-bold font-mono text-foreground mt-1">{{ stats.totalUsers }}</h3></div>
-                        <div class="w-12 h-12 rounded-2xl flex items-center justify-center bg-primary/10 text-primary"><svg class="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z"/></svg></div>
+                        <div class="dash-icon-box"><svg class="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z"/></svg></div>
                     </div>
-                    <div class="glass-card flex items-center justify-between">
+                    <div class="dash-card flex items-center justify-between">
                         <div><p class="text-xs font-bold text-muted-foreground uppercase tracking-widest">Total Albums</p><h3 class="text-3xl font-bold font-mono text-foreground mt-1">{{ stats.totalAlbums }}</h3></div>
-                        <div class="w-12 h-12 rounded-2xl flex items-center justify-center bg-primary/10 text-primary"><svg class="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 7v10a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-6l-2-2H5a2 2 0 00-2 2z"/></svg></div>
+                        <div class="dash-icon-box"><svg class="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 7v10a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-6l-2-2H5a2 2 0 00-2 2z"/></svg></div>
                     </div>
-                    <div class="glass-card flex items-center justify-between">
+                    <div class="dash-card flex items-center justify-between">
                         <div><p class="text-xs font-bold text-muted-foreground uppercase tracking-widest">Media Assets</p><h3 class="text-3xl font-bold font-mono text-foreground mt-1">{{ stats.mediaAssets }}</h3></div>
-                        <div class="w-12 h-12 rounded-2xl flex items-center justify-center bg-primary/10 text-primary"><svg class="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z"/></svg></div>
+                        <div class="dash-icon-box"><svg class="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z"/></svg></div>
                     </div>
-                    <div class="glass-card flex items-center justify-between">
+                    <div class="dash-card flex items-center justify-between">
                         <div>
                             <p class="text-xs font-bold text-muted-foreground uppercase tracking-widest">Storage Used</p>
                             <h3 class="text-3xl font-bold font-mono text-foreground mt-1">{{ stats.storageUsed }}</h3>
                             <p class="text-[10px] text-muted-foreground mt-1">{{ stats.mediaAssets }} files in R2</p>
                         </div>
-                        <div class="w-12 h-12 rounded-2xl flex items-center justify-center bg-primary/10 text-primary"><svg class="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7v8a2 2 0 002 2h6M8 7V5a2 2 0 012-2h4.586a1 1 0 01.707.293l4.414 4.414a1 1 0 01.293.707V15a2 2 0 01-2 2h-2M8 7H6a2 2 0 00-2 2v10a2 2 0 002 2h8a2 2 0 002-2v-2"/></svg></div>
+                        <div class="dash-icon-box"><svg class="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7v8a2 2 0 002 2h6M8 7V5a2 2 0 012-2h4.586a1 1 0 01.707.293l4.414 4.414a1 1 0 01.293.707V15a2 2 0 01-2 2h-2M8 7H6a2 2 0 00-2 2v10a2 2 0 002 2h8a2 2 0 002-2v-2"/></svg></div>
                     </div>
                 </template>
 
                 <!-- Manager Stats -->
                 <template v-if="userRole === 'manager'">
-                    <div class="glass-card flex items-center justify-between">
+                    <div class="dash-card flex items-center justify-between">
                         <div><p class="text-xs font-bold text-muted-foreground uppercase tracking-widest">Team Members</p><h3 class="text-3xl font-bold font-mono text-foreground mt-1">{{ stats.totalUsers }}</h3></div>
-                        <div class="w-12 h-12 rounded-2xl flex items-center justify-center bg-primary/10 text-primary"><svg class="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z"/></svg></div>
+                        <div class="dash-icon-box"><svg class="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z"/></svg></div>
                     </div>
-                    <div class="glass-card flex items-center justify-between">
+                    <div class="dash-card flex items-center justify-between">
                         <div><p class="text-xs font-bold text-muted-foreground uppercase tracking-widest">Total Albums</p><h3 class="text-3xl font-bold font-mono text-foreground mt-1">{{ stats.totalAlbums }}</h3></div>
-                        <div class="w-12 h-12 rounded-2xl flex items-center justify-center bg-primary/10 text-primary"><svg class="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 7v10a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-6l-2-2H5a2 2 0 00-2 2z"/></svg></div>
+                        <div class="dash-icon-box"><svg class="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 7v10a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-6l-2-2H5a2 2 0 00-2 2z"/></svg></div>
                     </div>
-                    <div class="glass-card flex items-center justify-between">
+                    <div class="dash-card flex items-center justify-between">
                         <div><p class="text-xs font-bold text-muted-foreground uppercase tracking-widest">My Albums</p><h3 class="text-3xl font-bold font-mono text-foreground mt-1">{{ stats.myAlbums }}</h3></div>
-                        <div class="w-12 h-12 rounded-2xl flex items-center justify-center bg-primary/10 text-primary"><svg class="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 7v10a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-6l-2-2H5a2 2 0 00-2 2z"/></svg></div>
+                        <div class="dash-icon-box"><svg class="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 7v10a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-6l-2-2H5a2 2 0 00-2 2z"/></svg></div>
                     </div>
-                    <div class="glass-card flex items-center justify-between">
+                    <div class="dash-card flex items-center justify-between">
                         <div><p class="text-xs font-bold text-muted-foreground uppercase tracking-widest">New Uploads</p><h3 class="text-3xl font-bold font-mono text-foreground mt-1">{{ stats.newUploads }}</h3></div>
-                        <div class="w-12 h-12 rounded-2xl flex items-center justify-center bg-primary/10 text-primary"><svg class="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12"/></svg></div>
+                        <div class="dash-icon-box"><svg class="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12"/></svg></div>
                     </div>
                 </template>
 
                 <!-- Member Stats -->
                 <template v-if="userRole === 'member'">
-                    <div class="glass-card flex items-center justify-between lg:col-span-1">
+                    <div class="dash-card flex items-center justify-between lg:col-span-1">
                         <div><p class="text-xs font-bold text-muted-foreground uppercase tracking-widest">Total Uploads</p><h3 class="text-3xl font-bold font-mono text-foreground mt-1">{{ stats.myUploadsCount }}</h3></div>
-                        <div class="w-12 h-12 rounded-2xl flex items-center justify-center bg-primary/10 text-primary"><svg class="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z"/></svg></div>
+                        <div class="dash-icon-box"><svg class="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z"/></svg></div>
                     </div>
-                    <div class="glass-card flex items-center justify-between lg:col-span-1">
+                    <div class="dash-card flex items-center justify-between lg:col-span-1">
                         <div><p class="text-xs font-bold text-muted-foreground uppercase tracking-widest">Albums Joined</p><h3 class="text-3xl font-bold font-mono text-foreground mt-1">{{ stats.totalAlbums }}</h3></div>
-                        <div class="w-12 h-12 rounded-2xl flex items-center justify-center bg-primary/10 text-primary"><svg class="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 7v10a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-6l-2-2H5a2 2 0 00-2 2z"/></svg></div>
+                        <div class="dash-icon-box"><svg class="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 7v10a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-6l-2-2H5a2 2 0 00-2 2z"/></svg></div>
                     </div>
-                    <div class="glass-card flex items-center justify-between lg:col-span-1">
+                    <div class="dash-card flex items-center justify-between lg:col-span-1">
                         <div>
                             <p class="text-xs font-bold text-muted-foreground uppercase tracking-widest">My Storage</p>
                             <h3 class="text-3xl font-bold font-mono text-foreground mt-1">{{ stats.myStorageUsed }}</h3>
                             <p class="text-[10px] text-muted-foreground mt-1">{{ stats.myUploadsCount }} files uploaded</p>
                         </div>
-                        <div class="w-12 h-12 rounded-2xl flex items-center justify-center bg-primary/10 text-primary"><svg class="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7v8a2 2 0 002 2h6M8 7V5a2 2 0 012-2h4.586a1 1 0 01.707.293l4.414 4.414a1 1 0 01.293.707V15a2 2 0 01-2 2h-2M8 7H6a2 2 0 00-2 2v10a2 2 0 002 2h8a2 2 0 002-2v-2"/></svg></div>
+                        <div class="dash-icon-box"><svg class="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7v8a2 2 0 002 2h6M8 7V5a2 2 0 012-2h4.586a1 1 0 01.707.293l4.414 4.414a1 1 0 01.293.707V15a2 2 0 01-2 2h-2M8 7H6a2 2 0 00-2 2v10a2 2 0 002 2h8a2 2 0 002-2v-2"/></svg></div>
                     </div>
                 </template>
             </div>
@@ -164,21 +202,29 @@ const handleAction = (e, action, id) => {
                     <div class="flex items-center justify-between">
                         <h3 class="font-heading font-bold text-lg text-foreground flex items-center gap-2">
                             <span v-if="userRole === 'member'">Active Albums</span>
-                            <span v-else>Recently Updated Albums</span>
+                            <span v-else>Pinned Albums</span>
                         </h3>
-                        <Link href="/albums" class="text-xs font-bold text-primary hover:underline uppercase tracking-widest">Browse All</Link>
+                        <Link href="/albums" class="text-xs font-bold text-primary hover:underline uppercase tracking-widest">View All</Link>
                     </div>
 
-                    <div class="grid grid-cols-2 sm:grid-cols-4 gap-4">
-                        <Link v-for="album in recentAlbums.slice(0, 4)" :key="album.id" :href="`/albums/${album.id}`" class="group cursor-pointer flex flex-col items-center gap-2">
-                            <div class="w-full aspect-[4/3] rounded-2xl overflow-hidden bg-bg-card border border-border group-hover:border-primary/50 transition-all shadow-sm">
-                                <img v-if="album.coverUrl" :src="album.coverUrl" class="w-full h-full object-cover group-hover:scale-110 transition-transform duration-500" alt="" />
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <Link
+                            v-for="album in recentAlbums.slice(0, 4)"
+                            :key="album.id"
+                            :href="`/albums/${album.id}`"
+                            class="dash-card flex items-center gap-3 p-3 group"
+                        >
+                            <div class="w-12 h-12 rounded-xl overflow-hidden bg-bg-elevated shrink-0 border border-border">
+                                <img v-if="album.coverUrl" :src="album.coverUrl" class="w-full h-full object-cover group-hover:scale-110 transition-transform duration-300" alt="" />
                                 <div v-else class="w-full h-full flex items-center justify-center text-muted-foreground bg-bg-elevated">
-                                    <svg class="w-8 h-8 opacity-30" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 7v10a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-6l-2-2H5a2 2 0 00-2 2z"/></svg>
+                                    <svg class="w-5 h-5 opacity-40" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 7v10a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-6l-2-2H5a2 2 0 00-2 2z"/></svg>
                                 </div>
                             </div>
-                            <span class="text-xs font-bold text-foreground truncate w-full px-1">{{ album.name }}</span>
-                            <span class="text-[10px] text-muted-foreground">{{ album.photoCount }} assets</span>
+                            <div class="min-w-0 flex-1">
+                                <p class="text-sm font-bold text-foreground truncate">{{ album.name }}</p>
+                                <p class="text-[11px] text-muted-foreground mt-0.5">{{ album.created_at || 'Recently updated' }}</p>
+                                <span class="inline-flex mt-1 text-[10px] font-bold px-2 py-0.5 rounded bg-primary/10 text-primary uppercase tracking-wide">{{ album.photoCount }} assets</span>
+                            </div>
                         </Link>
                     </div>
 
@@ -217,7 +263,7 @@ const handleAction = (e, action, id) => {
                 <div class="space-y-6">
                     <!-- Admin & Manager Sidebar widgets -->
                     <template v-if="userRole !== 'member'">
-                        <div class="glass-card-static !p-6 space-y-4">
+                        <div class="dash-card !p-6 space-y-4">
                             <div class="flex items-center justify-between">
                                 <h3 class="font-heading font-bold text-sm text-foreground flex items-center gap-2">Team Updates</h3>
                                 <Link v-if="userRole === 'admin'" href="/users" class="text-[10px] font-bold text-primary hover:underline uppercase tracking-widest">Manage</Link>
@@ -235,47 +281,71 @@ const handleAction = (e, action, id) => {
                         </div>
                     </template>
 
-                    <!-- Manager/Member specific upload CTA -->
-                    <template v-if="userRole === 'member' || userRole === 'manager'">
-                        <div class="glass-card-static !p-6 space-y-4 bg-gradient-to-br from-primary/5 to-accent-hover/5 border-primary/20 shadow-xl">
-                            <div class="flex flex-col items-center text-center py-4">
-                                <div class="w-16 h-16 rounded-full bg-primary/10 flex items-center justify-center text-primary mb-4">
-                                    <svg class="w-8 h-8" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12"/></svg>
+                    <div class="dash-card !p-6 space-y-4">
+                        <h3 class="font-heading font-bold text-sm uppercase tracking-widest text-foreground">Usage Summary</h3>
+                        <div class="space-y-4">
+                            <div>
+                                <div class="flex items-center justify-between text-[11px] text-muted-foreground mb-1.5">
+                                    <span>Storage Used</span>
+                                    <span class="font-bold text-foreground">{{ storageUsedLabel }} / {{ userRole === 'member' ? '2 TB' : '5 TB' }}</span>
                                 </div>
-                                <h3 class="font-heading font-bold text-lg text-foreground">Ready to contribute?</h3>
-                                <p class="text-xs text-muted-foreground mt-2 max-w-[200px]">Upload photos from your latest event directly to the shared albums.</p>
-                                <Link href="/albums" class="mt-6 w-full h-11 flex items-center justify-center rounded-pill bg-primary text-primary-foreground font-bold text-sm shadow-lg hover:shadow-primary/20 transition-all">Start Uploading</Link>
+                                <div class="h-1.5 rounded-full bg-muted overflow-hidden">
+                                    <div class="orange-progress h-full rounded-full transition-all" :style="{ width: `${storageUsagePercent}%` }" />
+                                </div>
+                            </div>
+
+                            <div>
+                                <div class="flex items-center justify-between text-[11px] text-muted-foreground mb-1.5">
+                                    <span>Members Active</span>
+                                    <span class="font-bold text-foreground">{{ membersUsed }} / {{ membersMax }}</span>
+                                </div>
+                                <div class="h-1.5 rounded-full bg-muted overflow-hidden">
+                                    <div class="orange-progress h-full rounded-full transition-all" :style="{ width: `${memberUsagePercent}%` }" />
+                                </div>
                             </div>
                         </div>
-                    </template>
+                    </div>
                 </div>
             </div>
 
-            <!-- Lightbox Modal -->
-            <div v-if="showPreviewModal" class="fixed inset-0 z-50 bg-black/95 backdrop-blur-sm flex items-center justify-center" @click.self="closePreview">
-                <div class="absolute top-4 right-4 flex items-center gap-4">
-                    <button class="w-10 h-10 rounded-full bg-white/10 hover:bg-white/20 text-white flex items-center justify-center transition-colors">
-                        <svg class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"/></svg>
-                    </button>
-                    <button @click="closePreview" class="w-10 h-10 rounded-full bg-white/10 hover:bg-white/20 text-white flex items-center justify-center transition-colors">
-                        <svg class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg>
-                    </button>
-                </div>
-
-                <button v-if="currentIndex > 0" @click="goToPrevious" class="absolute left-4 w-12 h-12 rounded-full bg-white/10 hover:bg-white/20 text-white flex items-center justify-center transition-colors backdrop-blur-md">
-                    <svg class="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7"/></svg>
-                </button>
-
-                <button v-if="currentIndex < allMediaContext.length - 1" @click="goToNext" class="absolute right-4 w-12 h-12 rounded-full bg-white/10 hover:bg-white/20 text-white flex items-center justify-center transition-colors backdrop-blur-md">
-                    <svg class="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/></svg>
-                </button>
-
-                <div class="flex items-center justify-center w-full max-w-5xl max-h-[85vh] px-16">
-                    <img v-if="previewMedia?.file_type === 'image'" :src="previewMedia.url" class="max-w-full max-h-[85vh] object-contain" />
-                    <video v-else-if="previewMedia?.file_type === 'video'" :src="previewMedia.url" controls autoplay class="max-w-full max-h-[85vh]"></video>
-                </div>
-            </div>
+            <MediaPreviewOverlay
+                :show="showPreviewModal"
+                :media="previewMedia"
+                :items="allMediaContext"
+                :current-index="currentIndex"
+                @close="closePreview"
+                @next="goToNext"
+                @previous="goToPrevious"
+            />
 
         </div>
     </AuthenticatedLayout>
 </template>
+
+<style scoped>
+.dash-card {
+    position: relative;
+    overflow: hidden;
+    background: linear-gradient(132deg, hsl(var(--card)), hsl(var(--card)) 15%, hsl(var(--primary) / 0.08));
+    border: 1px solid hsl(var(--border));
+    border-radius: 1rem;
+    padding: 1.25rem;
+    box-shadow: 0 1px 2px hsl(220 15% 20% / 0.04);
+}
+
+.dash-icon-box {
+    width: 3rem;
+    height: 3rem;
+    border-radius: 0.75rem;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: linear-gradient(135deg, hsl(var(--primary)), hsl(var(--accent-hover)));
+    color: hsl(var(--primary-foreground));
+    box-shadow: 0 10px 20px hsl(var(--primary) / 0.22);
+}
+
+.orange-progress {
+    background: linear-gradient(90deg, hsl(var(--primary)), hsl(var(--accent-hover)));
+}
+</style>

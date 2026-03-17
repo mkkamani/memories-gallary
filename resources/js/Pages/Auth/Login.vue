@@ -23,12 +23,14 @@ const submit = () => {
     });
 };
 
+const theme = ref('dark');
+
 onMounted(() => {
     // Reinforce dark theme on public pages (no AuthenticatedLayout present)
     const saved = localStorage.getItem('theme');
-    const theme = saved === 'light' ? 'light' : 'dark';
+    theme.value = saved === 'light' ? 'light' : 'dark';
     document.documentElement.classList.remove('dark', 'light');
-    document.documentElement.classList.add(theme);
+    document.documentElement.classList.add(theme.value);
 });
 </script>
 
@@ -41,22 +43,22 @@ onMounted(() => {
         <ParticleBackground />
 
         <!-- Perspective grid -->
-        <div class="perspective-grid" />
+        <div class="public-perspective-grid" />
 
         <!-- Radial glow -->
-        <div class="pointer-events-none absolute inset-0 flex items-center justify-center z-0">
+        <div class="pointer-events-none absolute inset-0 flex items-center justify-center">
             <div class="w-[500px] h-[500px] rounded-full bg-primary/5 blur-[100px]"></div>
         </div>
 
         <!-- Card -->
-        <div class="relative z-10 w-full max-w-md mx-4 animate-fade-in-up">
-            <div class="login-card p-8 sm:p-10">
+        <div class="w-full max-w-md mx-4 animate-fade-in-up">
+            <div class="public-panel p-8 sm:p-10">
 
                 <!-- Logo + tagline -->
                 <div class="text-center mb-8 flex flex-col items-center">
                     <img
-                        src="/images/cx-logo-light.svg"
-                        alt="CypherFrame"
+                        :src="theme === 'dark' ? '/images/cx-logo-light.svg' : '/images/cx-logo-dark.svg'"
+                        alt="Cypherox Technologies"
                         class="h-7 mb-4"
                         onerror="this.onerror=null;this.src='/images/cx-logo-dark.svg'"
                     />
@@ -87,7 +89,7 @@ onMounted(() => {
                                 required
                                 autofocus
                                 autocomplete="email"
-                                class="w-full h-11 pl-10 pr-4 rounded-xl bg-white/[0.05] border border-white/[0.1] text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:border-primary focus:bg-white/[0.07] focus:shadow-[0_0_0_3px_hsla(14,100%,56%,0.12)] transition-all"
+                                class="public-form-control w-full h-11 pl-10 pr-4 rounded-xl text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:shadow-[0_0_0_3px_hsla(var(--primary),0.12)] transition-all"
                             />
                         </div>
                         <p v-if="form.errors.email" class="text-xs text-red-400 pl-1 flex items-center gap-1">
@@ -106,7 +108,7 @@ onMounted(() => {
                                 v-model="form.password"
                                 required
                                 autocomplete="current-password"
-                                class="w-full h-11 pl-10 pr-11 rounded-xl bg-white/[0.05] border border-white/[0.1] text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:border-primary focus:bg-white/[0.07] focus:shadow-[0_0_0_3px_hsla(14,100%,56%,0.12)] transition-all"
+                                class="public-form-control w-full h-11 pl-10 pr-11 rounded-xl text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:shadow-[0_0_0_3px_hsla(var(--primary),0.12)] transition-all"
                             />
                             <button
                                 type="button"
@@ -185,53 +187,6 @@ onMounted(() => {
 </template>
 
 <style scoped>
-/* ── Login card ─────────────────────────────────────────── */
-.login-card {
-    background: hsla(240, 20%, 8%, 0.65);
-    backdrop-filter: blur(32px);
-    -webkit-backdrop-filter: blur(32px);
-    border: 1px solid hsla(240, 20%, 30%, 0.2);
-    border-radius: 1.5rem;
-    box-shadow:
-        inset 0 1px 0 hsla(0, 0%, 100%, 0.06),
-        0 24px 64px -12px rgba(0, 0, 0, 0.75),
-        0 0 0 1px hsla(0, 0%, 0%, 0.25);
-}
-
-/* Light-mode override (when user explicitly switched to light) */
-:global(.light) .login-card {
-    background: hsla(0, 0%, 100%, 0.80);
-    border: 1px solid hsla(220, 20%, 80%, 0.5);
-    box-shadow:
-        inset 0 1px 0 hsla(0, 0%, 100%, 0.9),
-        0 24px 64px -12px rgba(0, 0, 0, 0.1);
-}
-
-/* ── Perspective grid ───────────────────────────────────── */
-.perspective-grid {
-    position: absolute;
-    inset: -50%;
-    background-image:
-        linear-gradient(to right, hsla(220, 20%, 50%, 0.045) 1px, transparent 1px),
-        linear-gradient(to bottom, hsla(220, 20%, 50%, 0.045) 1px, transparent 1px);
-    background-size: 50px 50px;
-    transform: perspective(1000px) rotateX(60deg) translateY(-100px) translateZ(-200px);
-    animation: gridMove 24s linear infinite;
-    pointer-events: none;
-    z-index: 1;
-}
-
-:global(.light) .perspective-grid {
-    background-image:
-        linear-gradient(to right, hsla(220, 20%, 40%, 0.12) 1px, transparent 1px),
-        linear-gradient(to bottom, hsla(220, 20%, 40%, 0.12) 1px, transparent 1px);
-}
-
-@keyframes gridMove {
-    0%   { transform: perspective(1000px) rotateX(60deg) translateY(0)    translateZ(-200px); }
-    100% { transform: perspective(1000px) rotateX(60deg) translateY(50px) translateZ(-200px); }
-}
-
 /* ── Entrance animation ─────────────────────────────────── */
 .animate-fade-in-up {
     animation: fadeInUp 0.7s cubic-bezier(0.16, 1, 0.3, 1) both;

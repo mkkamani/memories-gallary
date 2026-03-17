@@ -1,5 +1,5 @@
 <script setup>
-import { onMounted } from 'vue';
+import { onMounted, ref } from 'vue';
 import { Head, Link } from '@inertiajs/vue3';
 import ParticleBackground from '@/Components/ParticleBackground.vue';
 
@@ -10,17 +10,19 @@ defineProps({
     phpVersion: { type: String, required: true },
 });
 
+const theme = ref('dark');
+
 onMounted(() => {
     // Reinforce dark theme on public pages (no AuthenticatedLayout present)
     const saved = localStorage.getItem('theme');
-    const theme = saved === 'light' ? 'light' : 'dark';
+    theme.value = saved === 'light' ? 'light' : 'dark';
     document.documentElement.classList.remove('dark', 'light');
-    document.documentElement.classList.add(theme);
+    document.documentElement.classList.add(theme.value);
 });
 </script>
 
 <template>
-    <Head title="Welcome to CypherFrame" />
+    <Head title="Welcome to Cypherox Technologies" />
 
     <div class="min-h-screen bg-background text-foreground selection:bg-primary/20 selection:text-primary overflow-hidden font-sans relative flex flex-col items-center justify-center">
 
@@ -28,21 +30,21 @@ onMounted(() => {
         <ParticleBackground />
 
         <!-- Subtle perspective grid -->
-        <div class="perspective-grid" />
+        <div class="public-perspective-grid" />
 
         <!-- Radial glow behind the card -->
-        <div class="pointer-events-none absolute inset-0 flex items-center justify-center z-0">
+        <div class="pointer-events-none absolute inset-0 flex items-center justify-center">
             <div class="w-[600px] h-[600px] rounded-full bg-primary/5 blur-[120px]"></div>
         </div>
 
         <!-- ── Navbar ─────────────────────────────────── -->
-        <nav class="absolute top-0 w-full z-50 px-6 py-5 flex justify-between items-center max-w-7xl mx-auto left-0 right-0">
+        <nav class="absolute top-0 w-full px-6 py-5 flex justify-between items-center max-w-7xl mx-auto left-0 right-0">
             <div class="flex items-center">
                 <img
-                    src="/images/cx-logo-dark.svg"
-                    alt="CypherFrame Logo"
+                    :src="theme === 'dark' ? '/images/cx-logo-light.svg' : '/images/cx-logo-dark.svg'"
+                    alt="Cypherox Technologies Logo"
                     class="h-6"
-                    onerror="this.onerror=null;this.src='/images/cx-logo-light.svg'"
+                    onerror="this.onerror=null;this.src='/images/cx-logo-dark.svg'"
                 />
             </div>
 
@@ -74,8 +76,8 @@ onMounted(() => {
         </nav>
 
         <!-- ── Hero ──────────────────────────────────── -->
-        <main class="relative z-10 w-full max-w-2xl mx-4 text-center">
-            <div class="hero-card p-10 sm:p-14 animate-fade-in-up">
+        <main class="relative w-full max-w-2xl mx-4 text-center">
+            <div class="public-panel public-panel-hero p-10 sm:p-14 animate-fade-in-up">
 
                 <!-- Pill badge -->
                 <div class="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-primary/10 border border-primary/20 text-primary text-xs font-bold mb-8 tracking-widest uppercase">
@@ -122,10 +124,9 @@ onMounted(() => {
                     </Link>
                 </div>
 
-                <!-- Feature pills -->
-                <div class="flex flex-wrap items-center justify-center gap-3 mt-10 pt-8 border-t border-white/5">
+                <div class="flex flex-wrap items-center justify-center gap-3 mt-10 pt-8 border-t border-border/10">
                     <span v-for="feat in ['Cloudflare R2 Storage', 'Role-based Access', 'ZIP Import', 'Smart Albums']" :key="feat"
-                          class="flex items-center gap-1.5 text-xs text-muted-foreground px-3 py-1.5 rounded-full bg-white/[0.04] border border-white/[0.08]">
+                        class="flex items-center gap-1.5 text-xs text-muted-foreground px-3 py-1.5 rounded-full bg-muted/10 border border-border/20">
                         <svg class="w-3 h-3 text-primary" fill="currentColor" viewBox="0 0 20 20"><path fill-rule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clip-rule="evenodd"/></svg>
                         {{ feat }}
                     </span>
@@ -134,62 +135,15 @@ onMounted(() => {
         </main>
 
         <!-- ── Footer ─────────────────────────────────── -->
-        <footer class="absolute bottom-5 w-full text-center z-10">
+        <footer class="absolute bottom-5 w-full text-center">
             <p class="text-xs text-muted-foreground/50">
-                © 2026 CypherFrame &nbsp;·&nbsp; Laravel v{{ laravelVersion }} &nbsp;·&nbsp; PHP v{{ phpVersion }}
+                &copy; 2026 <b>Cypherox Technologies</b>. All Rights Reserved.
             </p>
         </footer>
     </div>
 </template>
 
 <style scoped>
-/* ── Hero card ──────────────────────────────────────────── */
-.hero-card {
-    background: hsla(240, 20%, 8%, 0.6);
-    backdrop-filter: blur(32px);
-    -webkit-backdrop-filter: blur(32px);
-    border: 1px solid hsla(240, 20%, 30%, 0.2);
-    border-radius: 1.75rem;
-    box-shadow:
-        inset 0 1px 0 hsla(0, 0%, 100%, 0.06),
-        0 24px 64px -12px rgba(0, 0, 0, 0.7),
-        0 0 0 1px hsla(0, 0%, 0%, 0.3);
-}
-
-/* Light-mode override (when user explicitly switched to light) */
-:global(.light) .hero-card {
-    background: hsla(0, 0%, 100%, 0.75);
-    border: 1px solid hsla(220, 20%, 80%, 0.5);
-    box-shadow:
-        inset 0 1px 0 hsla(0, 0%, 100%, 0.8),
-        0 24px 64px -12px rgba(0, 0, 0, 0.12);
-}
-
-/* ── Perspective grid ───────────────────────────────────── */
-.perspective-grid {
-    position: absolute;
-    inset: -50%;
-    background-image:
-        linear-gradient(to right, hsla(220, 20%, 50%, 0.045) 1px, transparent 1px),
-        linear-gradient(to bottom, hsla(220, 20%, 50%, 0.045) 1px, transparent 1px);
-    background-size: 50px 50px;
-    transform: perspective(1000px) rotateX(60deg) translateY(-100px) translateZ(-200px);
-    animation: gridMove 24s linear infinite;
-    pointer-events: none;
-    z-index: 1;
-}
-
-:global(.light) .perspective-grid {
-    background-image:
-        linear-gradient(to right, hsla(220, 20%, 40%, 0.12) 1px, transparent 1px),
-        linear-gradient(to bottom, hsla(220, 20%, 40%, 0.12) 1px, transparent 1px);
-}
-
-@keyframes gridMove {
-    0%   { transform: perspective(1000px) rotateX(60deg) translateY(0)     translateZ(-200px); }
-    100% { transform: perspective(1000px) rotateX(60deg) translateY(50px)  translateZ(-200px); }
-}
-
 /* ── Entrance animation ─────────────────────────────────── */
 .animate-fade-in-up {
     animation: fadeInUp 0.9s cubic-bezier(0.16, 1, 0.3, 1) both;

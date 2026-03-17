@@ -5,22 +5,27 @@ use App\Http\Controllers\DashboardController;
 use App\Http\Controllers\AlbumController;
 use App\Http\Controllers\MediaController;
 use App\Http\Controllers\RecycleBinController;
-use Illuminate\Foundation\Application;
 use Illuminate\Support\Facades\Route;
 use Inertia\Inertia;
 
 Route::get("/", function () {
     return Inertia::render("Welcome", [
         "canLogin" => Route::has("login"),
-        "canRegister" => Route::has("register"),
-        "laravelVersion" => Application::VERSION,
-        "phpVersion" => PHP_VERSION,
+        "canRegister" => Route::has("register")
+        // "laravelVersion" => Application::VERSION,
+        // "phpVersion" => PHP_VERSION,
     ]);
 });
 
 Route::middleware(["auth"])->group(function () {
     Route::get("/dashboard", [DashboardController::class, "index"])->name(
         "dashboard",
+    );
+    Route::get("/albums/{album}/upload", [AlbumController::class, "uploadPage"])->name(
+        "albums.upload",
+    );
+    Route::post("/albums/{album}/upload", [AlbumController::class, "uploadStore"])->name(
+        "albums.upload.store",
     );
     Route::post("/albums/import", [AlbumController::class, "import"])->name(
         "albums.import",

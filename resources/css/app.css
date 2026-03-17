@@ -58,8 +58,10 @@
 
     /* === GLASS === */
     --glass-bg: 0 0% 100%;
-    --glass-border: 14 100% 56%;
+    --glass-border: 220 14% 88%;
     --glass-bg-alpha: 0, 0%, 100%;
+    --glass-border-alpha: 220, 14%, 88%;
+    --glass-shadow: 0 24px 64px -12px rgba(0, 0, 0, 0.12);
 
     /* === RADIUS === */
     --radius: 0.75rem;
@@ -139,8 +141,10 @@
 
     /* === GLASS === */
     --glass-bg: 240 33% 5%;
-    --glass-border: 14 100% 56%;
+    --glass-border: 240 33% 13%;
     --glass-bg-alpha: 240, 33%, 5%;
+    --glass-border-alpha: 240, 33%, 13%;
+    --glass-shadow: 0 24px 64px -12px rgba(0, 0, 0, 0.7);
 
     /* === RADIUS === */
     --radius: 0.75rem;
@@ -188,6 +192,14 @@
     -webkit-font-smoothing: antialiased;
     overflow-x: hidden;
     overflow-y: auto;
+  }
+
+  button,
+  input,
+  select,
+  textarea,
+  option {
+    font: inherit;
   }
 
   ::selection {
@@ -273,6 +285,59 @@
     box-shadow: 0 1px 3px hsl(220 14% 50% / 0.08);
   }
 
+  .public-panel {
+    position: relative;
+    background: hsl(var(--bg-card));
+    border: 1px solid hsl(var(--glass-border) / 0.72);
+    border-radius: 1.5rem;
+    box-shadow:
+      0 28px 80px -32px hsl(0 0% 0% / 0.24),
+      0 0 0 1px hsl(0 0% 100% / 0.02);
+  }
+
+  .public-panel-hero {
+    border-radius: 1.75rem;
+  }
+
+  .public-perspective-grid {
+    position: absolute;
+    inset: -50%;
+    background-image:
+      linear-gradient(to right, hsl(var(--grid-line) / 0.28) 1px, transparent 1px),
+      linear-gradient(to bottom, hsl(var(--grid-line) / 0.28) 1px, transparent 1px);
+    background-size: 50px 50px;
+    transform: perspective(1000px) rotateX(60deg) translateY(-100px) translateZ(-200px);
+    animation: public-grid-move 24s linear infinite;
+    pointer-events: none;
+  }
+
+  .light .public-panel {
+    box-shadow:
+      0 24px 60px -28px hsl(220 24% 18% / 0.18),
+      0 0 0 1px hsl(220 18% 74% / 0.18);
+  }
+
+  .public-form-control {
+    background: hsl(var(--bg-input));
+    border: 1px solid hsl(var(--border));
+  }
+
+  .public-form-control:focus {
+    background: hsl(var(--bg-input));
+    border-color: hsl(var(--primary));
+  }
+
+  .public-form-control:disabled,
+  .public-form-control[readonly] {
+    background: hsl(var(--bg-elevated));
+  }
+
+  .light .public-perspective-grid {
+    background-image:
+      linear-gradient(to right, hsl(var(--grid-line) / 0.9) 1px, transparent 1px),
+      linear-gradient(to bottom, hsl(var(--grid-line) / 0.9) 1px, transparent 1px);
+  }
+
   /* === ACCENT GLOW === */
   .accent-glow {
     box-shadow: 0 0 30px hsl(var(--primary) / 0.25);
@@ -352,5 +417,14 @@
 @keyframes spin-coral {
   to {
     transform: rotate(360deg);
+  }
+}
+
+@keyframes public-grid-move {
+  0% {
+    transform: perspective(1000px) rotateX(60deg) translateY(0) translateZ(-200px);
+  }
+  100% {
+    transform: perspective(1000px) rotateX(60deg) translateY(50px) translateZ(-200px);
   }
 }

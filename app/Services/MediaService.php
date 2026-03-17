@@ -1,10 +1,12 @@
+<?php
 
 namespace App\Services;
 
-use App\Models\Media;
 use App\Models\Album;
+use App\Models\Media;
 use App\Models\User;
 use Illuminate\Http\UploadedFile;
+use Illuminate\Support\Facades\Log;
 
 class MediaService
 {
@@ -87,7 +89,7 @@ class MediaService
             // Log the R2 error but still remove the DB record so orphaned rows
             // do not accumulate. The file may have already been deleted manually
             // or may never have existed (e.g. failed upload that was rolled back).
-            \Log::warning('MediaService::purge – could not delete R2 file; proceeding with DB delete.', [
+            Log::warning('MediaService::purge – could not delete R2 file; proceeding with DB delete.', [
                 'media_id'  => $media->id,
                 'file_path' => $media->file_path,
                 'error'     => $e->getMessage(),
