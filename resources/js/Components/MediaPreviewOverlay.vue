@@ -12,6 +12,8 @@ import {
     X,
 } from 'lucide-vue-next';
 import { computed, onBeforeUnmount, ref, watch } from 'vue';
+import { downloadFile } from '@/utils/media';
+import MediaRenderer from '@/Components/MediaRenderer.vue';
 
 const props = defineProps({
     show: {
@@ -86,13 +88,7 @@ const downloadCurrent = () => {
         return;
     }
 
-    const link = document.createElement('a');
-    link.href = props.media.url;
-    link.download = props.media.file_name || 'media';
-    link.target = '_blank';
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
+    downloadFile(props.media.url, props.media.file_name || 'media');
 };
 
 const shareCurrent = async () => {
@@ -259,21 +255,17 @@ onBeforeUnmount(() => {
 
             <div class="absolute inset-0 flex items-center justify-center px-14 pt-20 pb-20 sm:px-20 sm:pt-24 sm:pb-24 lg:px-24" @wheel="onWheelZoom">
                 <div class="flex h-full w-full items-center justify-center">
-                        <img
-                            v-if="!isVideo"
-                            :src="media.url"
+                        <MediaRenderer
+                            :media="media"
                             :alt="mediaLabel"
-                            class="max-h-full max-w-full object-contain transition-transform duration-200"
-                            :style="{ transform: `scale(${zoomLevel})` }"
+                            image-class="max-h-full max-w-full object-contain transition-transform duration-200"
+                            video-class="max-h-full max-w-full rounded-lg bg-black object-contain"
+                            fallback-class="flex min-h-[18rem] min-w-[18rem] items-center justify-center rounded-2xl border border-white/10 bg-black/35 px-8 text-base font-bold uppercase tracking-[0.3em] text-white/70"
+                            :style="!isVideo ? { transform: `scale(${zoomLevel})` } : undefined"
+                            :video-controls="isVideo"
+                            :video-autoplay="isVideo"
+                            :video-playsinline="isVideo"
                         />
-                        <video
-                            v-else
-                            :src="media.url"
-                            controls
-                            autoplay
-                            playsinline
-                            class="max-h-full max-w-full rounded-lg bg-black object-contain"
-                        ></video>
                 </div>
             </div>
 

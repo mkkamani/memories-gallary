@@ -35,6 +35,7 @@ Route::middleware(["auth"])->group(function () {
         "store",
         "destroy",
     ]);
+    Route::get("/media/{media}/raw", [MediaController::class, "raw"])->name("media.raw");
     Route::post("/media/bulk-delete", [
         MediaController::class,
         "bulkDelete",

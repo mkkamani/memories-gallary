@@ -1,6 +1,7 @@
 <script setup>
 import { ref, computed, onMounted } from 'vue';
 import { Link, router, usePage } from '@inertiajs/vue3';
+import { getInitials } from '@/utils/initials';
 import {
   LayoutDashboard,
   Users,
@@ -23,7 +24,7 @@ const page = usePage();
 const authUser = computed(() => page.props.auth.user);
 
 const collapsed = ref(false);
-const theme = ref('dark'); // dark default
+const theme = ref('light'); // light default
 const searchQuery = ref('');
 const showUserMenu = ref(false);
 const showNotifications = ref(false);
@@ -46,11 +47,6 @@ const toggleSidebar = () => {
     localStorage.setItem('sidebarCollapsed', collapsed.value);
 };
 
-const getInitials = (name) => {
-    if (!name) return '';
-    return name.split(' ').map(n => n[0]).join('').substring(0, 2).toUpperCase();
-};
-
 const logout = () => {
     router.post(route('logout'));
 };
@@ -65,7 +61,7 @@ onMounted(() => {
     const savedTheme = localStorage.getItem('theme');
     if (savedTheme) {
         theme.value = savedTheme;
-    } else if (window.matchMedia('(prefers-color-scheme: light)').matches) {
+    } else {
         theme.value = 'light';
     }
 
@@ -275,12 +271,17 @@ const isActive = (item) => {
 
         <!-- Main Content area -->
         <main class="flex-1 flex flex-col pt-16 pb-16 md:pb-0 transition-all duration-300" :class="collapsed ? 'md:pl-16' : 'md:pl-56'">
-            <div class="flex-1 p-4 lg:p-6 w-full max-w-full overflow-y-auto">
-                <!-- Page Heading (Optional, can be used for secondary headers) -->
-                <header v-if="$slots.header" class="mb-4 hidden md:block">
-                    <slot name="header" />
-                </header>
-                <slot />
+            <div
+                class="relative flex-1 w-full max-w-full overflow-y-auto"
+                :style="{ '--layout-content-left': collapsed ? '4rem' : '14rem' }"
+            >
+                <div class="p-4 lg:p-6">
+                    <!-- Page Heading (Optional, can be used for secondary headers) -->
+                    <header v-if="$slots.header" class="mb-4 hidden md:block">
+                        <slot name="header" />
+                    </header>
+                    <slot />
+                </div>
             </div>
         </main>
 

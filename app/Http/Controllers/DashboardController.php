@@ -61,13 +61,23 @@ class DashboardController extends Controller
             ->take(8)
             ->get()
             ->map(function ($album) {
+                $coverMedia = $album->media->first();
+
                 return [
                     'id'         => $album->id,
                     'name'       => $album->title,
                     'date'       => $album->created_at->format('Y-m-d'),
                     'photoCount' => $album->media()->count(),
-                    'coverUrl'   => $album->media->first()
-                        ? $album->media->first()->url
+                    'coverUrl'   => $coverMedia
+                        ? $coverMedia->url
+                        : null,
+                    'coverMedia' => $coverMedia
+                        ? [
+                            'url' => $coverMedia->url,
+                            'file_type' => $coverMedia->file_type,
+                            'file_name' => $coverMedia->file_name,
+                            'mime_type' => $coverMedia->mime_type,
+                        ]
                         : null,
                 ];
             });

@@ -1,5 +1,6 @@
 <script setup>
 import { computed, onMounted, onUnmounted, ref } from 'vue';
+import { useEscapeKey } from '@/composables/useEscapeKey';
 
 const props = defineProps({
     align: {
@@ -16,14 +17,11 @@ const props = defineProps({
     },
 });
 
-const closeOnEscape = (e) => {
-    if (open.value && e.key === 'Escape') {
-        open.value = false;
-    }
-};
+const open = ref(false);
 
-onMounted(() => document.addEventListener('keydown', closeOnEscape));
-onUnmounted(() => document.removeEventListener('keydown', closeOnEscape));
+useEscapeKey(() => {
+    open.value = false;
+}, () => open.value);
 
 const widthClass = computed(() => {
     return {
@@ -41,7 +39,6 @@ const alignmentClasses = computed(() => {
     }
 });
 
-const open = ref(false);
 </script>
 
 <template>

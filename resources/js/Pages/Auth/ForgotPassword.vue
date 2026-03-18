@@ -2,7 +2,7 @@
 import { ref, onMounted } from 'vue';
 import { Head, Link, useForm } from '@inertiajs/vue3';
 import { Mail, ArrowLeft } from 'lucide-vue-next';
-import ParticleBackground from '@/Components/ParticleBackground.vue';
+import PublicBackgroundScene from '@/Components/PublicBackgroundScene.vue';
 
 defineProps({
     status: {
@@ -17,12 +17,12 @@ const form = useForm({
 const submit = () => {
     form.post(route('password.email'));
 };
-const theme = ref('dark');
+const theme = ref('light');
 
 onMounted(() => {
-    // Reinforce dark theme on public pages (no AuthenticatedLayout present)
+    // Apply saved theme and default to light across public pages.
     const saved = localStorage.getItem('theme');
-    theme.value = saved === 'light' ? 'light' : 'dark';
+    theme.value = saved === 'dark' ? 'dark' : 'light';
     document.documentElement.classList.remove('dark', 'light');
     document.documentElement.classList.add(theme.value);
 });
@@ -31,9 +31,8 @@ onMounted(() => {
 <template>
     <Head title="Forgot Password" />
 
-    <div class="min-h-screen flex items-center justify-center relative overflow-hidden bg-background text-foreground font-sans">
-        <ParticleBackground />
-        <div class="public-perspective-grid" />
+    <div class="min-h-screen flex items-center justify-center relative overflow-hidden bg-background text-foreground font-sans isolate">
+        <PublicBackgroundScene />
 
         <div class="w-full max-w-md mx-4 animate-fade-in-up">
             <div class="public-panel p-8 relative">
@@ -57,8 +56,8 @@ onMounted(() => {
                     <div class="relative">
                         <Mail class="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
                         <input
-                            type="email" 
-                            placeholder="Email address" 
+                            type="email"
+                            placeholder="Email address"
                             v-model="form.email"
                             required
                             autofocus
@@ -67,8 +66,8 @@ onMounted(() => {
                         <p v-if="form.errors.email" class="text-xs text-error mt-1 pl-3">{{ form.errors.email }}</p>
                     </div>
 
-                    <button 
-                        type="submit" 
+                    <button
+                        type="submit"
                         :disabled="form.processing"
                         class="flex justify-center items-center w-full h-11 rounded-pill bg-gradient-to-r from-primary to-accent-hover text-primary-foreground font-bold text-sm shadow-xl shadow-primary/20 hover:scale-[1.02] active:scale-[0.98] transition-all duration-200 disabled:opacity-50 mt-6"
                     >
@@ -78,7 +77,7 @@ onMounted(() => {
                 </form>
 
                 <p class="text-center text-sm text-muted-foreground mt-8 font-medium">
-                    Remember your password? 
+                    Remember your password?
                     <Link :href="route('login')" class="text-primary hover:underline font-bold">Sign In</Link>
                 </p>
             </div>

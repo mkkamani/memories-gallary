@@ -1,7 +1,7 @@
 <script setup>
 import { onMounted, ref } from 'vue';
 import { Head, Link } from '@inertiajs/vue3';
-import ParticleBackground from '@/Components/ParticleBackground.vue';
+import PublicBackgroundScene from '@/Components/PublicBackgroundScene.vue';
 
 defineProps({
     canLogin: { type: Boolean },
@@ -10,12 +10,12 @@ defineProps({
     phpVersion: { type: String, required: true },
 });
 
-const theme = ref('dark');
+const theme = ref('light');
 
 onMounted(() => {
-    // Reinforce dark theme on public pages (no AuthenticatedLayout present)
+    // Apply saved theme and default to light across public pages.
     const saved = localStorage.getItem('theme');
-    theme.value = saved === 'light' ? 'light' : 'dark';
+    theme.value = saved === 'dark' ? 'dark' : 'light';
     document.documentElement.classList.remove('dark', 'light');
     document.documentElement.classList.add(theme.value);
 });
@@ -24,24 +24,22 @@ onMounted(() => {
 <template>
     <Head title="Welcome to Cypherox Technologies" />
 
-    <div class="min-h-screen bg-background text-foreground selection:bg-primary/20 selection:text-primary overflow-hidden font-sans relative flex flex-col items-center justify-center">
-
-        <!-- Particle animation layer -->
-        <ParticleBackground />
+    <div class="min-h-screen bg-background text-foreground selection:bg-primary/20 selection:text-primary overflow-hidden font-sans relative flex flex-col items-center justify-center isolate">
+        <PublicBackgroundScene />
 
         <!-- Subtle perspective grid -->
-        <div class="public-perspective-grid" />
+        <!-- <div class="public-perspective-grid" /> -->
 
         <!-- Radial glow behind the card -->
-        <div class="pointer-events-none absolute inset-0 flex items-center justify-center">
+        <!-- <div class="pointer-events-none absolute inset-0 flex items-center justify-center">
             <div class="w-[600px] h-[600px] rounded-full bg-primary/5 blur-[120px]"></div>
-        </div>
+        </div> -->
 
         <!-- ── Navbar ─────────────────────────────────── -->
         <nav class="absolute top-0 w-full px-6 py-5 flex justify-between items-center max-w-7xl mx-auto left-0 right-0">
             <div class="flex items-center">
                 <img
-                    :src="theme === 'dark' ? '/images/cx-logo-light.svg' : '/images/cx-logo-dark.svg'"
+                    src='/images/cx-logo-light.svg'
                     alt="Cypherox Technologies Logo"
                     class="h-6"
                     onerror="this.onerror=null;this.src='/images/cx-logo-dark.svg'"
@@ -52,7 +50,7 @@ onMounted(() => {
                 <template v-if="$page.props.auth.user">
                     <Link
                         :href="route('dashboard')"
-                        class="text-sm font-semibold text-muted-foreground hover:text-foreground transition-colors"
+                        class="text-sm font-semibold text-muted-foreground hover:text-primary-foreground transition-colors px-4 py-2 rounded-full hover:bg-white/5"
                     >
                         Dashboard
                     </Link>
@@ -60,7 +58,7 @@ onMounted(() => {
                 <template v-else>
                     <Link
                         :href="route('login')"
-                        class="text-sm font-semibold text-muted-foreground hover:text-foreground transition-colors px-4 py-2 rounded-full hover:bg-white/5"
+                        class="text-sm font-semibold text-muted-foreground hover:text-primary-foreground transition-colors px-4 py-2 rounded-full hover:bg-white/5"
                     >
                         Log in
                     </Link>
@@ -87,7 +85,7 @@ onMounted(() => {
 
                 <h1 class="text-4xl md:text-5xl font-extrabold tracking-tight leading-tight font-heading mb-6">
                     <span class="block text-foreground">Your Company Memories,</span>
-                    <span class="block mt-2 bg-gradient-to-r from-primary via-orange-400 to-primary bg-clip-text text-transparent drop-shadow-[0_0_20px_hsla(14,100%,56%,0.35)]">
+                    <span class="block mt-2 bg-gradient-to-r from-primary via-orange-400 to-primary bg-clip-text text-transparent drop-shadow-[0_0_10px_hsla(14,100%,56%,0.18)]">
                         Safely Organized
                     </span>
                 </h1>
@@ -101,7 +99,7 @@ onMounted(() => {
                     <Link
                         v-if="$page.props.auth.user"
                         :href="route('dashboard')"
-                        class="w-full sm:w-auto px-8 h-12 flex items-center justify-center gap-2 rounded-full bg-gradient-to-r from-primary to-orange-400 text-primary-foreground font-bold text-[15px] shadow-[0_4px_24px_hsla(14,100%,56%,0.3)] hover:translate-y-[-2px] hover:shadow-[0_8px_40px_hsla(14,100%,56%,0.45)] transition-all duration-300"
+                        class="w-full sm:w-auto px-8 h-12 flex items-center justify-center gap-2 rounded-full bg-gradient-to-r from-primary to-orange-400 text-primary-foreground font-bold text-[15px] shadow-[0_4px_18px_hsla(14,100%,56%,0.2)] hover:translate-y-[-2px] hover:shadow-[0_8px_28px_hsla(14,100%,56%,0.28)] transition-all duration-300"
                     >
                         <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6"/></svg>
                         Go to Dashboard
@@ -109,7 +107,7 @@ onMounted(() => {
                     <Link
                         v-else
                         :href="route('login')"
-                        class="w-full sm:w-auto px-8 h-12 flex items-center justify-center gap-2 rounded-full bg-gradient-to-r from-primary to-orange-400 text-primary-foreground font-bold text-[15px] shadow-[0_4px_24px_hsla(14,100%,56%,0.3)] hover:translate-y-[-2px] hover:shadow-[0_8px_40px_hsla(14,100%,56%,0.45)] transition-all duration-300"
+                        class="w-full sm:w-auto px-8 h-12 flex items-center justify-center gap-2 rounded-full bg-gradient-to-r from-primary to-orange-400 text-primary-foreground font-bold text-[15px] shadow-[0_4px_18px_hsla(14,100%,56%,0.2)] hover:translate-y-[-2px] hover:shadow-[0_8px_28px_hsla(14,100%,56%,0.28)] transition-all duration-300"
                     >
                         <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 16l-4-4m0 0l4-4m-4 4h14m-5 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h7a3 3 0 013 3v1"/></svg>
                         Sign In to Your Gallery
@@ -136,7 +134,7 @@ onMounted(() => {
 
         <!-- ── Footer ─────────────────────────────────── -->
         <footer class="absolute bottom-5 w-full text-center">
-            <p class="text-xs text-muted-foreground/50">
+            <p class="text-xs text-white/50">
                 &copy; 2026 <b>Cypherox Technologies</b>. All Rights Reserved.
             </p>
         </footer>
@@ -152,5 +150,11 @@ onMounted(() => {
 @keyframes fadeInUp {
     from { opacity: 0; transform: translateY(32px) scale(0.98); }
     to   { opacity: 1; transform: translateY(0)    scale(1);    }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .animate-fade-in-up {
+        animation: none !important;
+    }
 }
 </style>

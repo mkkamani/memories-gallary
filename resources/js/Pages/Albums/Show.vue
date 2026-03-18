@@ -1,10 +1,13 @@
 <script setup>
 import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout.vue';
 import { Head, Link, router, usePage } from '@inertiajs/vue3';
-import { ref, computed } from 'vue';
+import { ref, computed, nextTick, onMounted, onBeforeUnmount } from 'vue';
 import MediaPreviewOverlay from '@/Components/MediaPreviewOverlay.vue';
 import Modal from '@/Components/Modal.vue';
+import MediaRenderer from '@/Components/MediaRenderer.vue';
 import DangerButton from '@/Components/DangerButton.vue';
+import { useMediaPreview } from '@/composables/useMediaPreview';
+import { downloadFile } from '@/utils/media';
 
 const props = defineProps({
     album: Object,
@@ -26,10 +29,47 @@ const deleteType = ref('album');
 const newFolder = ref({ title: '', description: '' });
 const isPinned = ref(false); // Mock
 
+// ── Pinterest-style LTR masonry ──────────────────────────────────────────────
+// CSS Grid masonry using 10 px row tracks with no row-gap.
+// Items use align-self:start (via grid's items-start) so the visible card
+// height equals the image's natural rendered height — no bg strip below.
+// Each item's span = ceil((imageH + 16) / 10)  →  ~16 px gap between rows.
+const MASONRY_ROW_UNIT = 10; // px — must match grid-auto-rows below
+const MASONRY_GAP      = 16; // px — visual row gap between cards
+
+const masonryRef = ref(null);
+const naturalDims = ref({}); // { [fileId]: { w, h } }
+const spanMap    = ref({}); // { [fileId]: row span count }
+
+function calcSpan(fileId) {
+    const dims = naturalDims.value[fileId];
+    if (!dims || !masonryRef.value) return;
+    const item = masonryRef.value.querySelector(`[data-file-id="${fileId}"]`);
+    // clientWidth excludes the 2 px border so the aspect-ratio math is exact.
+    const colWidth = item ? (item.clientWidth || item.offsetWidth) : 220;
+    const imageH = dims.h / dims.w * colWidth;
+    const span = Math.ceil((imageH + MASONRY_GAP) / MASONRY_ROW_UNIT);
+    spanMap.value = { ...spanMap.value, [fileId]: span };
+}
+
+function onFileLoad(fileId, { naturalWidth, naturalHeight }) {
+    naturalDims.value[fileId] = { w: naturalWidth, h: naturalHeight };
+    nextTick(() => calcSpan(fileId));
+}
+
+function recalcAllSpans() {
+    Object.keys(naturalDims.value).forEach(id => calcSpan(Number(id)));
+}
+
+onMounted(() => window.addEventListener('resize', recalcAllSpans));
+onBeforeUnmount(() => window.removeEventListener('resize', recalcAllSpans));
+// ─────────────────────────────────────────────────────────────────────────────
+
 const canManage = computed(() => ['admin', 'manager'].includes(user.role));
+const canContribute = computed(() => ['admin', 'manager', 'member'].includes(user.role));
 const canModify = computed(() => canManage.value || props.album.user_id === user.id);
-const canUpload = computed(() => !props.album.is_system && canModify.value);
-const canCreateFolder = computed(() => !props.album.is_system && canModify.value);
+const canUpload = computed(() => !props.album.is_system && canContribute.value);
+const canCreateFolder = computed(() => !props.album.is_system && canContribute.value);
 const canShowToolbar = computed(() => canUpload.value || canCreateFolder.value);
 const parentAlbumSlug = computed(() => {
     if (!props.breadcrumbs?.length) {
@@ -40,7 +80,11 @@ const parentAlbumSlug = computed(() => {
 });
 
 const folders = computed(() => props.album.children || []);
-const files = computed(() => props.album.media || []);
+const files = computed(() => {
+    return [...(props.album.media || [])].sort((left, right) => {
+        return new Date(right.created_at || 0).getTime() - new Date(left.created_at || 0).getTime();
+    });
+});
 
 const filteredFolders = computed(() => {
     if (filter.value === 'Photos' || filter.value === 'Videos') return [];
@@ -122,46 +166,20 @@ const handleAction = (action, type, item) => {
         confirmDelete(item, type);
     } else if (action === 'Download') {
         if (type === 'media') {
-            const link = document.createElement('a');
-            link.href = item.url;
-            link.download = item.file_name;
-            link.target = '_blank';
-            document.body.appendChild(link);
-            link.click();
-            document.body.removeChild(link);
+            downloadFile(item.url, item.file_name);
         }
     }
 };
 
-const showPreviewModal = ref(false);
-const previewMedia = ref(null);
-const currentIndex = ref(0);
-
-const openPreview = (media) => {
-    const index = filteredFiles.value.findIndex(m => m.id === media.id);
-    currentIndex.value = index !== -1 ? index : 0;
-    previewMedia.value = media;
-    showPreviewModal.value = true;
-};
-
-const closePreview = () => {
-    showPreviewModal.value = false;
-    previewMedia.value = null;
-};
-
-const goToNext = () => {
-    if (currentIndex.value < filteredFiles.value.length - 1) {
-        currentIndex.value++;
-        previewMedia.value = filteredFiles.value[currentIndex.value];
-    }
-};
-
-const goToPrevious = () => {
-    if (currentIndex.value > 0) {
-        currentIndex.value--;
-        previewMedia.value = filteredFiles.value[currentIndex.value];
-    }
-};
+const {
+    showPreviewModal,
+    previewMedia,
+    currentIndex,
+    openPreview,
+    closePreview,
+    goToNext,
+    goToPrevious,
+} = useMediaPreview(filteredFiles);
 </script>
 
 <template>
@@ -247,7 +265,14 @@ const goToPrevious = () => {
                         class="group cursor-pointer transition-all animate-fade-in-up flex items-center gap-4 bg-bg-card border border-border rounded-2xl hover:bg-bg-hover hover:border-primary/30"
                         :class="viewMode === 'grid' ? 'p-4 pr-2' : 'p-3 px-6'">
                         <div class="w-14 h-14 rounded-xl bg-primary/5 flex items-center justify-center shrink-0 transition-transform group-hover:scale-110 overflow-hidden">
-                            <img v-if="folder.thumbnail" :src="folder.thumbnail" class="w-full h-full object-cover rounded-xl" :alt="folder.title" />
+                            <MediaRenderer
+                                v-if="folder.thumbnail_media"
+                                :media="folder.thumbnail_media"
+                                :alt="folder.title"
+                                image-class="w-full h-full object-cover rounded-xl"
+                                video-class="w-full h-full object-cover rounded-xl"
+                                fallback-class="flex h-full w-full items-center justify-center rounded-xl bg-primary/10 text-[10px] font-bold uppercase tracking-[0.22em] text-primary"
+                            />
                             <div v-else class="w-full h-full rounded-xl bg-primary/10 flex items-center justify-center text-primary">
                                 <svg class="w-6 h-6 fill-current" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 7v10a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-6l-2-2H5a2 2 0 00-2 2z"/></svg>
                             </div>
@@ -280,12 +305,29 @@ const goToPrevious = () => {
             <div v-if="filteredFiles.length > 0" class="space-y-4">
                 <h3 class="text-sm font-bold text-foreground">Files</h3>
 
-                <div v-if="viewMode === 'grid'" class="columns-2 sm:columns-3 lg:columns-4 xl:columns-5 gap-4 space-y-4">
-                    <div v-for="(file, index) in filteredFiles" :key="file.id" @click="openPreview(file)"
-                        class="group relative inline-block w-full break-inside-avoid rounded-2xl overflow-visible border border-border bg-bg-elevated cursor-pointer hover:border-primary/50 transition-all shadow-sm hover:shadow-xl animate-fade-in-up">
+                <div
+                    v-if="viewMode === 'grid'"
+                    ref="masonryRef"
+                    class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 items-start"
+                    style="grid-auto-rows: 10px; row-gap: 0; column-gap: 1rem;"
+                >
+                    <div
+                        v-for="file in filteredFiles"
+                        :key="file.id"
+                        :data-file-id="file.id"
+                        :style="{ gridRowEnd: 'span ' + (spanMap[file.id] || 22) }"
+                        @click="openPreview(file)"
+                        class="group relative w-full rounded-2xl overflow-visible border border-border bg-bg-elevated cursor-pointer hover:border-primary/50 transition-all shadow-sm hover:shadow-xl animate-fade-in-up"
+                    >
                         <div class="relative overflow-hidden rounded-2xl">
-                            <img v-if="file.file_type === 'image'" :src="file.url" class="w-full h-auto object-cover transition-transform duration-700 group-hover:scale-105" :alt="file.file_name" />
-                            <video v-else :src="file.url" class="w-full h-auto object-cover transition-transform duration-700 group-hover:scale-105"></video>
+                            <MediaRenderer
+                                :media="file"
+                                :alt="file.file_name"
+                                image-class="w-full h-auto block object-cover transition-transform duration-700 group-hover:scale-105"
+                                video-class="w-full h-auto block object-cover transition-transform duration-700 group-hover:scale-105"
+                                fallback-class="flex h-[180px] w-full items-center justify-center bg-bg-hover text-sm font-bold uppercase tracking-[0.24em] text-muted-foreground"
+                                @load="dims => onFileLoad(file.id, dims)"
+                            />
 
                             <div v-if="file.file_type === 'video'" class="absolute inset-0 flex items-center justify-center bg-black/10">
                                 <div class="w-12 h-12 rounded-full bg-black/40 backdrop-blur-md flex items-center justify-center text-white scale-90 group-hover:scale-100 transition-transform">
@@ -335,8 +377,13 @@ const goToPrevious = () => {
                         <div v-for="file in filteredFiles" :key="file.id" @click="openPreview(file)" class="grid grid-cols-[1fr_200px_100px] items-center px-6 py-4 hover:bg-bg-hover transition-colors cursor-pointer group">
                             <div class="flex items-center gap-4 min-w-0">
                                 <div class="w-12 h-12 rounded-lg overflow-hidden border border-border shrink-0">
-                                    <img v-if="file.file_type === 'image'" :src="file.url" class="w-full h-full object-cover" />
-                                    <video v-else :src="file.url" class="w-full h-full object-cover"></video>
+                                    <MediaRenderer
+                                        :media="file"
+                                        :alt="file.file_name"
+                                        image-class="w-full h-full object-cover"
+                                        video-class="w-full h-full object-cover"
+                                        fallback-class="flex h-full w-full items-center justify-center bg-bg-hover text-[10px] font-bold uppercase tracking-[0.22em] text-muted-foreground"
+                                    />
                                 </div>
                                 <div class="min-w-0">
                                     <p class="text-sm font-medium text-foreground truncate">{{ file.file_name }}</p>
@@ -389,7 +436,7 @@ const goToPrevious = () => {
         />
 
         <!-- New Folder Modal -->
-        <Modal :show="showNewFolderModal" @close="showNewFolderModal = false" max-width="md">
+        <Modal :show="showNewFolderModal" @close="showNewFolderModal = false" max-width="md" contained>
             <div class="p-8 bg-bg-card border border-border rounded-xl">
                 <div class="flex items-center gap-3 mb-6">
                     <div class="w-10 h-10 rounded-xl bg-primary/10 flex items-center justify-center text-primary">
@@ -413,7 +460,7 @@ const goToPrevious = () => {
         </Modal>
 
         <!-- Delete Confirmation Modal -->
-        <Modal :show="showDeleteModal" @close="showDeleteModal = false" max-width="sm">
+        <Modal :show="showDeleteModal" @close="showDeleteModal = false" max-width="sm" contained>
             <div class="p-6 bg-bg-card border border-border rounded-xl">
                 <h2 class="text-lg font-bold text-foreground">Confirm Delete</h2>
 

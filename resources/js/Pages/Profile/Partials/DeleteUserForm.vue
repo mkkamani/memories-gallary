@@ -56,7 +56,7 @@ const closeModal = () => {
             Delete Account
         </button>
 
-        <Modal :show="confirmingUserDeletion" @close="closeModal">
+        <Modal :show="confirmingUserDeletion" @close="closeModal" contained>
             <div class="p-6 bg-card text-foreground rounded-xl border border-border">
                 <h2
                     class="text-lg font-medium text-foreground"

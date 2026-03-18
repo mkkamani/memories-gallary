@@ -4,6 +4,7 @@ import { Head, useForm, router, Link } from '@inertiajs/vue3';
 import { ref, watch } from 'vue';
 import Modal from '@/Components/Modal.vue';
 import debounce from 'lodash/debounce';
+import { getInitials } from '@/utils/initials';
 
 const props = defineProps({
     users: Object,
@@ -84,9 +85,6 @@ const deleteUser = () => {
     }
 };
 
-const getInitials = (name) => {
-    return name.split(' ').map(n => n[0]).join('').substring(0, 2).toUpperCase();
-};
 </script>
 
 <template>
@@ -94,11 +92,11 @@ const getInitials = (name) => {
 
     <AuthenticatedLayout>
         <div class="animate-fade-in text-foreground space-y-6">
-            
+
             <div class="flex flex-col md:flex-row md:items-center justify-between gap-4">
                 <div>
-                     <h1 class="font-heading font-bold text-3xl text-foreground">Users Management</h1>
-                     <p class="text-sm text-muted-foreground mt-1">Manage team members and their roles</p>
+                    <h1 class="font-heading font-bold text-3xl text-foreground">Users Management</h1>
+                    <p class="text-sm text-muted-foreground mt-1">Manage team members and their roles</p>
                 </div>
                 <div class="flex items-center gap-3">
                     <input v-model="search" type="text" placeholder="Search users by name or email..." class="h-11 bg-bg-input border-border text-foreground rounded-pill shadow-sm focus:border-primary focus:ring-1 focus:ring-primary w-full md:w-80 px-4 text-sm" />
@@ -117,7 +115,7 @@ const getInitials = (name) => {
                     <span class="text-xs font-bold text-muted-foreground uppercase tracking-wider">Role</span>
                     <span class="text-xs font-bold text-muted-foreground uppercase tracking-wider text-right">Actions</span>
                 </div>
-                
+
                 <div class="divide-y divide-border">
                     <div v-for="user in users.data" :key="user.id" class="grid grid-cols-[1fr_200px_100px_100px_100px] items-center px-6 py-4 hover:bg-bg-hover transition-colors">
                         <div class="flex items-center gap-4">
@@ -129,7 +127,7 @@ const getInitials = (name) => {
                         <span class="text-sm text-muted-foreground truncate pr-4">{{ user.email }}</span>
                         <span class="text-sm font-medium pr-4">{{ user.location || '-' }}</span>
                         <div>
-                             <span class="text-[10px] px-2 py-0.5 rounded capitalize font-bold" 
+                             <span class="text-[10px] px-2 py-0.5 rounded capitalize font-bold"
                                    :class="user.role === 'admin' ? 'bg-primary/20 text-primary' : (user.role === 'manager' ? 'bg-info/20 text-info' : 'bg-success/20 text-success')">
                                  {{ user.role }}
                              </span>
@@ -144,7 +142,7 @@ const getInitials = (name) => {
                         </div>
                     </div>
                 </div>
-                
+
                 <!-- Pagination -->
                 <div class="px-6 py-4 border-t border-border flex justify-end" v-if="users.links.length > 3">
                      <div class="flex gap-1">
@@ -157,7 +155,7 @@ const getInitials = (name) => {
             </div>
 
             <!-- Create/Edit Modal -->
-            <Modal :show="showModal" @close="closeModal" max-width="md">
+            <Modal :show="showModal" @close="closeModal" max-width="md" contained>
                 <div class="p-8 bg-bg-card border border-border rounded-xl">
                     <div class="flex items-center gap-3 mb-6">
                         <div class="w-10 h-10 rounded-xl bg-primary/10 flex items-center justify-center text-primary">
@@ -224,7 +222,7 @@ const getInitials = (name) => {
             </Modal>
 
             <!-- Delete Confirmation Modal -->
-            <Modal :show="showDeleteModal" @close="showDeleteModal = false" max-width="sm">
+            <Modal :show="showDeleteModal" @close="showDeleteModal = false" max-width="sm" contained>
                 <div class="p-6 bg-bg-card border border-border rounded-xl">
                     <h2 class="text-lg font-bold text-foreground">Delete User</h2>
 

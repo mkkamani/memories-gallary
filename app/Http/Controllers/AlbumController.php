@@ -24,7 +24,7 @@ class AlbumController extends Controller
     {
         $query = Album::with([
             "media" => function ($q) {
-                $q->orderBy("created_at", "asc")->limit(1);
+                $q->orderBy("created_at", "desc")->limit(1);
             },
         ])
             ->withCount(["media", "children"])
@@ -59,6 +59,8 @@ class AlbumController extends Controller
             ->latest()
             ->get()
             ->map(function ($album) {
+                $thumbnailMedia = $album->media->first();
+
                 return [
                     "id" => $album->id,
                     "slug" => $album->slug,
@@ -71,7 +73,15 @@ class AlbumController extends Controller
                     "parent_id" => $album->parent_id,
                     "media_count" => $album->media_count,
                     "children_count" => $album->children_count,
-                    "thumbnail" => $album->media->first()?->url,
+                    "thumbnail" => $thumbnailMedia?->url,
+                    "thumbnail_media" => $thumbnailMedia
+                        ? [
+                            "url" => $thumbnailMedia->url,
+                            "file_type" => $thumbnailMedia->file_type,
+                            "file_name" => $thumbnailMedia->file_name,
+                            "mime_type" => $thumbnailMedia->mime_type,
+                        ]
+                        : null,
                     "is_system" => false,
                     "location" => $album->location,
                     "created_at" => $album->created_at,
@@ -89,6 +99,7 @@ class AlbumController extends Controller
                 ->get();
 
             if ($recentMedia->count() > 0) {
+                $thumbnailMedia = $recentMedia->first();
                 $systemAlbums->push([
                     "id" => "recent",
                     "title" => "Recent",
@@ -99,7 +110,13 @@ class AlbumController extends Controller
                     "user_id" => auth()->id(),
                     "media_count" => $recentMedia->count(),
                     "children_count" => 0,
-                    "thumbnail" => $recentMedia->first()->url,
+                    "thumbnail" => $thumbnailMedia->url,
+                    "thumbnail_media" => [
+                        "url" => $thumbnailMedia->url,
+                        "file_type" => $thumbnailMedia->file_type,
+                        "file_name" => $thumbnailMedia->file_name,
+                        "mime_type" => $thumbnailMedia->mime_type,
+                    ],
                     "is_system" => true,
                 ]);
             }
@@ -113,6 +130,7 @@ class AlbumController extends Controller
                 ->get();
 
             if ($todayMemories->count() > 0) {
+                $thumbnailMedia = $todayMemories->first();
                 $systemAlbums->push([
                     "id" => "todays-memories",
                     "title" => "Today's Memories",
@@ -123,7 +141,13 @@ class AlbumController extends Controller
                     "user_id" => auth()->id(),
                     "media_count" => $todayMemories->count(),
                     "children_count" => 0,
-                    "thumbnail" => $todayMemories->first()->url,
+                    "thumbnail" => $thumbnailMedia->url,
+                    "thumbnail_media" => [
+                        "url" => $thumbnailMedia->url,
+                        "file_type" => $thumbnailMedia->file_type,
+                        "file_name" => $thumbnailMedia->file_name,
+                        "mime_type" => $thumbnailMedia->mime_type,
+                    ],
                     "is_system" => true,
                 ]);
             }
@@ -665,12 +689,14 @@ class AlbumController extends Controller
         $this->authorize("view", $album);
 
         $album->load([
-            "media.user:id,name,role",
+            "media" => function ($query) {
+                $query->with('user:id,name,role')->orderBy('created_at', 'desc');
+            },
             "children" => function ($query) {
                 $query
                     ->with([
                         "media" => fn($q) => $q
-                            ->orderBy("created_at", "asc")
+                            ->orderBy("created_at", "desc")
                             ->limit(1),
                     ])
                     ->withCount(["media", "children"]);
@@ -680,7 +706,16 @@ class AlbumController extends Controller
         // Attach thumbnail to each child album
         if ($album->children) {
             $album->children->transform(function ($child) {
-                $child->thumbnail = $child->media->first()?->url;
+                $thumbnailMedia = $child->media->first();
+                $child->thumbnail = $thumbnailMedia?->url;
+                $child->thumbnail_media = $thumbnailMedia
+                    ? [
+                        'url' => $thumbnailMedia->url,
+                        'file_type' => $thumbnailMedia->file_type,
+                        'file_name' => $thumbnailMedia->file_name,
+                        'mime_type' => $thumbnailMedia->mime_type,
+                    ]
+                    : null;
                 return $child;
             });
         }

@@ -65,16 +65,6 @@ const roleLabel = computed(() => user.role || 'Member');
             </div>
 
             <div>
-                <label class="block mb-2 text-xs font-extrabold uppercase tracking-wide text-muted-foreground">Department</label>
-                <input
-                    type="text"
-                    :value="roleLabel === 'admin' ? 'Management' : (roleLabel === 'manager' ? 'Operations' : 'Member Team')"
-                    readonly
-                    class="w-full h-12 rounded-xl border border-border bg-bg-secondary px-4 text-foreground/80"
-                />
-            </div>
-
-            <div>
                 <label class="block mb-2 text-xs font-extrabold uppercase tracking-wide text-muted-foreground">Designation</label>
                 <input
                     type="text"

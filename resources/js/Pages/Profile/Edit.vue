@@ -6,6 +6,7 @@ import UpdateProfileInformationForm from './Partials/UpdateProfileInformationFor
 import { Head } from '@inertiajs/vue3';
 import { computed } from 'vue';
 import { usePage } from '@inertiajs/vue3';
+import { getInitials } from '@/utils/initials';
 
 defineProps({
     mustVerifyEmail: {
@@ -18,14 +19,7 @@ defineProps({
 
 const user = usePage().props.auth.user;
 
-const initials = computed(() => {
-    return (user?.name || 'User')
-        .split(' ')
-        .map((n) => n[0])
-        .join('')
-        .substring(0, 2)
-        .toUpperCase();
-});
+const initials = computed(() => getInitials(user?.name, 'US'));
 </script>
 
 <template>

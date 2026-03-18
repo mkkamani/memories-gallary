@@ -3,6 +3,9 @@ import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout.vue';
 import { Head, Link } from '@inertiajs/vue3';
 import { ref, computed } from 'vue';
 import MediaPreviewOverlay from '@/Components/MediaPreviewOverlay.vue';
+import MediaRenderer from '@/Components/MediaRenderer.vue';
+import { getInitials } from '@/utils/initials';
+import { useMediaPreview } from '@/composables/useMediaPreview';
 
 const props = defineProps({
     stats: Object,
@@ -13,10 +16,6 @@ const props = defineProps({
     userRole: String,
 });
 
-const getInitials = (name) => {
-    return name.split(' ').map(n => n[0]).join('').substring(0, 2).toUpperCase();
-};
-
 const formatSize = (bytes) => {
     if (!bytes) return '0 B';
     const k = 1024;
@@ -25,37 +24,16 @@ const formatSize = (bytes) => {
     return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
 };
 
-const showPreviewModal = ref(false);
-const previewMedia = ref(null);
-const currentIndex = ref(0);
-const allMediaContext = ref([]);
-
-const openPreview = (media, contextList = null) => {
-    allMediaContext.value = contextList || props.recentMedia;
-    const index = allMediaContext.value.findIndex(m => m.id === media.id);
-    currentIndex.value = index !== -1 ? index : 0;
-    previewMedia.value = media;
-    showPreviewModal.value = true;
-};
-
-const closePreview = () => {
-    showPreviewModal.value = false;
-    previewMedia.value = null;
-};
-
-const goToNext = () => {
-    if (currentIndex.value < allMediaContext.value.length - 1) {
-        currentIndex.value++;
-        previewMedia.value = allMediaContext.value[currentIndex.value];
-    }
-};
-
-const goToPrevious = () => {
-    if (currentIndex.value > 0) {
-        currentIndex.value--;
-        previewMedia.value = allMediaContext.value[currentIndex.value];
-    }
-};
+const {
+    showPreviewModal,
+    previewMedia,
+    currentIndex,
+    items: allMediaContext,
+    openPreview,
+    closePreview,
+    goToNext,
+    goToPrevious,
+} = useMediaPreview(() => props.recentMedia);
 
 const handleAction = (e, action, id) => {
     e.stopPropagation();
@@ -215,7 +193,14 @@ const memberUsagePercent = computed(() => {
                             class="dash-card flex items-center gap-3 p-3 group"
                         >
                             <div class="w-12 h-12 rounded-xl overflow-hidden bg-bg-elevated shrink-0 border border-border">
-                                <img v-if="album.coverUrl" :src="album.coverUrl" class="w-full h-full object-cover group-hover:scale-110 transition-transform duration-300" alt="" />
+                                <MediaRenderer
+                                    v-if="album.coverMedia"
+                                    :media="album.coverMedia"
+                                    :alt="album.name"
+                                    image-class="w-full h-full object-cover group-hover:scale-110 transition-transform duration-300"
+                                    video-class="w-full h-full object-cover group-hover:scale-110 transition-transform duration-300"
+                                    fallback-class="flex h-full w-full items-center justify-center bg-bg-elevated text-[10px] font-bold uppercase tracking-[0.22em] text-muted-foreground"
+                                />
                                 <div v-else class="w-full h-full flex items-center justify-center text-muted-foreground bg-bg-elevated">
                                     <svg class="w-5 h-5 opacity-40" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 7v10a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-6l-2-2H5a2 2 0 00-2 2z"/></svg>
                                 </div>
@@ -238,8 +223,13 @@ const memberUsagePercent = computed(() => {
                             <template v-for="(item, i) in (userRole === 'member' ? myRecentUploads : recentMedia)" :key="item.id">
                                 <div @click="openPreview(item, userRole === 'member' ? myRecentUploads : recentMedia)" class="group relative inline-block w-full break-inside-avoid rounded-xl overflow-hidden border border-border bg-bg-elevated cursor-pointer hover:border-primary/50 transition-all shadow-sm hover:shadow-lg animate-fade-in-up">
                                     <div class="relative">
-                                        <img v-if="item.file_type === 'image'" :src="item.url" class="w-full h-auto object-contain transition-transform duration-700 group-hover:scale-105 rounded-xl" :alt="item.file_name" />
-                                        <video v-else :src="item.url" class="w-full h-auto rounded-xl"></video>
+                                        <MediaRenderer
+                                            :media="item"
+                                            :alt="item.file_name"
+                                            image-class="w-full h-auto object-contain transition-transform duration-700 group-hover:scale-105 rounded-xl"
+                                            video-class="w-full h-auto rounded-xl"
+                                            fallback-class="flex min-h-[10rem] w-full items-center justify-center rounded-xl bg-bg-hover text-xs font-bold uppercase tracking-[0.24em] text-muted-foreground"
+                                        />
 
                                         <div v-if="item.file_type === 'video'" class="absolute inset-0 flex items-center justify-center">
                                             <div class="w-10 h-10 rounded-full bg-black/60 flex items-center justify-center">

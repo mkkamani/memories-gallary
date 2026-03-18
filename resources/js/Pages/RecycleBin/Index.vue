@@ -1,6 +1,7 @@
 <script setup>
 import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout.vue';
 import { Head, router } from '@inertiajs/vue3';
+import MediaRenderer from '@/Components/MediaRenderer.vue';
 
 defineProps({
     media: Array,
@@ -66,8 +67,13 @@ const forceDeleteAlbum = (id) => {
                     <h3 class="text-lg font-medium text-gray-200 mb-4">Deleted Media</h3>
                     <div class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-4">
                         <div v-for="item in media" :key="item.id" class="relative group aspect-square bg-gray-800 rounded-lg overflow-hidden ring-1 ring-gray-700">
-                            <img v-if="item.file_type === 'image'" :src="item.url" class="w-full h-full object-cover opacity-50" />
-                            <video v-else :src="item.url" class="w-full h-full object-cover opacity-50"></video>
+                            <MediaRenderer
+                                :media="item"
+                                :alt="item.file_name"
+                                image-class="w-full h-full object-cover opacity-50"
+                                video-class="w-full h-full object-cover opacity-50"
+                                fallback-class="flex h-full w-full items-center justify-center bg-gray-900/60 text-xs font-bold uppercase tracking-[0.22em] text-gray-300"
+                            />
 
                             <div class="absolute inset-0 flex flex-col items-center justify-center gap-2 opacity-0 group-hover:opacity-100 transition bg-black/60">
                                 <button @click="restoreMedia(item.id)" class="px-3 py-1 bg-green-600 hover:bg-green-700 text-white text-xs rounded transition w-24">Restore</button>

@@ -2,7 +2,7 @@
 import { ref, onMounted } from 'vue';
 import { Head, Link, useForm } from '@inertiajs/vue3';
 import { Eye, EyeOff, Mail, Lock } from 'lucide-vue-next';
-import ParticleBackground from '@/Components/ParticleBackground.vue';
+import PublicBackgroundScene from '@/Components/PublicBackgroundScene.vue';
 
 defineProps({
     canResetPassword: { type: Boolean },
@@ -23,12 +23,12 @@ const submit = () => {
     });
 };
 
-const theme = ref('dark');
+const theme = ref('light');
 
 onMounted(() => {
-    // Reinforce dark theme on public pages (no AuthenticatedLayout present)
+    // Apply saved theme and default to light across public pages.
     const saved = localStorage.getItem('theme');
-    theme.value = saved === 'light' ? 'light' : 'dark';
+    theme.value = saved === 'dark' ? 'dark' : 'light';
     document.documentElement.classList.remove('dark', 'light');
     document.documentElement.classList.add(theme.value);
 });
@@ -37,18 +37,8 @@ onMounted(() => {
 <template>
     <Head title="Log in" />
 
-    <div class="min-h-screen flex items-center justify-center relative overflow-hidden bg-background text-foreground font-sans">
-
-        <!-- Particle animation layer -->
-        <ParticleBackground />
-
-        <!-- Perspective grid -->
-        <div class="public-perspective-grid" />
-
-        <!-- Radial glow -->
-        <div class="pointer-events-none absolute inset-0 flex items-center justify-center">
-            <div class="w-[500px] h-[500px] rounded-full bg-primary/5 blur-[100px]"></div>
-        </div>
+    <div class="min-h-screen flex items-center justify-center relative overflow-hidden bg-background text-foreground font-sans isolate">
+        <PublicBackgroundScene />
 
         <!-- Card -->
         <div class="w-full max-w-md mx-4 animate-fade-in-up">

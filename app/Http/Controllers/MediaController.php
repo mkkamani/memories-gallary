@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Storage;
 
 use App\Models\Album;
 use App\Models\Media;
@@ -21,7 +22,7 @@ class MediaController extends Controller
         $request->validate([
             "files" => "required|array",
             "files.*" =>
-                "file|mimes:jpg,jpeg,png,gif,mp4,mov,avi,webm|max:102400",
+                "file|mimes:jpg,jpeg,png,gif,heic,heif,mp4,mov,avi,webm,mkv|max:204800",
             "album_id" => "nullable|exists:albums,id",
         ]);
 
@@ -33,6 +34,39 @@ class MediaController extends Controller
         }
 
         return back();
+    }
+
+    /**
+     * Stream a media file's raw bytes through the app server.
+     * This proxy avoids CORS issues when the media is stored on an external
+     * origin (e.g. Cloudflare R2 presigned URLs) and the browser cannot
+     * fetch them directly via JavaScript.
+     */
+    public function raw(Media $media)
+    {
+        $this->authorize('view', $media);
+
+        $disk = (string) config('filesystems.media_disk', 'public');
+        $stream = Storage::disk($disk)->readStream($media->file_path);
+
+        if (! $stream) {
+            abort(404, 'Media file not found.');
+        }
+
+        $mimeType = $media->mime_type ?: 'application/octet-stream';
+        $fileName = basename((string) $media->file_name);
+
+        return response()->stream(function () use ($stream): void {
+            fpassthru($stream);
+            if (is_resource($stream)) {
+                fclose($stream);
+            }
+        }, 200, [
+            'Content-Type'        => $mimeType,
+            'Content-Disposition' => 'inline; filename="' . $fileName . '"',
+            'Cache-Control'       => 'private, max-age=3600',
+            'X-Accel-Buffering'   => 'no',
+        ]);
     }
 
     public function destroy(

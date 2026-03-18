@@ -3,6 +3,8 @@ import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout.vue';
 import { Head, Link, router, usePage, useForm } from '@inertiajs/vue3';
 import { ref, watch, computed } from 'vue';
 import Modal from '@/Components/Modal.vue';
+import MediaRenderer from '@/Components/MediaRenderer.vue';
+import { downloadFile } from '@/utils/media';
 import DangerButton from '@/Components/DangerButton.vue';
 import SecondaryButton from '@/Components/SecondaryButton.vue';
 import debounce from 'lodash/debounce';
@@ -39,6 +41,7 @@ watch([search, locationFilter], debounce(() => {
 
 const page = usePage();
 const canManage = computed(() => ['admin', 'manager'].includes(page.props.auth.user.role));
+const canCreateActions = computed(() => ['admin', 'manager', 'member'].includes(page.props.auth.user.role));
 
 const confirmDelete = (album) => {
     albumToDelete.value = album;
@@ -96,13 +99,10 @@ const handleAction = (action, album) => {
 
     if (action === 'Download') {
         if (album.thumbnail) {
-            const link = document.createElement('a');
-            link.href = album.thumbnail;
-            link.download = `${(album.title || 'album').replace(/\s+/g, '-').toLowerCase()}-cover`;
-            link.target = '_blank';
-            document.body.appendChild(link);
-            link.click();
-            document.body.removeChild(link);
+            downloadFile(
+                album.thumbnail,
+                `${(album.title || 'album').replace(/\s+/g, '-').toLowerCase()}-cover`,
+            );
         } else {
             router.visit(route('albums.show', album.slug || album.id));
         }
@@ -160,7 +160,7 @@ const submitImport = () => {
 
                     <input v-model="search" type="text" placeholder="Search albums..." class="h-11 bg-bg-input border-border text-foreground rounded-pill shadow-sm focus:border-primary focus:ring-1 focus:ring-primary w-full md:w-64 px-4 text-sm" />
 
-                    <div class="relative" v-if="canManage">
+                    <div class="relative" v-if="canCreateActions">
                         <button @click.stop="showNewMenu = !showNewMenu" class="flex items-center gap-2 h-11 px-6 rounded-pill bg-gradient-to-r from-primary to-accent-hover text-primary-foreground font-bold text-sm shadow-lg hover:translate-y-[-2px] transition-all whitespace-nowrap">
                             <svg class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/></svg>
                             New
@@ -212,7 +212,14 @@ const submitImport = () => {
                     <template v-for="album in systemAlbums" :key="album.id">
                         <Link :href="route('albums.system', album.id)" class="group relative flex flex-col gap-2 cursor-pointer transition-all active:scale-95">
                             <div class="aspect-[4/3] rounded-2xl bg-bg-elevated border border-border overflow-hidden relative group-hover:border-purple-500/50 transition-all shadow-sm group-hover:shadow-md">
-                                <img v-if="album.thumbnail" :src="album.thumbnail" class="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500" :alt="album.title" />
+                                <MediaRenderer
+                                    v-if="album.thumbnail_media"
+                                    :media="album.thumbnail_media"
+                                    :alt="album.title"
+                                    image-class="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
+                                    video-class="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
+                                    fallback-class="flex h-full w-full items-center justify-center bg-purple-500/5 text-xs font-bold uppercase tracking-[0.24em] text-purple-500"
+                                />
                                 <div v-else class="w-full h-full flex items-center justify-center bg-purple-500/5 text-purple-500">
                                     <svg class="w-10 h-10" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"/></svg>
                                 </div>
@@ -237,7 +244,14 @@ const submitImport = () => {
                 <template v-for="album in userAlbums" :key="album.id">
                     <div class="group relative flex flex-col gap-2 cursor-pointer transition-all active:scale-95" @click="router.visit(route('albums.show', album.slug || album.id))">
                         <div class="aspect-[4/3] rounded-2xl bg-bg-elevated border border-border overflow-hidden relative group-hover:border-primary/50 transition-all shadow-sm group-hover:shadow-md">
-                            <img v-if="album.thumbnail" :src="album.thumbnail" class="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500" :alt="album.title" />
+                            <MediaRenderer
+                                v-if="album.thumbnail_media"
+                                :media="album.thumbnail_media"
+                                :alt="album.title"
+                                image-class="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
+                                video-class="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
+                                fallback-class="flex h-full w-full items-center justify-center bg-primary/5 text-xs font-bold uppercase tracking-[0.24em] text-primary/60"
+                            />
                             <div v-else class="w-full h-full flex items-center justify-center text-primary/40 bg-primary/5">
                                 <svg class="w-12 h-12" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 7v10a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-6l-2-2H5a2 2 0 00-2 2z"/></svg>
                             </div>
@@ -344,7 +358,7 @@ const submitImport = () => {
                 <svg class="w-16 h-16 mx-auto text-muted-foreground mb-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10"/></svg>
                 <p class="text-foreground font-bold text-lg">No albums found.</p>
                 <p class="text-muted-foreground text-sm mt-1 mb-4">Create your first album to start managing assets.</p>
-                <Link v-if="canManage" :href="route('albums.create')" class="inline-flex items-center justify-center h-10 px-5 rounded-pill bg-primary text-primary-foreground font-bold text-sm shadow-sm transition-all hover:bg-accent-hover">
+                <Link v-if="canCreateActions" :href="route('albums.create')" class="inline-flex items-center justify-center h-10 px-5 rounded-pill bg-primary text-primary-foreground font-bold text-sm shadow-sm transition-all hover:bg-accent-hover">
                     Create Album
                 </Link>
             </div>
@@ -352,7 +366,7 @@ const submitImport = () => {
         </div>
 
         <!-- Delete Confirmation Modal -->
-        <Modal :show="showDeleteModal" @close="showDeleteModal = false" max-width="sm">
+        <Modal :show="showDeleteModal" @close="showDeleteModal = false" max-width="sm" contained>
             <div class="p-6 bg-bg-card border border-border rounded-xl">
                 <h2 class="text-lg font-bold text-foreground">Delete Album</h2>
 
@@ -369,7 +383,7 @@ const submitImport = () => {
         </Modal>
 
         <!-- Import ZIP Modal -->
-        <Modal :show="showImportModal" @close="!importForm.processing && (showImportModal = false)" max-width="md">
+        <Modal :show="showImportModal" @close="!importForm.processing && (showImportModal = false)" max-width="md" contained>
             <form @submit.prevent="submitImport" class="relative p-6 bg-bg-card border border-border rounded-xl overflow-hidden">
 
                 <!-- Processing overlay -->
