@@ -179,17 +179,16 @@ const memberUsagePercent = computed(() => {
                 <div class="lg:col-span-2 space-y-6">
                     <div class="flex items-center justify-between">
                         <h3 class="font-heading font-bold text-lg text-foreground flex items-center gap-2">
-                            <span v-if="userRole === 'member'">Active Albums</span>
-                            <span v-else>Pinned Albums</span>
+                            <span>Pinned Albums</span>
                         </h3>
                         <Link href="/albums" class="text-xs font-bold text-primary hover:underline uppercase tracking-widest">View All</Link>
                     </div>
 
-                    <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div v-if="recentAlbums.length" class="grid grid-cols-1 md:grid-cols-2 gap-4">
                         <Link
                             v-for="album in recentAlbums.slice(0, 4)"
                             :key="album.id"
-                            :href="`/albums/${album.id}`"
+                            :href="route('albums.show', album.path || album.slug || album.id)"
                             class="dash-card flex items-center gap-3 p-3 group"
                         >
                             <div class="w-12 h-12 rounded-xl overflow-hidden bg-bg-elevated shrink-0 border border-border">
@@ -207,10 +206,13 @@ const memberUsagePercent = computed(() => {
                             </div>
                             <div class="min-w-0 flex-1">
                                 <p class="text-sm font-bold text-foreground truncate">{{ album.name }}</p>
-                                <p class="text-[11px] text-muted-foreground mt-0.5">{{ album.created_at || 'Recently updated' }}</p>
+                                <p class="text-[11px] text-muted-foreground mt-0.5">{{ album.date || 'Recently updated' }}</p>
                                 <span class="inline-flex mt-1 text-[10px] font-bold px-2 py-0.5 rounded bg-primary/10 text-primary uppercase tracking-wide">{{ album.photoCount }} assets</span>
                             </div>
                         </Link>
+                    </div>
+                    <div v-else class="dash-card !p-6 text-sm text-muted-foreground">
+                        No pinned albums yet. Pin an album from the Albums or Album details page.
                     </div>
 
                     <div class="space-y-4 pt-4">
@@ -226,6 +228,7 @@ const memberUsagePercent = computed(() => {
                                         <MediaRenderer
                                             :media="item"
                                             :alt="item.file_name"
+                                            :use-thumbnail="true"
                                             image-class="w-full h-auto object-contain transition-transform duration-700 group-hover:scale-105 rounded-xl"
                                             video-class="w-full h-auto rounded-xl"
                                             fallback-class="flex min-h-[10rem] w-full items-center justify-center rounded-xl bg-bg-hover text-xs font-bold uppercase tracking-[0.24em] text-muted-foreground"

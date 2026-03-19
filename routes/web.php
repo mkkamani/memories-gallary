@@ -25,16 +25,22 @@ Route::middleware(["auth"])->group(function () {
     // Static / extra album routes MUST be declared before Route::resource() so
     // Laravel matches them before the parameterised {album} show/edit routes.
 
-    // System (smart) album viewer — e.g. /albums/system/recent
-    Route::get("/albums/system/{type}", [
+    // System (smart) album viewer — e.g. /albums/all/recent
+    Route::get("/albums/all/{type}", [
         AlbumController::class,
         "showSystemAlbum",
-    ])->name("albums.system");
+    ])->name("albums.all");
 
     // ZIP import
     Route::post("/albums/import", [AlbumController::class, "import"])->name(
         "albums.import",
     );
+
+    // Pin / unpin album (per user)
+    Route::post("/albums/{album}/pin-toggle", [
+        AlbumController::class,
+        "togglePin",
+    ])->name("albums.pin-toggle");
 
     // Per-album upload page & handler
     Route::get("/albums/{album}/upload", [
@@ -46,8 +52,12 @@ Route::middleware(["auth"])->group(function () {
         "uploadStore",
     ])->name("albums.upload.store");
 
-    // Standard resource routes (index, create, store, show, edit, update, destroy)
-    Route::resource("albums", AlbumController::class);
+    // Standard resource routes (index, create, store, edit, update, destroy)
+    // MUST come before the generic {path} route so that /albums/create isn't caught as a path
+    Route::resource("albums", AlbumController::class)->except(["show"]);
+
+    // Generic nested album show route — matches /albums/slug or /albums/parent/child
+    Route::get("albums/{path}", [AlbumController::class, "show"])->where("path", ".*")->name("albums.show");
 
     // ── Media ─────────────────────────────────────────────────────────────────
     // Extra media routes must come before the resource so that
@@ -66,10 +76,12 @@ Route::middleware(["auth"])->group(function () {
     );
 
     // Resource (only store + destroy — list/show handled inside album pages)
-    Route::resource("media", MediaController::class)->only([
-        "store",
-        "destroy",
-    ]);
+    Route::resource("media", MediaController::class)
+        ->parameters(["media" => "media"])
+        ->only([
+            "store",
+            "destroy",
+        ]);
 
     // ── Recycle Bin (admin only) ──────────────────────────────────────────────
     Route::middleware("admin")

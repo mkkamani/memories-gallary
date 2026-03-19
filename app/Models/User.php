@@ -58,4 +58,15 @@ class User extends Authenticatable implements MustVerifyEmail
     {
         return $this->hasMany(Media::class);
     }
+
+    public function pinnedAlbumRecords()
+    {
+        return $this->hasMany(PinnedAlbum::class);
+    }
+
+    public function pinnedAlbums()
+    {
+        return $this->belongsToMany(Album::class, 'pinned_albums')
+            ->withTimestamps();
+    }
 }

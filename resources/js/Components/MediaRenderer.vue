@@ -179,6 +179,7 @@ onBeforeUnmount(() => {
         :controls="videoControls"
         :autoplay="videoAutoplay"
         :playsinline="videoPlaysinline"
+        preload="metadata"
         @loadedmetadata="onVideoMeta"
     ></video>
 
@@ -192,6 +193,7 @@ onBeforeUnmount(() => {
         :src="resolvedUrl"
         :alt="alt || media?.file_name || 'Media'"
         :class="imageClass"
+        loading="lazy"
         @load="onImgLoad"
         @error="onImageError"
     />
@@ -200,23 +202,3 @@ onBeforeUnmount(() => {
         {{ fallbackLabel }}
     </div>
 </template>
-
-<style scoped>
-.orange-loader {
-    width: 52px;
-    height: 52px;
-    border-radius: 50%;
-    border: 4px solid rgba(255, 120, 0, 0.15);
-    border-top-color: #ff7a00;
-    animation: spin 0.8s linear infinite;
-    box-shadow:
-        0 0 12px rgba(255, 122, 0, 0.4),
-        0 0 24px rgba(255, 122, 0, 0.2);
-}
-
-@keyframes spin {
-    to {
-        transform: rotate(360deg);
-    }
-}
-</style>

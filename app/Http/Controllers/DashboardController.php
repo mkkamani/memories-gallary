@@ -51,13 +51,16 @@ class DashboardController extends Controller
         // Team Updates (recent users)
         $recentUsers = User::latest()->take(5)->get();
 
-        // Pinned/Recent Albums
-        $recentAlbums = Album::with([
-            'media' => function ($q) {
-                $q->latest()->take(1);
-            },
-        ])
-            ->latest()
+        // Pinned Albums (scoped to current user)
+        $recentAlbums = $user
+            ->pinnedAlbums()
+            ->with([
+                'media' => function ($q) {
+                    $q->latest()->take(1);
+                },
+            ])
+            ->withCount('media')
+            ->orderByDesc('pinned_albums.created_at')
             ->take(8)
             ->get()
             ->map(function ($album) {
@@ -65,9 +68,11 @@ class DashboardController extends Controller
 
                 return [
                     'id'         => $album->id,
+                    'slug'       => $album->slug,
+                    'path'       => $album->path,
                     'name'       => $album->title,
-                    'date'       => $album->created_at->format('Y-m-d'),
-                    'photoCount' => $album->media()->count(),
+                    'date'       => optional($album->updated_at)->format('Y-m-d'),
+                    'photoCount' => $album->media_count,
                     'coverUrl'   => $coverMedia
                         ? $coverMedia->url
                         : null,

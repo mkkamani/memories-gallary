@@ -80,26 +80,31 @@ class MediaController extends Controller
     ) {
         $this->authorize("delete", $media);
 
+        $fileName = $media->file_name;
+
         try {
             $logService->logMediaDeleted($media);
-            $service->delete($media);
+            $result = $service->delete($media);
+
+            if (!$result) {
+                throw new \RuntimeException("Failed to soft-delete media record.");
+            }
         } catch (\Throwable $e) {
             \Log::error("MediaController::destroy – failed to delete media.", [
                 "media_id" => $media->id,
+                "file_name" => $fileName,
                 "error" => $e->getMessage(),
             ]);
 
             return back()->with(
                 "error",
-                'Failed to delete "' .
-                    $media->file_name .
-                    '". Please try again.',
+                'Failed to delete "' . $fileName . '". Please try again.',
             );
         }
 
         return back()->with(
             "success",
-            '"' . $media->file_name . '" moved to Recycle Bin.',
+            '"' . $fileName . '" has been moved to the Recycle Bin.',
         );
     }
 

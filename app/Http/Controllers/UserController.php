@@ -17,16 +17,20 @@ class UserController extends Controller
         $this->authorize('viewAny', User::class);
 
         $users = User::query()
+            ->when($request->role && $request->role !== 'all', function ($query) use ($request) {
+                $query->where('role', $request->role);
+            })
             ->when($request->search, function ($query, $search) {
                 $query->where('name', 'like', "%{$search}%")
                     ->orWhere('email', 'like', "%{$search}%");
             })
+            ->latest()
             ->paginate(10)
             ->withQueryString();
 
         return Inertia::render('Users/Index', [
             'users' => $users,
-            'filters' => $request->only(['search']),
+            'filters' => $request->only(['search', 'role']),
         ]);
     }
 

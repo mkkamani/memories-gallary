@@ -7,10 +7,13 @@ import Modal from '@/Components/Modal.vue';
 import MediaRenderer from '@/Components/MediaRenderer.vue';
 import DangerButton from '@/Components/DangerButton.vue';
 import { useMediaPreview } from '@/composables/useMediaPreview';
-import { downloadFile } from '@/utils/media';
+import { downloadFile, formatFileSize } from '@/utils/media';
+import { useInfiniteScroll } from '@vueuse/core';
+import axios from 'axios';
 
 const props = defineProps({
     album: Object,
+    mediaData: Object,
     breadcrumbs: Array,
 });
 
@@ -27,7 +30,8 @@ const itemToDelete = ref(null);
 const deleteType = ref('album');
 
 const newFolder = ref({ title: '', description: '' });
-const isPinned = ref(false); // Mock
+const isPinned = ref(!!props.album?.is_pinned);
+const isPinProcessing = ref(false);
 
 // ── Pinterest-style LTR masonry ──────────────────────────────────────────────
 // CSS Grid masonry using 10 px row tracks with no row-gap.
@@ -61,7 +65,23 @@ function recalcAllSpans() {
     Object.keys(naturalDims.value).forEach(id => calcSpan(Number(id)));
 }
 
-onMounted(() => window.addEventListener('resize', recalcAllSpans));
+function removeDeletedMediaFromList(mediaId) {
+    files.value = files.value.filter(file => file.id !== mediaId);
+
+    const { [mediaId]: removedDims, ...remainingDims } = naturalDims.value;
+    const { [mediaId]: removedSpan, ...remainingSpans } = spanMap.value;
+
+    naturalDims.value = remainingDims;
+    spanMap.value = remainingSpans;
+
+    if (previewMedia.value?.id === mediaId) {
+        closePreview();
+    }
+
+    nextTick(() => recalcAllSpans());
+}
+
+// The previous original onMounted listener was here but was removed during a refactor.
 onBeforeUnmount(() => window.removeEventListener('resize', recalcAllSpans));
 // ─────────────────────────────────────────────────────────────────────────────
 
@@ -76,27 +96,69 @@ const parentAlbumSlug = computed(() => {
         return null;
     }
 
-    return props.breadcrumbs[props.breadcrumbs.length - 1]?.slug || null;
+    return props.breadcrumbs[props.breadcrumbs.length - 1]?.path || props.breadcrumbs[props.breadcrumbs.length - 1]?.slug || null;
 });
 
-const folders = computed(() => props.album.children || []);
-const files = computed(() => {
-    return [...(props.album.media || [])].sort((left, right) => {
-        return new Date(right.created_at || 0).getTime() - new Date(left.created_at || 0).getTime();
-    });
-});
+const folderItems = ref([...(props.album.children || [])]);
+const folders = computed(() => folderItems.value);
+const files = ref([...(props.mediaData?.data || [])]);
+const nextPageUrl = ref(props.mediaData?.next_page_url || null);
+const isLoadingMore = ref(false);
+
+useInfiniteScroll(
+    window,
+    async () => {
+        if (!nextPageUrl.value || isLoadingMore.value) return;
+
+        isLoadingMore.value = true;
+        try {
+            const response = await axios.get(nextPageUrl.value, {
+                headers: { 'Accept': 'application/json' }
+            });
+            files.value.push(...response.data.data);
+            nextPageUrl.value = response.data.next_page_url;
+        } catch (e) {
+            console.error(e);
+        } finally {
+            isLoadingMore.value = false;
+        }
+    },
+    { distance: 10 }
+);
 
 const filteredFolders = computed(() => {
     if (filter.value === 'Photos' || filter.value === 'Videos') return [];
     return folders.value;
 });
 
-const filteredFiles = computed(() => {
+
+const allFilteredFiles = computed(() => {
+    let result = files.value;
     if (filter.value === 'Folders') return [];
-    if (filter.value === 'Photos') return files.value.filter(f => f.file_type === 'image');
-    if (filter.value === 'Videos') return files.value.filter(f => f.file_type === 'video');
-    return files.value;
+    if (filter.value === 'Photos') result = files.value.filter(f => f.file_type === 'image');
+    if (filter.value === 'Videos') result = files.value.filter(f => f.file_type === 'video');
+    return result;
 });
+
+const filteredFiles = computed(() => {
+    return allFilteredFiles.value;
+});
+
+const totalFolderCount = computed(() => folders.value.length);
+const totalFileCount = computed(() => {
+    const serverTotal = Number(props.mediaData?.total);
+    if (Number.isFinite(serverTotal) && serverTotal > 0) {
+        return serverTotal;
+    }
+
+    return files.value.length;
+});
+
+onMounted(() => {
+    window.addEventListener('resize', recalcAllSpans);
+    nextTick(() => recalcAllSpans());
+});
+
 
 const toggleActionMenu = (e, id) => {
     e.stopPropagation();
@@ -110,7 +172,20 @@ const closeActionMenu = () => {
 
 const togglePin = (e) => {
     e.stopPropagation();
-    isPinned.value = !isPinned.value;
+
+    if (isPinProcessing.value) return;
+
+    isPinProcessing.value = true;
+    router.post(route('albums.pin-toggle', props.album.slug || props.album.id), {}, {
+        preserveScroll: true,
+        preserveState: true,
+        onSuccess: () => {
+            isPinned.value = !isPinned.value;
+        },
+        onFinish: () => {
+            isPinProcessing.value = false;
+        },
+    });
 };
 
 const createFolder = () => {
@@ -139,9 +214,13 @@ const deleteItem = () => {
     if (!itemToDelete.value) return;
 
     if (deleteType.value === 'album') {
+        const albumId = itemToDelete.value.id;
+
         router.delete(route('albums.destroy', itemToDelete.value.slug || itemToDelete.value.id), {
             preserveScroll: true,
+            preserveState: true,
             onSuccess: () => {
+                folderItems.value = folderItems.value.filter(folder => folder.id !== albumId);
                 showDeleteModal.value = false;
                 itemToDelete.value = null;
             },
@@ -151,9 +230,12 @@ const deleteItem = () => {
             },
         });
     } else {
+        const mediaId = itemToDelete.value.id;
+
         router.delete(route('media.destroy', itemToDelete.value.id), {
             preserveScroll: true,
             onSuccess: () => {
+                removeDeletedMediaFromList(mediaId);
                 showDeleteModal.value = false;
                 itemToDelete.value = null;
             },
@@ -189,7 +271,7 @@ const {
     closePreview,
     goToNext,
     goToPrevious,
-} = useMediaPreview(filteredFiles);
+} = useMediaPreview(allFilteredFiles);
 </script>
 
 <template>
@@ -210,7 +292,7 @@ const {
 
                         <template v-for="crumb in breadcrumbs" :key="crumb.id">
                             <svg class="w-4 h-4 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/></svg>
-                            <Link :href="route('albums.show', crumb.slug || crumb.id)" class="hover:text-foreground cursor-pointer transition-colors truncate">
+                            <Link :href="route('albums.show', crumb.path || crumb.slug || crumb.id)" class="hover:text-foreground cursor-pointer transition-colors truncate">
                                 {{ crumb.title }}
                             </Link>
                         </template>
@@ -219,9 +301,9 @@ const {
                         <span class="text-foreground font-bold truncate">{{ album.title }}</span>
 
                         <!-- Pin Button -->
-                        <button v-if="!album.is_system" @click="togglePin" class="ml-3 p-1.5 rounded-full transition-all shrink-0 shadow-sm border"
+                        <button v-if="!album.is_system" @click="togglePin" :disabled="isPinProcessing" class="ml-3 p-1.5 rounded-full transition-all shrink-0 shadow-sm border disabled:opacity-60 disabled:cursor-not-allowed"
                                 :class="isPinned ? 'bg-primary border-primary text-primary-foreground' : 'hover:bg-bg-hover text-muted-foreground border-border'">
-                            <svg class="w-4 h-4" :class="isPinned ? 'fill-current' : ''" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 5a2 2 0 012-2h10a2 2 0 012 2v16l-7-3.5L5 21V5z"/></svg>
+                            <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-pin w-4 h-4 fill-current"><path d="M12 17v5"></path><path d="M9 10.76a2 2 0 0 1-1.11 1.79l-1.78.9A2 2 0 0 0 5 15.24V16a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1v-.76a2 2 0 0 0-1.11-1.79l-1.78-.9A2 2 0 0 1 15 10.76V7a1 1 0 0 1 1-1 2 2 0 0 0 0-4H8a2 2 0 0 0 0 4 1 1 0 0 1 1 1z"></path></svg>
                         </button>
                     </div>
                 </div>
@@ -268,22 +350,31 @@ const {
             </div>
 
             <!-- Folders Section -->
-            <div v-if="filteredFolders.length > 0" class="space-y-4">
-                <h3 class="text-sm font-bold text-foreground">Folders</h3>
-                <div class="grid gap-4" :class="viewMode === 'grid' ? 'grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4' : 'grid-cols-1'">
-                    <Link v-for="folder in filteredFolders" :key="folder.id" :href="route('albums.show', folder.slug || folder.id)"
-                        class="group cursor-pointer transition-all animate-fade-in-up flex items-center gap-4 bg-bg-card border border-border rounded-2xl hover:bg-bg-hover hover:border-primary/30"
-                        :class="viewMode === 'grid' ? 'p-4 pr-2' : 'p-3 px-6'">
-                        <div class="w-14 h-14 rounded-xl bg-primary/5 flex items-center justify-center shrink-0 transition-transform group-hover:scale-110 overflow-hidden">
+            <div v-if="filteredFolders.length > 0" class="space-y-4 overflow-visible isolate folders-layer">
+                <div class="flex items-center gap-2">
+                    <h3 class="text-sm font-bold text-foreground">Folders</h3>
+                    <span class="inline-flex items-center rounded-pill bg-bg-elevated px-2.5 py-1 text-[11px] font-bold text-muted-foreground">
+                        {{ totalFolderCount }}
+                    </span>
+                </div>
+                <div class="grid gap-4 overflow-visible" :class="viewMode === 'grid' ? 'grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4' : 'grid-cols-1'">
+                    <Link v-for="folder in filteredFolders" :key="folder.id" :href="route('albums.show', folder.path || folder.slug || folder.id)"
+                        class="group relative z-0 overflow-visible cursor-pointer transition-all animate-fade-in-up flex items-center gap-4 bg-bg-card border border-border rounded-2xl hover:bg-bg-hover hover:border-primary/30 folder-card-layer"
+                        :class="[
+                            viewMode === 'grid' ? 'p-4 pr-2' : 'p-3 px-6',
+                            showActionMenu === 'folder-'+folder.id ? 'z-50 menu-open' : '',
+                        ]">
+                        <div class="w-14 h-14 rounded-xl bg-primary/5 flex items-center justify-center shrink-0 transition-transform group-hover:scale-110 overflow-hidden border border-primary/10">
                             <MediaRenderer
                                 v-if="folder.thumbnail_media"
                                 :media="folder.thumbnail_media"
                                 :alt="folder.title"
+                                :use-thumbnail="true"
                                 image-class="w-full h-full object-cover rounded-xl"
                                 video-class="w-full h-full object-cover rounded-xl"
                                 fallback-class="flex h-full w-full items-center justify-center rounded-xl bg-primary/10 text-[10px] font-bold uppercase tracking-[0.22em] text-primary"
                             />
-                            <div v-else class="w-full h-full rounded-xl bg-primary/10 flex items-center justify-center text-primary">
+                            <div v-else class="w-full h-full rounded-xl bg-gradient-to-br from-primary/20 to-primary/10 flex items-center justify-center text-primary">
                                 <svg class="w-6 h-6 fill-current" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 7v10a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-6l-2-2H5a2 2 0 00-2 2z"/></svg>
                             </div>
                         </div>
@@ -292,16 +383,16 @@ const {
                             <p class="text-[10px] text-muted-foreground mt-0.5">{{ folder.media_count }} files</p>
                         </div>
 
-                        <div class="relative" @click.stop>
-                            <button @click="toggleActionMenu($event, 'folder-'+folder.id)" class="p-2 rounded-full border border-transparent bg-transparent text-muted-foreground transition-all opacity-100 md:opacity-0 md:group-hover:opacity-100 hover:bg-bg-elevated hover:border-border/80 hover:text-foreground">
+                        <div class="relative overflow-visible" @click.stop>
+                            <button @click.prevent.stop="toggleActionMenu($event, 'folder-'+folder.id)" class="p-2 rounded-full border border-border/80 bg-bg-card/90 text-foreground shadow-sm backdrop-blur-sm transition-all opacity-100 md:opacity-0 md:group-hover:opacity-100 hover:bg-bg-elevated hover:border-primary/30 hover:text-foreground">
                                 <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 12h.01M12 12h.01M19 12h.01M6 12a1 1 0 11-2 0 1 1 0 012 0zm7 0a1 1 0 11-2 0 1 1 0 012 0zm7 0a1 1 0 11-2 0 1 1 0 012 0z"/></svg>
                             </button>
-                            <div v-if="showActionMenu === 'folder-'+folder.id" class="absolute right-0 top-full mt-2 w-44 rounded-2xl border border-border/80 bg-bg-card/95 p-1.5 shadow-2xl backdrop-blur-xl z-50 animate-scale-in">
-                                <Link v-if="canManage || folder.user_id === user.id" :href="route('albums.edit', folder.slug || folder.id)" class="flex w-full items-center gap-3 rounded-xl px-3.5 py-2.5 text-sm font-medium text-foreground transition-colors hover:bg-bg-hover">
+                            <div v-if="showActionMenu === 'folder-'+folder.id" class="absolute right-0 top-full mt-2 w-44 rounded-2xl border border-border/80 bg-bg-card/95 p-1.5 shadow-2xl backdrop-blur-xl z-[9999] animate-scale-in folder-menu-popover">
+                                <button v-if="canManage || folder.user_id === user.id" type="button" class="flex w-full items-center gap-3 rounded-xl px-3.5 py-2.5 text-sm font-medium text-foreground transition-colors hover:bg-bg-hover" @click.prevent.stop="router.visit(route('albums.edit', folder.slug || folder.id)); closeActionMenu();">
                                     <svg class="w-4 h-4 text-muted-foreground" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"/></svg>
                                     Rename
-                                </Link>
-                                <button v-if="canManage || folder.user_id === user.id" @click="handleAction('Delete', 'album', folder)" class="flex w-full items-center gap-3 rounded-xl px-3.5 py-2.5 text-sm font-medium text-error transition-colors hover:bg-error/10">
+                                </button>
+                                <button v-if="canManage || folder.user_id === user.id" @click.prevent.stop="confirmDelete(folder, 'album')" class="flex w-full items-center gap-3 rounded-xl px-3.5 py-2.5 text-sm font-medium text-error transition-colors hover:bg-error/10">
                                     <svg class="w-4 h-4 text-error" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/></svg>
                                     Delete
                                 </button>
@@ -312,8 +403,13 @@ const {
             </div>
 
             <!-- Files Section -->
-            <div v-if="filteredFiles.length > 0" class="space-y-4">
-                <h3 class="text-sm font-bold text-foreground">Files</h3>
+            <div v-if="filteredFiles.length > 0" class="space-y-4 files-layer">
+                <div class="flex items-center gap-2">
+                    <h3 class="text-sm font-bold text-foreground">Files</h3>
+                    <span class="inline-flex items-center rounded-pill bg-bg-elevated px-2.5 py-1 text-[11px] font-bold text-muted-foreground">
+                        {{ totalFileCount }}
+                    </span>
+                </div>
 
                 <div
                     v-if="viewMode === 'grid'"
@@ -333,6 +429,7 @@ const {
                             <MediaRenderer
                                 :media="file"
                                 :alt="file.file_name"
+                                :use-thumbnail="true"
                                 image-class="w-full h-auto block object-cover transition-transform duration-700 group-hover:scale-105"
                                 video-class="w-full h-auto block object-cover transition-transform duration-700 group-hover:scale-105"
                                 fallback-class="flex h-[180px] w-full items-center justify-center bg-bg-hover text-sm font-bold uppercase tracking-[0.24em] text-muted-foreground"
@@ -347,7 +444,7 @@ const {
 
                             <div class="absolute inset-0 bg-gradient-to-t from-black/60 via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-all duration-300">
                                 <div class="absolute top-3 right-3 flex flex-col gap-2">
-                                    <button @click="toggleActionMenu($event, 'file-'+file.id)" class="w-10 h-10 rounded-full border border-white/20 bg-white/10 text-white backdrop-blur-md flex items-center justify-center transition-all hover:bg-white/20 hover:border-white/40">
+                                    <button @click="toggleActionMenu($event, 'file-'+file.id)" class="w-10 h-10 rounded-full border border-white/20 bg-black/55 text-white backdrop-blur-md flex items-center justify-center shadow-lg transition-all hover:bg-black/70 hover:border-white/40">
                                         <svg class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 5v.01M12 12v.01M12 19v.01M12 6a1 1 0 110-2 1 1 0 010 2zm0 7a1 1 0 110-2 1 1 0 010 2zm0 7a1 1 0 110-2 1 1 0 010 2z"/></svg>
                                     </button>
                                 </div>
@@ -378,18 +475,20 @@ const {
                 </div>
 
                 <div v-else class="bg-bg-card border border-border rounded-2xl overflow-hidden shadow-sm">
-                    <div class="grid grid-cols-[1fr_200px_100px] items-center px-6 py-3 border-b border-border bg-bg-elevated/50">
+                    <div class="grid grid-cols-[minmax(0,1fr)_220px_120px_88px] items-center gap-4 px-6 py-3 border-b border-border bg-bg-elevated/50">
                         <span class="text-xs font-bold text-muted-foreground uppercase tracking-wider">Name</span>
                         <span class="text-xs font-bold text-muted-foreground uppercase tracking-wider">Owner</span>
+                        <span class="text-xs font-bold text-muted-foreground uppercase tracking-wider text-right">Size</span>
                         <span />
                     </div>
                     <div class="divide-y divide-border">
-                        <div v-for="file in filteredFiles" :key="file.id" @click="openPreview(file)" class="grid grid-cols-[1fr_200px_100px] items-center px-6 py-4 hover:bg-bg-hover transition-colors cursor-pointer group">
+                        <div v-for="file in filteredFiles" :key="file.id" @click="openPreview(file)" class="grid grid-cols-[minmax(0,1fr)_220px_120px_88px] items-center gap-4 px-6 py-4 hover:bg-bg-hover transition-colors cursor-pointer group">
                             <div class="flex items-center gap-4 min-w-0">
                                 <div class="w-12 h-12 rounded-lg overflow-hidden border border-border shrink-0">
                                     <MediaRenderer
                                         :media="file"
                                         :alt="file.file_name"
+                                        :use-thumbnail="true"
                                         image-class="w-full h-full object-cover"
                                         video-class="w-full h-full object-cover"
                                         fallback-class="flex h-full w-full items-center justify-center bg-bg-hover text-[10px] font-bold uppercase tracking-[0.22em] text-muted-foreground"
@@ -400,14 +499,15 @@ const {
                                     <p class="text-[11px] text-muted-foreground">{{ new Date(file.created_at).toLocaleDateString() }}</p>
                                 </div>
                             </div>
-                            <div class="flex items-center gap-2">
+                            <div class="min-w-0 flex items-center gap-2">
                                 <span class="text-sm text-foreground truncate">{{ file.user?.name || 'Unknown' }}</span>
                             </div>
-                            <div class="relative flex items-center justify-end gap-2">
+                            <span class="text-sm font-medium text-foreground text-right tabular-nums">{{ formatFileSize(file.file_size) }}</span>
+                            <div class="relative flex items-center justify-end gap-1">
                                 <button @click.stop="handleAction('Download', 'media', file)" class="p-2 rounded-full hover:bg-bg-elevated text-muted-foreground hover:text-foreground transition-all">
                                     <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"/></svg>
                                 </button>
-                                <button @click.stop="toggleActionMenu($event, 'file-'+file.id)" class="p-2 rounded-full hover:bg-bg-elevated text-muted-foreground hover:text-foreground transition-all">
+                                <button @click.stop="toggleActionMenu($event, 'file-'+file.id)" class="p-2 rounded-full border border-border/80 bg-bg-card/90 text-foreground shadow-sm transition-all hover:bg-bg-elevated hover:border-primary/30 hover:text-foreground">
                                     <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 5v.01M12 12v.01M12 19v.01M12 6a1 1 0 110-2 1 1 0 010 2zm0 7a1 1 0 110-2 1 1 0 010 2zm0 7a1 1 0 110-2 1 1 0 010 2z"/></svg>
                                 </button>
                                 <div v-if="showActionMenu === 'file-'+file.id" class="absolute right-0 top-full mt-2 w-44 rounded-2xl border border-border/80 bg-bg-card/95 p-1.5 shadow-2xl backdrop-blur-xl z-50 animate-scale-in" @click.stop>
@@ -424,6 +524,11 @@ const {
                 </div>
             </div>
 
+            <!-- Loading Indicator -->
+            <div v-if="isLoadingMore" class="py-6 flex justify-center text-muted-foreground animate-pulse">
+                <div class="orange-loader"></div>
+            </div>
+
             <!-- Empty State -->
             <div v-if="filteredFiles.length === 0 && filteredFolders.length === 0" class="flex flex-col items-center justify-center py-20 bg-bg-card border border-dashed border-border rounded-3xl animate-fade-in">
                 <div class="w-20 h-20 rounded-full bg-bg-elevated flex items-center justify-center text-muted-foreground mb-6">
@@ -438,7 +543,7 @@ const {
         <MediaPreviewOverlay
             :show="showPreviewModal"
             :media="previewMedia"
-            :items="filteredFiles"
+            :items="allFilteredFiles"
             :current-index="currentIndex"
             @close="closePreview"
             @next="goToNext"
@@ -486,3 +591,32 @@ const {
         </Modal>
     </AuthenticatedLayout>
 </template>
+
+<style scoped>
+.folders-layer {
+    position: relative !important;
+    z-index: 120 !important;
+    overflow: visible !important;
+    isolation: isolate !important;
+}
+
+.folder-card-layer {
+    position: relative !important;
+    overflow: visible !important;
+}
+
+.folder-card-layer.menu-open {
+    z-index: 130 !important;
+}
+
+.folder-menu-popover {
+    position: absolute !important;
+    z-index: 9999 !important;
+    overflow: visible !important;
+}
+
+.files-layer {
+    position: relative !important;
+    z-index: 1 !important;
+}
+</style>

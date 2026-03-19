@@ -22,6 +22,7 @@
         "vue": "^3.4.0"
     },
     "dependencies": {
+        "@vueuse/core": "^14.2.1",
         "heic2any": "^0.0.4",
         "lodash": "^4.17.21",
         "lucide-vue-next": "^0.577.0",

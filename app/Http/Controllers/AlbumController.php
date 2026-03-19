@@ -2,13 +2,14 @@
 
 namespace App\Http\Controllers;
 
-use Illuminate\Http\Request;
-use Illuminate\Http\UploadedFile;
 use App\Models\Album;
-use App\Services\AlbumService;
 use App\Services\ActivityLogService;
+use App\Services\AlbumService;
 use App\Services\MediaService;
 use Illuminate\Foundation\Auth\Access\AuthorizesRequests;
+use Illuminate\Http\Request;
+use Illuminate\Http\UploadedFile;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Validation\ValidationException;
 use Inertia\Inertia;
 
@@ -22,9 +23,15 @@ class AlbumController extends Controller
 
     public function index(Request $request)
     {
+        $pinnedAlbumIds = auth()
+            ->user()
+            ->pinnedAlbums()
+            ->pluck("albums.id")
+            ->all();
+
         $query = Album::with([
             "media" => function ($q) {
-                $q->orderBy("created_at", "desc")->limit(1);
+                $q->orderBy("created_at", "desc")->limit(5);
             },
         ])
             ->withCount(["media", "children"])
@@ -58,12 +65,19 @@ class AlbumController extends Controller
         $albums = $query
             ->latest()
             ->get()
-            ->map(function ($album) {
+            ->map(function ($album) use ($pinnedAlbumIds) {
                 $thumbnailMedia = $album->media->first();
+                $previewMedia = $album->media->take(5)->map(fn($m) => [
+                    "url"       => $m->url,
+                    "file_type" => $m->file_type,
+                    "file_name" => $m->file_name,
+                    "mime_type" => $m->mime_type,
+                ])->values()->all();
 
                 return [
                     "id" => $album->id,
                     "slug" => $album->slug,
+                    "path" => $album->path,
                     "title" => $album->title,
                     "description" => $album->description,
                     "type" => $album->type,
@@ -82,6 +96,8 @@ class AlbumController extends Controller
                             "mime_type" => $thumbnailMedia->mime_type,
                         ]
                         : null,
+                    "preview_media" => $previewMedia,
+                    "is_pinned" => in_array($album->id, $pinnedAlbumIds, true),
                     "is_system" => false,
                     "location" => $album->location,
                     "created_at" => $album->created_at,
@@ -167,6 +183,7 @@ class AlbumController extends Controller
                         fn($a) => [
                             "id" => $a->id,
                             "slug" => $a->slug,
+                            "path" => $a->path,
                             "title" => $a->title,
                         ],
                     )
@@ -174,6 +191,7 @@ class AlbumController extends Controller
                 $breadcrumbs[] = [
                     "id" => $parent->id,
                     "slug" => $parent->slug,
+                    "path" => $parent->path,
                     "title" => $parent->title,
                 ];
             }
@@ -181,6 +199,7 @@ class AlbumController extends Controller
 
         return Inertia::render("Albums/Index", [
             "albums" => $allAlbums,
+            "pinnedAlbumIds" => $pinnedAlbumIds,
             "filters" => array_merge(
                 $request->only(["search", "parent_id", "location"]),
                 ["location" => $locationFilter],
@@ -235,7 +254,8 @@ class AlbumController extends Controller
         // If this was a sub-folder creation redirect back to the parent album,
         // otherwise go to the albums index.
         if (!empty($data["parent_id"])) {
-            return redirect()->route("albums.show", $album->parent_id);
+            $parent = Album::find($data["parent_id"]);
+            return redirect()->route("albums.show", $parent?->slug ?? "albums.index");
         }
 
         return redirect()->route("albums.index");
@@ -707,16 +727,30 @@ class AlbumController extends Controller
     // Show
     // -------------------------------------------------------------------------
 
-    public function show(Album $album)
+    public function show($path, Request $request)
     {
+        $slug = basename($path);
+        /** @var Album */
+        $album = Album::where('slug', $slug)->firstOrFail();
+
         $this->authorize("view", $album);
 
+        $album->setAttribute(
+            "is_pinned",
+            auth()->user()->pinnedAlbums()->where("albums.id", $album->id)->exists(),
+        );
+
+        $paginatedMedia = $album->media()
+            ->with("user:id,name,role")
+            ->orderBy("created_at", "desc")
+            ->paginate(10)
+            ->withQueryString();
+
+        if ($request->wantsJson() && !$request->header('X-Inertia')) {
+            return response()->json($paginatedMedia);
+        }
+
         $album->load([
-            "media" => function ($query) {
-                $query
-                    ->with("user:id,name,role")
-                    ->orderBy("created_at", "desc");
-            },
             "children" => function ($query) {
                 $query
                     ->with([
@@ -753,6 +787,7 @@ class AlbumController extends Controller
                 fn($a) => [
                     "id" => $a->id,
                     "slug" => $a->slug,
+                    "path" => $a->path,
                     "title" => $a->title,
                 ],
             )
@@ -760,8 +795,40 @@ class AlbumController extends Controller
 
         return Inertia::render("Albums/Show", [
             "album" => $album,
+            "mediaData" => $paginatedMedia,
             "breadcrumbs" => $breadcrumbs,
         ]);
+    }
+
+    public function togglePin(Request $request, Album $album)
+    {
+        $this->authorize("view", $album);
+
+        $user = $request->user();
+
+        $existingPin = $user
+            ->pinnedAlbumRecords()
+            ->where("album_id", $album->id)
+            ->first();
+
+        if ($existingPin) {
+            $existingPin->delete();
+            $pinned = false;
+        } else {
+            $user->pinnedAlbumRecords()->create([
+                "album_id" => $album->id,
+            ]);
+            $pinned = true;
+        }
+
+        if ($request->wantsJson() && !$request->header("X-Inertia")) {
+            return response()->json([
+                "album_id" => $album->id,
+                "pinned" => $pinned,
+            ]);
+        }
+
+        return back();
     }
 
     // -------------------------------------------------------------------------
@@ -803,7 +870,7 @@ class AlbumController extends Controller
     // Destroy
     // -------------------------------------------------------------------------
 
-    public function destroy(Album $album, ActivityLogService $logService)
+    public function destroy(Request $request, Album $album, ActivityLogService $logService)
     {
         $this->authorize("delete", $album);
 
@@ -817,22 +884,19 @@ class AlbumController extends Controller
             $logService->logAlbumDeleted($album);
             $album->delete();
         } catch (\Throwable $e) {
-            \Log::error("AlbumController::destroy – failed to delete album.", [
+            Log::error("AlbumController::destroy – failed to delete album.", [
                 "album_id" => $album->id,
                 "error" => $e->getMessage(),
             ]);
 
-            return redirect()
-                ->route("albums.index")
+            return back()
                 ->with(
                     "error",
                     "Failed to delete \"{$album->title}\". Please try again.",
                 );
         }
 
-        return redirect()
-            ->route("albums.index")
-            ->with("success", $successMessage);
+        return back()->with("success", $successMessage);
     }
 
     // -------------------------------------------------------------------------
@@ -927,17 +991,18 @@ class AlbumController extends Controller
     // System Albums (smart albums)
     // -------------------------------------------------------------------------
 
-    public function showSystemAlbum(string $type)
+    public function showSystemAlbum(string $type, Request $request)
     {
         $album = null;
-        $media = collect();
+        $paginatedMedia = null;
 
         if ($type === "recent") {
-            $media = \App\Models\Media::with("user:id,name,role")
+            $paginatedMedia = \App\Models\Media::with("user:id,name,role")
                 ->where("user_id", auth()->id())
                 ->where("created_at", ">=", now()->subDays(30))
                 ->orderBy("created_at", "desc")
-                ->get();
+                ->paginate(10)
+                ->withQueryString();
 
             $album = [
                 "id" => "recent",
@@ -945,16 +1010,17 @@ class AlbumController extends Controller
                 "description" => "Photos and videos from the last 30 days",
                 "type" => "system",
                 "is_system" => true,
-                "media" => $media,
+                "children" => [],
             ];
         } elseif ($type === "todays-memories") {
-            $media = \App\Models\Media::with("user:id,name,role")
+            $paginatedMedia = \App\Models\Media::with("user:id,name,role")
                 ->where("user_id", auth()->id())
                 ->whereRaw("MONTH(created_at) = ?", [now()->month])
                 ->whereRaw("DAY(created_at) = ?", [now()->day])
                 ->whereRaw("YEAR(created_at) < ?", [now()->year])
                 ->orderBy("created_at", "desc")
-                ->get();
+                ->paginate(10)
+                ->withQueryString();
 
             $album = [
                 "id" => "todays-memories",
@@ -962,7 +1028,7 @@ class AlbumController extends Controller
                 "description" => "Photos from this day in previous years",
                 "type" => "system",
                 "is_system" => true,
-                "media" => $media,
+                "children" => [],
             ];
         }
 
@@ -970,6 +1036,18 @@ class AlbumController extends Controller
             abort(404);
         }
 
-        return Inertia::render("Albums/Show", ["album" => $album]);
+        // Handle JSON pagination requests (for infinite scroll)
+        if ($request->wantsJson() && !$request->header('X-Inertia')) {
+            return response()->json($paginatedMedia);
+        }
+
+        // No breadcrumbs for system albums
+        $breadcrumbs = [];
+
+        return Inertia::render("Albums/Show", [
+            "album" => (object)$album,
+            "mediaData" => $paginatedMedia,
+            "breadcrumbs" => $breadcrumbs,
+        ]);
     }
 }

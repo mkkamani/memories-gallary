@@ -17,9 +17,19 @@ const user = usePage().props.auth.user;
 const form = useForm({
     name: user.name,
     email: user.email,
+    role: String(user.role || 'member').toLowerCase(),
 });
 
-const roleLabel = computed(() => user.role || 'Member');
+const roleLabel = computed(() => {
+    const role = String(user.role || 'member').toLowerCase();
+
+    if (role === 'admin') return 'Admin';
+    if (role === 'manager') return 'Manager';
+
+    return 'Member';
+});
+
+const canEditRole = computed(() => ['admin', 'manager'].includes(String(user.role || '').toLowerCase()));
 </script>
 
 <template>
@@ -64,11 +74,26 @@ const roleLabel = computed(() => user.role || 'Member');
                 <InputError class="mt-2" :message="form.errors.email" />
             </div>
 
-            <div>
-                <label class="block mb-2 text-xs font-extrabold uppercase tracking-wide text-muted-foreground">Designation</label>
+            <div v-if="canEditRole">
+                <label for="role" class="block mb-2 text-xs font-extrabold uppercase tracking-wide text-muted-foreground">Role</label>
+                <select
+                    id="role"
+                    v-model="form.role"
+                    class="w-full h-12 rounded-xl border border-border bg-bg-secondary px-4 text-foreground focus:outline-none focus:ring-2 focus:ring-primary/25 focus:border-primary"
+                >
+                    <option value="admin">Admin</option>
+                    <option value="manager">Manager</option>
+                    <option value="member">Member</option>
+                </select>
+
+                <InputError class="mt-2" :message="form.errors.role" />
+            </div>
+
+            <div v-else>
+                <label class="block mb-2 text-xs font-extrabold uppercase tracking-wide text-muted-foreground">Role</label>
                 <input
                     type="text"
-                    :value="roleLabel.toUpperCase()"
+                    :value="roleLabel"
                     readonly
                     class="w-full h-12 rounded-xl border border-border bg-bg-secondary px-4 text-foreground/80"
                 />

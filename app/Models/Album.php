@@ -18,6 +18,19 @@ class Album extends Model
         return 'slug';
     }
 
+    public function getPathAttribute()
+    {
+        $slugs = [$this->slug];
+        $parent = $this->parent;
+
+        while ($parent) {
+            array_unshift($slugs, $parent->slug);
+            $parent = $parent->parent;
+        }
+
+        return implode('/', $slugs);
+    }
+
     protected $fillable = [
         "user_id",
         "parent_id",
@@ -51,6 +64,12 @@ class Album extends Model
     public function tags()
     {
         return $this->morphToMany(Tag::class, "taggable");
+    }
+
+    public function pinnedByUsers()
+    {
+        return $this->belongsToMany(User::class, 'pinned_albums')
+            ->withTimestamps();
     }
 
     // Parent-child relationships for nested albums

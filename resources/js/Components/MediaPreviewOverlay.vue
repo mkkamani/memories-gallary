@@ -3,12 +3,10 @@ import {
     ChevronLeft,
     ChevronRight,
     Download,
-    Image as ImageIcon,
     Minus,
     Plus,
     RotateCcw,
     Share2,
-    Video,
     X,
 } from 'lucide-vue-next';
 import { computed, onBeforeUnmount, ref, watch } from 'vue';

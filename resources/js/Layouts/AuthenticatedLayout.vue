@@ -36,11 +36,31 @@ let toastTimer = null;
 
 const toastStyles = computed(() => {
     switch (toast.value?.type) {
-        case 'success': return 'bg-green-500/10 border-green-500/40 text-green-400';
-        case 'error':   return 'bg-red-500/10 border-red-500/40 text-red-400';
-        case 'warning': return 'bg-yellow-500/10 border-yellow-500/40 text-yellow-400';
-        case 'info':    return 'bg-blue-500/10 border-blue-500/40 text-blue-400';
-        default:        return '';
+        case 'success': return 'border-emerald-300 bg-emerald-600 text-white shadow-emerald-600/35';
+        case 'error':   return 'border-red-300 bg-red-600 text-white shadow-red-600/35';
+        case 'warning': return 'border-amber-300 bg-amber-500 text-slate-900 shadow-amber-500/30';
+        case 'info':    return 'border-blue-300 bg-blue-600 text-white shadow-blue-600/35';
+        default:        return 'border-slate-300 bg-slate-700 text-white shadow-slate-700/35';
+    }
+});
+
+const toastIconBoxStyles = computed(() => {
+    switch (toast.value?.type) {
+        case 'success': return 'bg-emerald-500/30 text-white';
+        case 'error':   return 'bg-red-500/30 text-white';
+        case 'warning': return 'bg-amber-100/60 text-amber-900';
+        case 'info':    return 'bg-blue-500/30 text-white';
+        default:        return 'bg-slate-500/30 text-white';
+    }
+});
+
+const toastTitle = computed(() => {
+    switch (toast.value?.type) {
+        case 'success': return 'Success';
+        case 'error':   return 'Error';
+        case 'warning': return 'Warning';
+        case 'info':    return 'Info';
+        default:        return 'Notice';
     }
 });
 
@@ -321,22 +341,29 @@ const isActive = (item) => {
         <!-- ── Toast notification ───────────────────────────────────────────── -->
         <Transition
             enter-active-class="transition duration-300 ease-out"
-            enter-from-class="opacity-0 translate-y-[-1rem]"
-            enter-to-class="opacity-100 translate-y-0"
+            enter-from-class="opacity-0 translate-y-[-0.75rem] translate-x-2"
+            enter-to-class="opacity-100 translate-y-0 translate-x-0"
             leave-active-class="transition duration-200 ease-in"
-            leave-from-class="opacity-100 translate-y-0"
-            leave-to-class="opacity-0 translate-y-[-1rem]"
+            leave-from-class="opacity-100 translate-y-0 translate-x-0"
+            leave-to-class="opacity-0 translate-y-[-0.5rem] translate-x-2"
         >
             <div
                 v-if="toast"
-                class="fixed top-20 left-1/2 -translate-x-1/2 z-[200] flex items-center gap-3 px-4 py-3 rounded-xl border shadow-2xl backdrop-blur-xl text-sm font-medium max-w-[92vw] sm:max-w-md"
+                class="fixed top-20 right-4 z-[200] flex items-start gap-3 rounded-2xl border px-4 py-3 shadow-2xl backdrop-blur-xl max-w-[92vw] sm:max-w-md"
                 :class="toastStyles"
             >
-                <svg class="w-5 h-5 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
-                    <path stroke-linecap="round" stroke-linejoin="round" :d="toastIcon" />
-                </svg>
-                <span class="flex-1">{{ toast.message }}</span>
-                <button @click="dismissToast" class="ml-2 opacity-60 hover:opacity-100 transition-opacity">
+                <div class="mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-xl" :class="toastIconBoxStyles">
+                    <svg class="h-4.5 w-4.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                        <path stroke-linecap="round" stroke-linejoin="round" :d="toastIcon" />
+                    </svg>
+                </div>
+
+                <div class="min-w-0 flex-1">
+                    <p class="text-xs font-bold uppercase tracking-[0.18em] opacity-90">{{ toastTitle }}</p>
+                    <p class="mt-0.5 text-sm font-semibold leading-5">{{ toast.message }}</p>
+                </div>
+
+                <button @click="dismissToast" class="ml-1 rounded-lg p-1 opacity-80 transition-opacity hover:bg-black/10 hover:opacity-100">
                     <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
                         <path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12" />
                     </svg>

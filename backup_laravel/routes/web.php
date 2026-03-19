@@ -24,13 +24,13 @@ Route::middleware(['auth', 'verified'])->group(function () {
     Route::resource('media', MediaController::class)->only(['store', 'destroy']);
     Route::post('/media/bulk-delete', [MediaController::class, 'bulkDelete'])->name('media.bulk-delete');
     Route::post('/media/bulk-download', [MediaController::class, 'bulkDownload'])->name('media.bulk-download');
-    
+
     Route::get('/recycle-bin', [RecycleBinController::class, 'index'])->name('recycle-bin.index');
     Route::post('/recycle-bin/media/{id}/restore', [RecycleBinController::class, 'restoreMedia'])->name('recycle-bin.restore-media');
     Route::delete('/recycle-bin/media/{id}', [RecycleBinController::class, 'forceDeleteMedia'])->name('recycle-bin.force-delete-media');
     Route::post('/recycle-bin/albums/{id}/restore', [RecycleBinController::class, 'restoreAlbum'])->name('recycle-bin.restore-album');
     Route::delete('/recycle-bin/albums/{id}', [RecycleBinController::class, 'forceDeleteAlbum'])->name('recycle-bin.force-delete-album');
-    Route::get('/albums/system/{type}', [AlbumController::class, 'showSystemAlbum'])->name('albums.system');
+    Route::get('/albums/all/{type}', [AlbumController::class, 'showSystemAlbum'])->name('albums.all');
     Route::resource('users', \App\Http\Controllers\UserController::class);
 });
 

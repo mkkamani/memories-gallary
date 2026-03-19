@@ -11,6 +11,7 @@ import debounce from 'lodash/debounce';
 
 const props = defineProps({
     albums: Array,
+    pinnedAlbumIds: Array,
     filters: Object,
     breadcrumbs: Array,
 });
@@ -21,7 +22,8 @@ const viewMode = ref('grid');
 const showDeleteModal = ref(false);
 const showActionMenu = ref(null);
 const albumToDelete = ref(null);
-const pinnedAlbums = ref([]); // Simplistic local state for pinning feature
+const pinnedAlbums = ref([...(props.pinnedAlbumIds || [])]);
+const pinLoadingAlbums = ref([]);
 const showNewMenu = ref(false);
 const showImportModal = ref(false);
 const importForm = useForm({
@@ -80,15 +82,30 @@ const closeActionMenu = () => {
     showNewMenu.value = false;
 };
 
-const togglePin = (e, albumId) => {
+const togglePin = (e, album) => {
     e.stopPropagation();
     e.preventDefault();
-    const index = pinnedAlbums.value.indexOf(albumId);
-    if (index > -1) {
-        pinnedAlbums.value.splice(index, 1);
-    } else {
-        pinnedAlbums.value.push(albumId);
-    }
+
+    const albumId = album.id;
+    if (pinLoadingAlbums.value.includes(albumId)) return;
+
+    pinLoadingAlbums.value.push(albumId);
+
+    router.post(route('albums.pin-toggle', album.slug || albumId), {}, {
+        preserveScroll: true,
+        preserveState: true,
+        onSuccess: () => {
+            const index = pinnedAlbums.value.indexOf(albumId);
+            if (index > -1) {
+                pinnedAlbums.value.splice(index, 1);
+            } else {
+                pinnedAlbums.value.push(albumId);
+            }
+        },
+        onFinish: () => {
+            pinLoadingAlbums.value = pinLoadingAlbums.value.filter((id) => id !== albumId);
+        },
+    });
 };
 
 const systemAlbums = computed(() => props.albums.filter(a => a.is_system));
@@ -109,13 +126,13 @@ const handleAction = (action, album) => {
                 `${(album.title || 'album').replace(/\s+/g, '-').toLowerCase()}-cover`,
             );
         } else {
-            router.visit(route('albums.show', album.slug || album.id));
+            router.visit(route('albums.show', album.path || album.slug || album.id));
         }
         return;
     }
 
     if (action === 'Share') {
-        const url = `${window.location.origin}${route('albums.show', album.slug || album.id)}`;
+        const url = `${window.location.origin}${route('albums.show', album.path || album.slug || album.id)}`;
 
         if (navigator.clipboard?.writeText) {
             navigator.clipboard.writeText(url);
@@ -209,13 +226,13 @@ const submitImport = () => {
             </div>
 
             <div v-if="systemAlbums.length > 0" class="space-y-4">
-                 <h3 class="font-heading font-bold text-lg text-foreground flex items-center gap-2">
+                <h3 class="font-heading font-bold text-lg text-foreground flex items-center gap-2">
                     <svg class="w-5 h-5 text-purple-500" fill="currentColor" viewBox="0 0 20 20"><path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z"></path></svg>
                     Smart Albums
                 </h3>
                 <div class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-6">
                     <template v-for="album in systemAlbums" :key="album.id">
-                        <Link :href="route('albums.system', album.id)" class="group relative flex flex-col gap-2 cursor-pointer transition-all active:scale-95">
+                        <Link :href="route('albums.all', album.id)" class="group relative flex flex-col gap-2 cursor-pointer transition-all active:scale-95">
                             <div class="aspect-[4/3] rounded-2xl bg-bg-elevated border border-border overflow-hidden relative group-hover:border-purple-500/50 transition-all shadow-sm group-hover:shadow-md">
                                 <MediaRenderer
                                     v-if="album.thumbnail_media"
@@ -245,10 +262,12 @@ const submitImport = () => {
             </div>
 
             <!-- Content View -->
-            <div v-if="viewMode === 'grid'" class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-6">
+            <div v-if="viewMode === 'grid'" class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
                 <template v-for="album in userAlbums" :key="album.id">
-                    <div class="group relative flex flex-col gap-2 cursor-pointer transition-all active:scale-95" @click="router.visit(route('albums.show', album.slug || album.id))">
-                        <div class="aspect-[4/3] rounded-2xl bg-bg-elevated border border-border overflow-hidden relative group-hover:border-primary/50 transition-all shadow-sm group-hover:shadow-md">
+                    <div class="group relative flex flex-col gap-2 cursor-pointer transition-all active:scale-95" @click="router.visit(route('albums.show', album.path || album.slug || album.id))">
+                        <!-- Unified card: cover + strip in one bordered container -->
+                        <div class="rounded-2xl bg-bg-elevated border border-border overflow-hidden transition-all shadow-sm group-hover:border-primary/50 group-hover:shadow-md">
+                        <div class="aspect-video relative overflow-hidden bg-bg-elevated">
                             <MediaRenderer
                                 v-if="album.thumbnail_media"
                                 :media="album.thumbnail_media"
@@ -287,9 +306,12 @@ const submitImport = () => {
 
                             <!-- Pin Button -->
                             <div class="absolute top-2 left-2">
-                                <button @click="togglePin($event, album.id)" class="w-8 h-8 rounded-full flex items-center justify-center transition-all shadow-lg backdrop-blur-md"
+                                <button @click="togglePin($event, album)" class="w-8 h-8 rounded-full flex items-center justify-center transition-all shadow-lg backdrop-blur-md"
                                         :class="pinnedAlbums.includes(album.id) ? 'bg-primary text-primary-foreground opacity-100' : 'bg-black/40 text-white opacity-0 group-hover:opacity-100 hover:bg-black/60'">
-                                    <svg class="w-4 h-4" :class="pinnedAlbums.includes(album.id) ? 'fill-current' : ''" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 5a2 2 0 012-2h10a2 2 0 012 2v16l-7-3.5L5 21V5z"/></svg>
+                                    <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" aria-hidden="true">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 17v5" />
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 4h8l-1.5 5 2.5 2.5H7L9.5 9 8 4Z" />
+                                    </svg>
                                 </button>
                             </div>
 
@@ -298,6 +320,24 @@ const submitImport = () => {
                                 {{ album.location }}
                             </div>
                         </div>
+
+                        <!-- Preview strip: 4 thumbnails inside the same card -->
+                        <div v-if="album.preview_media && album.preview_media.length > 1" class="grid grid-cols-4 gap-px bg-border">
+                            <div
+                                v-for="(pm, idx) in album.preview_media.slice(1)"
+                                :key="idx"
+                                class="aspect-square overflow-hidden bg-bg-elevated"
+                            >
+                                <MediaRenderer
+                                    :media="pm"
+                                    :alt="album.title"
+                                    image-class="w-full h-full object-cover"
+                                    video-class="w-full h-full object-cover"
+                                    fallback-class="w-full h-full bg-primary/5"
+                                />
+                            </div>
+                        </div>
+                        </div><!-- end unified card -->
 
                         <div class="px-1 relative">
                             <div class="flex items-center gap-2">
@@ -321,10 +361,10 @@ const submitImport = () => {
                 </div>
                 <div class="divide-y divide-border">
                     <template v-for="album in userAlbums" :key="album.id">
-                        <div class="grid grid-cols-[1fr_120px_120px_150px_40px] items-center px-6 py-4 hover:bg-bg-hover transition-colors cursor-pointer group" @click="router.visit(route('albums.show', album.slug || album.id))">
+                        <div class="grid grid-cols-[1fr_120px_120px_150px_40px] items-center px-6 py-4 hover:bg-bg-hover transition-colors cursor-pointer group" @click="router.visit(route('albums.show', album.path || album.slug || album.id))">
                             <div class="flex items-center gap-4">
-                                <button @click="togglePin($event, album.id)" class="p-1.5 rounded-full transition-all" :class="pinnedAlbums.includes(album.id) ? 'text-primary' : 'text-muted-foreground opacity-0 group-hover:opacity-100'">
-                                    <svg class="w-4 h-4" :class="pinnedAlbums.includes(album.id) ? 'fill-current' : ''" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 5a2 2 0 012-2h10a2 2 0 012 2v16l-7-3.5L5 21V5z"/></svg>
+                                <button @click="togglePin($event, album)" class="p-1.5 rounded-full transition-all" :class="pinnedAlbums.includes(album.id) ? 'text-primary' : 'text-muted-foreground opacity-0 group-hover:opacity-100'">
+                                    <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-pin w-4 h-4 fill-current"><path d="M12 17v5"></path><path d="M9 10.76a2 2 0 0 1-1.11 1.79l-1.78.9A2 2 0 0 0 5 15.24V16a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1v-.76a2 2 0 0 0-1.11-1.79l-1.78-.9A2 2 0 0 1 15 10.76V7a1 1 0 0 1 1-1 2 2 0 0 0 0-4H8a2 2 0 0 0 0 4 1 1 0 0 1 1 1z"></path></svg>
                                 </button>
                                 <div class="w-10 h-10 rounded-lg bg-orange-500/10 flex items-center justify-center text-orange-500">
                                     <svg class="w-5 h-5 fill-orange-500/20" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 7v10a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-6l-2-2H5a2 2 0 00-2 2z"/></svg>
@@ -335,7 +375,7 @@ const submitImport = () => {
                             <span class="text-[11px] font-medium text-blue-500">{{ album.location || '-' }}</span>
                             <span class="text-sm text-muted-foreground">{{ new Date(album.created_at || Date.now()).toLocaleDateString() }}</span>
                             <div class="relative">
-                                <button @click="toggleActionMenu($event, album.id)" class="p-2 rounded-full hover:bg-bg-elevated text-muted-foreground hover:text-foreground transition-all">
+                                <button @click="toggleActionMenu($event, album.id)" class="p-2 rounded-full border border-border/80 bg-bg-card/90 text-foreground shadow-sm transition-all hover:bg-bg-elevated hover:border-primary/30 hover:text-foreground">
                                     <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 5v.01M12 12v.01M12 19v.01M12 6a1 1 0 110-2 1 1 0 010 2zm0 7a1 1 0 110-2 1 1 0 010 2zm0 7a1 1 0 110-2 1 1 0 010 2z"/></svg>
                                 </button>
 
