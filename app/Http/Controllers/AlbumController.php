@@ -163,7 +163,13 @@ class AlbumController extends Controller
                 $breadcrumbs = $parent
                     ->ancestors()
                     ->reverse()
-                    ->map(fn($a) => ["id" => $a->id, "slug" => $a->slug, "title" => $a->title])
+                    ->map(
+                        fn($a) => [
+                            "id" => $a->id,
+                            "slug" => $a->slug,
+                            "title" => $a->title,
+                        ],
+                    )
                     ->toArray();
                 $breadcrumbs[] = [
                     "id" => $parent->id,
@@ -497,7 +503,8 @@ class AlbumController extends Controller
                 "description" => $album->description,
                 "location" => $album->location,
                 "created_at" => $album->created_at,
-                "thumbnail" => $album->cover_image ?: $album->media->first()?->url,
+                "thumbnail" =>
+                    $album->cover_image ?: $album->media->first()?->url,
                 "user" => $album->user
                     ? [
                         "id" => $album->user->id,
@@ -521,14 +528,20 @@ class AlbumController extends Controller
         // ── PHP-level upload pre-flight ───────────────────────────────────────
         // When the request body exceeds post_max_size PHP silently empties
         // $_FILES before Laravel boots, so the validator gets nothing.
-        $contentLength  = (int) ($request->server("CONTENT_LENGTH") ?? 0);
-        $postMaxBytes   = $this->parseIniBytes(ini_get("post_max_size"));
+        $contentLength = (int) ($request->server("CONTENT_LENGTH") ?? 0);
+        $postMaxBytes = $this->parseIniBytes(ini_get("post_max_size"));
         $uploadMaxBytes = $this->parseIniBytes(ini_get("upload_max_filesize"));
 
-        if ($contentLength > 0 && $postMaxBytes > 0 && $contentLength > $postMaxBytes) {
+        if (
+            $contentLength > 0 &&
+            $postMaxBytes > 0 &&
+            $contentLength > $postMaxBytes
+        ) {
             $maxMb = round($postMaxBytes / 1048576);
             return back()
-                ->withErrors(["files" => "The total upload size is too large. Maximum allowed: {$maxMb} MB. Try uploading fewer files at once."])
+                ->withErrors([
+                    "files" => "The total upload size is too large. Maximum allowed: {$maxMb} MB. Try uploading fewer files at once.",
+                ])
                 ->withInput();
         }
 
@@ -537,16 +550,23 @@ class AlbumController extends Controller
         if (is_array($rawFileList)) {
             $uploadMaxMb = round($uploadMaxBytes / 1048576, 1);
             foreach ($rawFileList as $rawFile) {
-                if ($rawFile && method_exists($rawFile, "getError") && $rawFile->getError() !== UPLOAD_ERR_OK) {
+                if (
+                    $rawFile &&
+                    method_exists($rawFile, "getError") &&
+                    $rawFile->getError() !== UPLOAD_ERR_OK
+                ) {
                     $errMsg = match ($rawFile->getError()) {
-                        UPLOAD_ERR_INI_SIZE, UPLOAD_ERR_FORM_SIZE =>
-                            "'{$rawFile->getClientOriginalName()}' is too large. The server allows a maximum of {$uploadMaxMb} MB per file. Please reduce the file size or contact your administrator.",
-                        UPLOAD_ERR_PARTIAL =>
-                            "'{$rawFile->getClientOriginalName()}' was only partially uploaded. Please try again.",
-                        default =>
-                            "'{$rawFile->getClientOriginalName()}' failed to upload (PHP error code {$rawFile->getError()}).",
+                        UPLOAD_ERR_INI_SIZE,
+                        UPLOAD_ERR_FORM_SIZE
+                            => "'{$rawFile->getClientOriginalName()}' is too large. The server allows a maximum of {$uploadMaxMb} MB per file. Please reduce the file size or contact your administrator.",
+                        UPLOAD_ERR_PARTIAL
+                            => "'{$rawFile->getClientOriginalName()}' was only partially uploaded. Please try again.",
+                        default
+                            => "'{$rawFile->getClientOriginalName()}' failed to upload (PHP error code {$rawFile->getError()}).",
                     };
-                    return back()->withErrors(["files" => $errMsg])->withInput();
+                    return back()
+                        ->withErrors(["files" => $errMsg])
+                        ->withInput();
                 }
             }
         }
@@ -583,16 +603,22 @@ class AlbumController extends Controller
             $size = (int) $file->getSize();
             // Determine type: ZIP is extension-first to avoid mis-classifying
             // video/octet-stream files as archives.
-            $isZip = $ext === "zip" || ($ext !== "" && in_array($mime, $zipMimeTypes, true));
-            $isMedia = str_starts_with($mime, "image/") ||
+            $isZip =
+                $ext === "zip" ||
+                ($ext !== "" && in_array($mime, $zipMimeTypes, true));
+            $isMedia =
+                str_starts_with($mime, "image/") ||
                 str_starts_with($mime, "video/") ||
                 in_array($ext, $imageExtensions, true) ||
-                in_array($ext, ["mp4", "mov", "avi", "mkv", "webm", "m4v", "3gp"], true);
+                in_array(
+                    $ext,
+                    ["mp4", "mov", "avi", "mkv", "webm", "m4v", "3gp"],
+                    true,
+                );
 
             if ($isZip) {
                 if ($size > 536870912) {
-                    $validationMessages[] =
-                        "ZIP file '{$file->getClientOriginalName()}' exceeds 512 MB.";
+                    $validationMessages[] = "ZIP file '{$file->getClientOriginalName()}' exceeds 512 MB.";
                 }
                 $zipFiles[] = $file;
                 continue;
@@ -600,15 +626,13 @@ class AlbumController extends Controller
 
             if ($isMedia) {
                 if ($size > 104857600) {
-                    $validationMessages[] =
-                        "Media file '{$file->getClientOriginalName()}' exceeds 100 MB.";
+                    $validationMessages[] = "Media file '{$file->getClientOriginalName()}' exceeds 100 MB.";
                 }
                 $mediaFiles[] = $file;
                 continue;
             }
 
-            $validationMessages[] =
-                "Unsupported file '{$file->getClientOriginalName()}'. Only images, videos, or ZIP files are allowed.";
+            $validationMessages[] = "Unsupported file '{$file->getClientOriginalName()}'. Only images, videos, or ZIP files are allowed.";
         }
 
         if (count($zipFiles) > 1) {
@@ -669,8 +693,7 @@ class AlbumController extends Controller
 
             return back()
                 ->withErrors([
-                    "files" =>
-                        "Upload failed: " . $e->getMessage(),
+                    "files" => "Upload failed: " . $e->getMessage(),
                 ])
                 ->with(
                     "error",
@@ -690,7 +713,9 @@ class AlbumController extends Controller
 
         $album->load([
             "media" => function ($query) {
-                $query->with('user:id,name,role')->orderBy('created_at', 'desc');
+                $query
+                    ->with("user:id,name,role")
+                    ->orderBy("created_at", "desc");
             },
             "children" => function ($query) {
                 $query
@@ -710,10 +735,10 @@ class AlbumController extends Controller
                 $child->thumbnail = $thumbnailMedia?->url;
                 $child->thumbnail_media = $thumbnailMedia
                     ? [
-                        'url' => $thumbnailMedia->url,
-                        'file_type' => $thumbnailMedia->file_type,
-                        'file_name' => $thumbnailMedia->file_name,
-                        'mime_type' => $thumbnailMedia->mime_type,
+                        "url" => $thumbnailMedia->url,
+                        "file_type" => $thumbnailMedia->file_type,
+                        "file_name" => $thumbnailMedia->file_name,
+                        "mime_type" => $thumbnailMedia->mime_type,
                     ]
                     : null;
                 return $child;
@@ -724,7 +749,13 @@ class AlbumController extends Controller
         $breadcrumbs = $album
             ->ancestors()
             ->reverse()
-            ->map(fn($a) => ["id" => $a->id, "slug" => $a->slug, "title" => $a->title])
+            ->map(
+                fn($a) => [
+                    "id" => $a->id,
+                    "slug" => $a->slug,
+                    "title" => $a->title,
+                ],
+            )
             ->toArray();
 
         return Inertia::render("Albums/Show", [
@@ -777,15 +808,31 @@ class AlbumController extends Controller
         $this->authorize("delete", $album);
 
         $childrenCount = $album->children()->count();
-        $message =
+        $successMessage =
             $childrenCount > 0
-                ? "Album and {$childrenCount} nested album(s) deleted successfully."
-                : "Album deleted successfully.";
+                ? "\"{$album->title}\" and {$childrenCount} nested album(s) moved to Recycle Bin."
+                : "\"{$album->title}\" moved to Recycle Bin.";
 
-        $logService->logAlbumDeleted($album);
-        $album->delete();
+        try {
+            $logService->logAlbumDeleted($album);
+            $album->delete();
+        } catch (\Throwable $e) {
+            \Log::error("AlbumController::destroy – failed to delete album.", [
+                "album_id" => $album->id,
+                "error" => $e->getMessage(),
+            ]);
 
-        return redirect()->route("albums.index")->with("success", $message);
+            return redirect()
+                ->route("albums.index")
+                ->with(
+                    "error",
+                    "Failed to delete \"{$album->title}\". Please try again.",
+                );
+        }
+
+        return redirect()
+            ->route("albums.index")
+            ->with("success", $successMessage);
     }
 
     // -------------------------------------------------------------------------
@@ -836,7 +883,9 @@ class AlbumController extends Controller
                 default => "Error code: {$openResult}.",
             };
 
-            throw new \RuntimeException("Unable to open the ZIP file. {$reason}");
+            throw new \RuntimeException(
+                "Unable to open the ZIP file. {$reason}",
+            );
         }
 
         $extractPath = storage_path("app/temp/zip_" . uniqid());

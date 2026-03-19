@@ -1,5 +1,5 @@
 <script setup>
-import { ref, computed, onMounted } from 'vue';
+import { ref, computed, onMounted, watch } from 'vue';
 import { Link, router, usePage } from '@inertiajs/vue3';
 import { getInitials } from '@/utils/initials';
 import {
@@ -29,6 +29,55 @@ const searchQuery = ref('');
 const showUserMenu = ref(false);
 const showNotifications = ref(false);
 const scrolled = ref(false);
+
+// ── Flash / Toast ─────────────────────────────────────────────────────────────
+const toast = ref(null);   // { type: 'success'|'error'|'warning'|'info', message: string }
+let toastTimer = null;
+
+const toastStyles = computed(() => {
+    switch (toast.value?.type) {
+        case 'success': return 'bg-green-500/10 border-green-500/40 text-green-400';
+        case 'error':   return 'bg-red-500/10 border-red-500/40 text-red-400';
+        case 'warning': return 'bg-yellow-500/10 border-yellow-500/40 text-yellow-400';
+        case 'info':    return 'bg-blue-500/10 border-blue-500/40 text-blue-400';
+        default:        return '';
+    }
+});
+
+const toastIcon = computed(() => {
+    switch (toast.value?.type) {
+        case 'success': return 'M5 13l4 4L19 7';
+        case 'error':   return 'M6 18L18 6M6 6l12 12';
+        case 'warning': return 'M12 9v2m0 4h.01M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z';
+        case 'info':    return 'M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z';
+        default:        return '';
+    }
+});
+
+const showToast = (type, message) => {
+    if (toastTimer) clearTimeout(toastTimer);
+    toast.value = { type, message };
+    toastTimer = setTimeout(() => { toast.value = null; }, 4500);
+};
+
+const dismissToast = () => {
+    if (toastTimer) clearTimeout(toastTimer);
+    toast.value = null;
+};
+
+// Watch for flash messages sent from the server via Inertia shared props
+watch(
+    () => page.props.flash,
+    (flash) => {
+        if (!flash) return;
+        if (flash.success) showToast('success', flash.success);
+        else if (flash.error)   showToast('error',   flash.error);
+        else if (flash.warning) showToast('warning', flash.warning);
+        else if (flash.info)    showToast('info',    flash.info);
+    },
+    { deep: true, immediate: true },
+);
+// ─────────────────────────────────────────────────────────────────────────────
 
 const toggleTheme = () => {
     theme.value = theme.value === 'dark' ? 'light' : 'dark';
@@ -268,6 +317,33 @@ const isActive = (item) => {
                 </div>
             </div>
         </header>
+
+        <!-- ── Toast notification ───────────────────────────────────────────── -->
+        <Transition
+            enter-active-class="transition duration-300 ease-out"
+            enter-from-class="opacity-0 translate-y-[-1rem]"
+            enter-to-class="opacity-100 translate-y-0"
+            leave-active-class="transition duration-200 ease-in"
+            leave-from-class="opacity-100 translate-y-0"
+            leave-to-class="opacity-0 translate-y-[-1rem]"
+        >
+            <div
+                v-if="toast"
+                class="fixed top-20 left-1/2 -translate-x-1/2 z-[200] flex items-center gap-3 px-4 py-3 rounded-xl border shadow-2xl backdrop-blur-xl text-sm font-medium max-w-[92vw] sm:max-w-md"
+                :class="toastStyles"
+            >
+                <svg class="w-5 h-5 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                    <path stroke-linecap="round" stroke-linejoin="round" :d="toastIcon" />
+                </svg>
+                <span class="flex-1">{{ toast.message }}</span>
+                <button @click="dismissToast" class="ml-2 opacity-60 hover:opacity-100 transition-opacity">
+                    <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                        <path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12" />
+                    </svg>
+                </button>
+            </div>
+        </Transition>
+        <!-- ─────────────────────────────────────────────────────────────────── -->
 
         <!-- Main Content area -->
         <main class="flex-1 flex flex-col pt-16 pb-16 md:pb-0 transition-all duration-300" :class="collapsed ? 'md:pl-16' : 'md:pl-56'">

@@ -56,7 +56,7 @@ class RecycleBinController extends Controller
 
         return back()->with(
             "success",
-            "Media \"{$media->file_name}\" has been restored.",
+            "\"{$media->file_name}\" has been restored and is back in its album.",
         );
     }
 
@@ -68,9 +68,26 @@ class RecycleBinController extends Controller
         $this->authorizeAdmin();
 
         $media = Media::onlyTrashed()->findOrFail($id);
-        $service->purge($media);
+        $fileName = $media->file_name;
 
-        return back()->with("success", "Media item permanently deleted.");
+        try {
+            $service->purge($media);
+        } catch (\Throwable $e) {
+            \Log::error("RecycleBinController::forceDeleteMedia – failed.", [
+                "media_id" => $id,
+                "error" => $e->getMessage(),
+            ]);
+
+            return back()->with(
+                "error",
+                "Failed to permanently delete \"{$fileName}\". Please try again.",
+            );
+        }
+
+        return back()->with(
+            "success",
+            "\"{$fileName}\" has been permanently deleted and removed from R2 storage.",
+        );
     }
 
     /**
@@ -85,7 +102,7 @@ class RecycleBinController extends Controller
 
         return back()->with(
             "success",
-            "Album \"{$album->title}\" has been restored.",
+            "Album \"{$album->title}\" has been restored and is visible in Albums.",
         );
     }
 
@@ -100,8 +117,25 @@ class RecycleBinController extends Controller
         $this->authorizeAdmin();
 
         $album = Album::onlyTrashed()->findOrFail($id);
-        $albumService->forceDelete($album, $mediaService);
+        $albumTitle = $album->title;
 
-        return back()->with("success", "Album permanently deleted.");
+        try {
+            $albumService->forceDelete($album, $mediaService);
+        } catch (\Throwable $e) {
+            \Log::error("RecycleBinController::forceDeleteAlbum – failed.", [
+                "album_id" => $id,
+                "error" => $e->getMessage(),
+            ]);
+
+            return back()->with(
+                "error",
+                "Failed to permanently delete \"{$albumTitle}\". Please try again.",
+            );
+        }
+
+        return back()->with(
+            "success",
+            "Album \"{$albumTitle}\" and all its contents have been permanently deleted from R2 storage.",
+        );
     }
 }

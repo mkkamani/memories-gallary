@@ -11,31 +11,48 @@ use Inertia\Inertia;
 Route::get("/", function () {
     return Inertia::render("Welcome", [
         "canLogin" => Route::has("login"),
-        "canRegister" => Route::has("register")
-        // "laravelVersion" => Application::VERSION,
-        // "phpVersion" => PHP_VERSION,
+        "canRegister" => Route::has("register"),
     ]);
 });
 
 Route::middleware(["auth"])->group(function () {
+    // ── Dashboard ─────────────────────────────────────────────────────────────
     Route::get("/dashboard", [DashboardController::class, "index"])->name(
         "dashboard",
     );
-    Route::get("/albums/{album}/upload", [AlbumController::class, "uploadPage"])->name(
-        "albums.upload",
-    );
-    Route::post("/albums/{album}/upload", [AlbumController::class, "uploadStore"])->name(
-        "albums.upload.store",
-    );
+
+    // ── Albums ────────────────────────────────────────────────────────────────
+    // Static / extra album routes MUST be declared before Route::resource() so
+    // Laravel matches them before the parameterised {album} show/edit routes.
+
+    // System (smart) album viewer — e.g. /albums/system/recent
+    Route::get("/albums/system/{type}", [
+        AlbumController::class,
+        "showSystemAlbum",
+    ])->name("albums.system");
+
+    // ZIP import
     Route::post("/albums/import", [AlbumController::class, "import"])->name(
         "albums.import",
     );
+
+    // Per-album upload page & handler
+    Route::get("/albums/{album}/upload", [
+        AlbumController::class,
+        "uploadPage",
+    ])->name("albums.upload");
+    Route::post("/albums/{album}/upload", [
+        AlbumController::class,
+        "uploadStore",
+    ])->name("albums.upload.store");
+
+    // Standard resource routes (index, create, store, show, edit, update, destroy)
     Route::resource("albums", AlbumController::class);
-    Route::resource("media", MediaController::class)->only([
-        "store",
-        "destroy",
-    ]);
-    Route::get("/media/{media}/raw", [MediaController::class, "raw"])->name("media.raw");
+
+    // ── Media ─────────────────────────────────────────────────────────────────
+    // Extra media routes must come before the resource so that
+    // /media/bulk-delete and /media/bulk-download are not swallowed by
+    // the parameterised DELETE /media/{media} route.
     Route::post("/media/bulk-delete", [
         MediaController::class,
         "bulkDelete",
@@ -44,39 +61,46 @@ Route::middleware(["auth"])->group(function () {
         MediaController::class,
         "bulkDownload",
     ])->name("media.bulk-download");
+    Route::get("/media/{media}/raw", [MediaController::class, "raw"])->name(
+        "media.raw",
+    );
+
+    // Resource (only store + destroy — list/show handled inside album pages)
+    Route::resource("media", MediaController::class)->only([
+        "store",
+        "destroy",
+    ]);
 
     // ── Recycle Bin (admin only) ──────────────────────────────────────────────
-    Route::middleware("admin")->group(function () {
-        Route::get("/recycle-bin", [
-            RecycleBinController::class,
-            "index",
-        ])->name("recycle-bin.index");
-        Route::post("/recycle-bin/media/{id}/restore", [
-            RecycleBinController::class,
-            "restoreMedia",
-        ])->name("recycle-bin.restore-media");
-        Route::delete("/recycle-bin/media/{id}", [
-            RecycleBinController::class,
-            "forceDeleteMedia",
-        ])->name("recycle-bin.force-delete-media");
-        Route::post("/recycle-bin/albums/{id}/restore", [
-            RecycleBinController::class,
-            "restoreAlbum",
-        ])->name("recycle-bin.restore-album");
-        Route::delete("/recycle-bin/albums/{id}", [
-            RecycleBinController::class,
-            "forceDeleteAlbum",
-        ])->name("recycle-bin.force-delete-album");
-    });
-    // ─────────────────────────────────────────────────────────────────────────
-    Route::get("/albums/system/{type}", [
-        AlbumController::class,
-        "showSystemAlbum",
-    ])->name("albums.system");
-    Route::resource("users", \App\Http\Controllers\UserController::class);
-});
+    Route::middleware("admin")
+        ->prefix("recycle-bin")
+        ->name("recycle-bin.")
+        ->group(function () {
+            Route::get("/", [RecycleBinController::class, "index"])->name(
+                "index",
+            );
+            Route::post("/media/{id}/restore", [
+                RecycleBinController::class,
+                "restoreMedia",
+            ])->name("restore-media");
+            Route::delete("/media/{id}", [
+                RecycleBinController::class,
+                "forceDeleteMedia",
+            ])->name("force-delete-media");
+            Route::post("/albums/{id}/restore", [
+                RecycleBinController::class,
+                "restoreAlbum",
+            ])->name("restore-album");
+            Route::delete("/albums/{id}", [
+                RecycleBinController::class,
+                "forceDeleteAlbum",
+            ])->name("force-delete-album");
+        });
 
-Route::middleware("auth")->group(function () {
+    // ── Users ─────────────────────────────────────────────────────────────────
+    Route::resource("users", \App\Http\Controllers\UserController::class);
+
+    // ── Profile ───────────────────────────────────────────────────────────────
     Route::get("/profile", [ProfileController::class, "edit"])->name(
         "profile.edit",
     );

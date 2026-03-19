@@ -139,18 +139,28 @@ const deleteItem = () => {
     if (!itemToDelete.value) return;
 
     if (deleteType.value === 'album') {
-        router.delete(route('albums.destroy', itemToDelete.value.id), {
+        router.delete(route('albums.destroy', itemToDelete.value.slug || itemToDelete.value.id), {
+            preserveScroll: true,
             onSuccess: () => {
                 showDeleteModal.value = false;
                 itemToDelete.value = null;
-            }
+            },
+            onError: () => {
+                showDeleteModal.value = false;
+                itemToDelete.value = null;
+            },
         });
     } else {
         router.delete(route('media.destroy', itemToDelete.value.id), {
+            preserveScroll: true,
             onSuccess: () => {
                 showDeleteModal.value = false;
                 itemToDelete.value = null;
-            }
+            },
+            onError: () => {
+                showDeleteModal.value = false;
+                itemToDelete.value = null;
+            },
         });
     }
 };

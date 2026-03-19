@@ -51,8 +51,13 @@ const confirmDelete = (album) => {
 
 const deleteAlbum = () => {
     if (albumToDelete.value) {
-        router.delete(route('albums.destroy', albumToDelete.value.id), {
+        router.delete(route('albums.destroy', albumToDelete.value.slug || albumToDelete.value.id), {
+            preserveScroll: true,
             onSuccess: () => {
+                showDeleteModal.value = false;
+                albumToDelete.value = null;
+            },
+            onError: () => {
                 showDeleteModal.value = false;
                 albumToDelete.value = null;
             },

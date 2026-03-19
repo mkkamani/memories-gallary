@@ -44,29 +44,33 @@ class MediaController extends Controller
      */
     public function raw(Media $media)
     {
-        $this->authorize('view', $media);
+        $this->authorize("view", $media);
 
-        $disk = (string) config('filesystems.media_disk', 'public');
+        $disk = (string) config("filesystems.media_disk", "public");
         $stream = Storage::disk($disk)->readStream($media->file_path);
 
-        if (! $stream) {
-            abort(404, 'Media file not found.');
+        if (!$stream) {
+            abort(404, "Media file not found.");
         }
 
-        $mimeType = $media->mime_type ?: 'application/octet-stream';
+        $mimeType = $media->mime_type ?: "application/octet-stream";
         $fileName = basename((string) $media->file_name);
 
-        return response()->stream(function () use ($stream): void {
-            fpassthru($stream);
-            if (is_resource($stream)) {
-                fclose($stream);
-            }
-        }, 200, [
-            'Content-Type'        => $mimeType,
-            'Content-Disposition' => 'inline; filename="' . $fileName . '"',
-            'Cache-Control'       => 'private, max-age=3600',
-            'X-Accel-Buffering'   => 'no',
-        ]);
+        return response()->stream(
+            function () use ($stream): void {
+                fpassthru($stream);
+                if (is_resource($stream)) {
+                    fclose($stream);
+                }
+            },
+            200,
+            [
+                "Content-Type" => $mimeType,
+                "Content-Disposition" => 'inline; filename="' . $fileName . '"',
+                "Cache-Control" => "private, max-age=3600",
+                "X-Accel-Buffering" => "no",
+            ],
+        );
     }
 
     public function destroy(
@@ -75,9 +79,28 @@ class MediaController extends Controller
         ActivityLogService $logService,
     ) {
         $this->authorize("delete", $media);
-        $logService->logMediaDeleted($media);
-        $service->delete($media);
-        return back();
+
+        try {
+            $logService->logMediaDeleted($media);
+            $service->delete($media);
+        } catch (\Throwable $e) {
+            \Log::error("MediaController::destroy – failed to delete media.", [
+                "media_id" => $media->id,
+                "error" => $e->getMessage(),
+            ]);
+
+            return back()->with(
+                "error",
+                'Failed to delete "' .
+                    $media->file_name .
+                    '". Please try again.',
+            );
+        }
+
+        return back()->with(
+            "success",
+            '"' . $media->file_name . '" moved to Recycle Bin.',
+        );
     }
 
     public function bulkDelete(
@@ -85,20 +108,44 @@ class MediaController extends Controller
         MediaService $service,
         ActivityLogService $logService,
     ) {
-        $request->validate(["ids" => "required|array"]);
+        $request->validate(["ids" => "required|array", "ids.*" => "integer"]);
 
         $mediaItems = Media::whereIn("id", $request->ids)->get();
         $count = 0;
+        $skipped = 0;
 
         foreach ($mediaItems as $media) {
-            if (auth()->user()->can("delete", $media)) {
-                $service->delete($media);
-                $count++;
+            // Individually authorize every item — admins/managers can delete
+            // any media, members can only delete their own.
+            if (auth()->user()->cannot("delete", $media)) {
+                $skipped++;
+                continue;
             }
+
+            $service->delete($media);
+            $count++;
         }
 
         $logService->logBulkAction("delete", $count);
-        return back();
+
+        if ($count === 0 && $skipped > 0) {
+            return back()->with(
+                "error",
+                "No items deleted. You do not have permission to delete the selected {$skipped} item(s).",
+            );
+        }
+
+        if ($skipped > 0) {
+            return back()->with(
+                "warning",
+                "Moved {$count} item(s) to the Recycle Bin. {$skipped} item(s) were skipped (no permission).",
+            );
+        }
+
+        return back()->with(
+            "success",
+            "Moved {$count} item(s) to the Recycle Bin.",
+        );
     }
 
     public function bulkDownload(
