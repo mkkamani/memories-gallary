@@ -311,7 +311,8 @@ const isActive = (item) => {
                         @click="showUserMenu = !showUserMenu; showNotifications = false"
                         class="flex items-center gap-2 h-9 pl-1 pr-3 rounded-full hover:bg-muted/60 transition-colors"
                     >
-                        <div class="w-7 h-7 rounded-full bg-gradient-to-br from-primary to-accent-hover flex items-center justify-center text-xs font-bold text-primary-foreground">
+                        <img v-if="authUser?.avatar_url" :src="authUser.avatar_url" alt="Avatar" class="w-7 h-7 rounded-full object-cover border border-border shrink-0" />
+                        <div v-else class="w-7 h-7 rounded-full bg-gradient-to-br from-primary to-accent-hover flex items-center justify-center text-xs font-bold text-primary-foreground shrink-0">
                             {{ getInitials(authUser?.name) }}
                         </div>
                         <span class="hidden lg:inline text-sm text-muted-foreground font-medium">{{ authUser?.name?.split(' ')[0] }}</span>

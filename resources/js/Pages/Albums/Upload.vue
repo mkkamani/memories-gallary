@@ -2,6 +2,7 @@
 import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout.vue';
 import { Head, Link, router, usePage } from '@inertiajs/vue3';
 import { computed, ref } from 'vue';
+import axios from 'axios';
 
 const props = defineProps({
     album: {
@@ -16,6 +17,10 @@ const selectedFiles = ref([]);
 const processing = ref(false);
 const dragActive = ref(false);
 const clientErrors = ref([]);
+const uploadProgress = ref(0);
+const currentUploadIndex = ref(0);
+const successfulUploads = ref(0);
+const failedUploads = ref(0);
 
 const acceptedZipMimes = [
     'application/zip',
@@ -124,7 +129,7 @@ const onDrop = (event) => {
     setFiles(event.dataTransfer?.files || []);
 };
 
-const submitUpload = () => {
+const submitUpload = async () => {
     clientErrors.value = validateSelection(selectedFiles.value);
 
     if (clientErrors.value.length > 0 || selectedFiles.value.length === 0) {
@@ -132,19 +137,50 @@ const submitUpload = () => {
     }
 
     processing.value = true;
+    uploadProgress.value = 0;
+    successfulUploads.value = 0;
+    failedUploads.value = 0;
 
-    const formData = new FormData();
-    selectedFiles.value.forEach((file) => {
+    const totalFiles = selectedFiles.value.length;
+
+    for (let i = 0; i < totalFiles; i++) {
+        currentUploadIndex.value = i;
+        const file = selectedFiles.value[i];
+        const formData = new FormData();
         formData.append('files[]', file);
-    });
 
-    router.post(route('albums.upload.store', props.album.slug || props.album.id), formData, {
-        forceFormData: true,
-        preserveScroll: true,
-        onFinish: () => {
-            processing.value = false;
-        },
-    });
+        try {
+            await axios.post(route('albums.upload.store', props.album.slug || props.album.id), formData, {
+                headers: {
+                    'Accept': 'application/json'
+                },
+                onUploadProgress: (progressEvent) => {
+                    const percentCompleted = Math.round((progressEvent.loaded * 100) / progressEvent.total);
+                    // Overall progress relative to all files
+                    uploadProgress.value = Math.floor(((i + (percentCompleted / 100)) / totalFiles) * 100);
+                }
+            });
+            successfulUploads.value++;
+        } catch (error) {
+            console.error('Upload failed for file ', file.name, error);
+            failedUploads.value++;
+            const errMsg = error.response?.data?.message || `Failed to upload ${file.name}`;
+            clientErrors.value.push(errMsg);
+        }
+    }
+
+    uploadProgress.value = 100;
+
+    // After uploading all
+    if (failedUploads.value === 0) {
+        // Redirect if everything was successful
+        router.get(route('albums.show', props.album.slug || props.album.id));
+    } else {
+        processing.value = false;
+        if (successfulUploads.value > 0) {
+            clientErrors.value.push(`Successfully uploaded ${successfulUploads.value} files, but ${failedUploads.value} failed.`);
+        }
+    }
 };
 
 const removeSelectedFile = (index) => {
@@ -246,8 +282,20 @@ const removeSelectedFile = (index) => {
                         </div>
                     </div>
 
+                    <div v-if="processing" class="mt-4 mb-6">
+                        <div class="flex items-center justify-between mb-2">
+                            <span class="text-sm font-semibold text-foreground">
+                                Uploading {{ currentUploadIndex + 1 }} of {{ totalSelected }}...
+                            </span>
+                            <span class="text-sm font-bold text-primary">{{ uploadProgress }}%</span>
+                        </div>
+                        <div class="w-full h-3 rounded-full bg-bg-elevated overflow-hidden border border-border">
+                            <div class="h-full bg-gradient-to-r from-primary to-accent-hover transition-all duration-300 ease-out" :style="`width: ${uploadProgress}%`"></div>
+                        </div>
+                    </div>
+
                     <div class="flex justify-end gap-3 pt-2">
-                        <Link :href="route('albums.show', album.slug || album.id)" class="inline-flex h-11 items-center rounded-pill px-6 text-sm font-bold text-foreground transition hover:bg-bg-hover">Cancel</Link>
+                        <Link :href="route('albums.show', album.slug || album.id)" class="inline-flex h-11 items-center rounded-pill px-6 text-sm font-bold text-foreground transition hover:bg-bg-hover" :class="{ 'pointer-events-none opacity-50': processing }">Cancel</Link>
                         <button
                             type="button"
                             class="inline-flex h-11 items-center rounded-pill bg-primary px-7 text-sm font-bold text-primary-foreground shadow-md transition hover:bg-accent-hover disabled:cursor-not-allowed disabled:opacity-60"

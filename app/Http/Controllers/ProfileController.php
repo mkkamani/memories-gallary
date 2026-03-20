@@ -31,6 +31,17 @@ class ProfileController extends Controller
     {
         $request->user()->fill($request->validated());
 
+        if ($request->hasFile('avatar')) {
+            // Delete old avatar if it exists and isn't an external URL
+            if ($request->user()->getOriginal('avatar') && !str_starts_with($request->user()->getOriginal('avatar'), 'http')) {
+                \Illuminate\Support\Facades\Storage::disk('public')->delete($request->user()->getOriginal('avatar'));
+            }
+            
+            // Upload new avatar locally
+            $path = $request->file('avatar')->store('avatars', 'public');
+            $request->user()->avatar = $path;
+        }
+
         if ($request->user()->isDirty('email')) {
             $request->user()->email_verified_at = null;
         }

@@ -204,8 +204,9 @@ const deleteUser = () => {
                         <div class="divide-y divide-border">
                             <div v-for="user in users.data" :key="user.id" class="grid grid-cols-[1.45fr_1.6fr_0.95fr_1.15fr_1fr_0.95fr] items-center gap-6 px-6 py-4 transition-colors hover:bg-bg-hover/70">
                                 <div class="flex min-w-0 items-center gap-3">
-                                    <div class="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-primary to-accent-hover text-sm font-bold text-white shadow-sm">
-                                        {{ getInitials(user.name) }}
+                                    <div class="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-primary to-accent-hover text-sm font-bold text-white shadow-sm overflow-hidden">
+                                        <img v-if="user.avatar_url" :src="user.avatar_url" alt="Avatar" class="h-full w-full object-cover bg-white" />
+                                        <span v-else>{{ getInitials(user.name) }}</span>
                                     </div>
                                     <div class="min-w-0">
                                         <p class="truncate text-sm font-bold text-foreground">{{ user.name }}</p>

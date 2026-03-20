@@ -680,6 +680,10 @@ class AlbumController extends Controller
                     $mediaService,
                 );
 
+                if ($request->wantsJson()) {
+                    return response()->json(["success" => true, "message" => "ZIP imported successfully."]);
+                }
+
                 return redirect()
                     ->route("albums.show", $album)
                     ->with(
@@ -694,6 +698,10 @@ class AlbumController extends Controller
             }
 
             $count = count($mediaFiles);
+
+            if ($request->wantsJson()) {
+                return response()->json(["success" => true, "message" => "{$count} files uploaded."]);
+            }
 
             return redirect()
                 ->route("albums.show", $album)
@@ -710,6 +718,10 @@ class AlbumController extends Controller
                 "error" => $e->getMessage(),
                 "trace" => $e->getTraceAsString(),
             ]);
+
+            if ($request->wantsJson()) {
+                return response()->json(["success" => false, "message" => "Upload failed: " . $e->getMessage()], 422);
+            }
 
             return back()
                 ->withErrors([
