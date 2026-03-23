@@ -157,20 +157,6 @@ onMounted(() => {
                     </button>
                 </form>
 
-                <!-- Divider -->
-                <div class="flex items-center gap-3 my-6">
-                    <div class="flex-1 h-px bg-white/[0.08]"></div>
-                    <span class="text-xs text-muted-foreground/60 font-medium">OR</span>
-                    <div class="flex-1 h-px bg-white/[0.08]"></div>
-                </div>
-
-                <!-- Register link -->
-                <p class="text-center text-sm text-muted-foreground">
-                    Don't have an account?
-                    <Link :href="route('register')" class="text-primary hover:text-orange-400 font-bold ml-1 transition-colors">
-                        Register here
-                    </Link>
-                </p>
             </div>
         </div>
     </div>

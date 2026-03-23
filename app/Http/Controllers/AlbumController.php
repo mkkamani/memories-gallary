@@ -251,6 +251,30 @@ class AlbumController extends Controller
 
         $logService->logAlbumCreated($album);
 
+        // JSON response for async (axios) requests — e.g. inline folder creation on Show page
+        if ($request->wantsJson()) {
+            $album->load(['media' => fn($q) => $q->latest()->limit(1)]);
+            $thumbnailMedia = $album->media->first();
+
+            return response()->json([
+                'album' => [
+                    'id'             => $album->id,
+                    'slug'           => $album->slug,
+                    'path'           => $album->path,
+                    'title'          => $album->title,
+                    'description'    => $album->description,
+                    'location'       => $album->location,
+                    'media_count'    => 0,
+                    'children_count' => 0,
+                    'thumbnail'      => $thumbnailMedia?->url,
+                    'thumbnail_media'=> null,
+                    'user_id'        => $album->user_id,
+                    'parent_id'      => $album->parent_id,
+                    'created_at'     => $album->created_at,
+                ],
+            ]);
+        }
+
         // If this was a sub-folder creation redirect back to the parent album,
         // otherwise go to the albums index.
         if (!empty($data["parent_id"])) {
