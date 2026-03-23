@@ -25,7 +25,7 @@ const submit = () => {
         <div class="mx-auto w-full max-w-4xl space-y-6 animate-fade-in text-foreground">
             <div class="flex items-center justify-between gap-3">
                 <div class="flex items-center gap-3">
-                    <Link :href="route('albums.show', album.slug || album.id)" class="inline-flex h-10 w-10 items-center justify-center rounded-full border border-border bg-bg-card text-muted-foreground transition hover:text-foreground hover:border-primary/30">
+                    <Link :href="route('albums.show', album.path || album.slug || album.id)" class="inline-flex h-10 w-10 items-center justify-center rounded-full border border-border bg-bg-card text-muted-foreground transition hover:text-foreground hover:border-primary/30">
                         <svg class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7"/></svg>
                     </Link>
                     <h1 class="text-4xl font-heading font-bold text-foreground">Edit Album</h1>
@@ -103,7 +103,7 @@ const submit = () => {
                     </div>
 
                     <div class="flex justify-end gap-3 border-t border-border pt-4">
-                        <Link :href="route('albums.show', album.slug || album.id)" class="inline-flex h-11 items-center rounded-pill px-6 text-sm font-bold text-foreground transition hover:bg-bg-hover">Cancel</Link>
+                        <Link :href="route('albums.show', album.path || album.slug || album.id)" class="inline-flex h-11 items-center rounded-pill px-6 text-sm font-bold text-foreground transition hover:bg-bg-hover">Cancel</Link>
                         <button
                             type="submit"
                             class="inline-flex h-11 items-center rounded-pill bg-primary px-8 text-sm font-bold text-primary-foreground shadow-md transition hover:bg-accent-hover disabled:cursor-not-allowed disabled:opacity-60"

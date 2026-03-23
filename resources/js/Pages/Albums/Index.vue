@@ -147,6 +147,33 @@ const handleImportFiles = (e) => {
     importForm.zip_file = e.target.files[0];
 };
 
+const getAlbumTotalItems = (album) => {
+    const total = Number(album?.media_count);
+    if (Number.isFinite(total) && total > 0) {
+        return total;
+    }
+
+    return Array.isArray(album?.preview_media) ? album.preview_media.length : 0;
+};
+
+const getBottomPreviewItems = (album) => {
+    const previews = Array.isArray(album?.preview_media) ? album.preview_media.slice(1) : [];
+    return previews.slice(0, 4);
+};
+
+const getHiddenPreviewCount = (album) => {
+    return Math.max(0, getAlbumTotalItems(album) - 5);
+};
+
+const isOverflowPreviewTile = (album, idx) => {
+    const bottomItems = getBottomPreviewItems(album);
+    if (!bottomItems.length || getHiddenPreviewCount(album) <= 0) {
+        return false;
+    }
+
+    return idx === Math.min(3, bottomItems.length - 1);
+};
+
 const submitImport = () => {
     importForm.post(route('albums.import'), {
         forceFormData: true,
@@ -264,10 +291,14 @@ const submitImport = () => {
             <!-- Content View -->
             <div v-if="viewMode === 'grid'" class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
                 <template v-for="album in userAlbums" :key="album.id">
-                    <div class="group relative flex flex-col gap-2 cursor-pointer transition-all active:scale-95" @click="router.visit(route('albums.show', album.path || album.slug || album.id))">
+                    <div
+                        class="group relative flex flex-col gap-2 cursor-pointer transition-all active:scale-95"
+                        :class="showActionMenu === album.id ? 'z-50' : 'z-0'"
+                        @click="router.visit(route('albums.show', album.path || album.slug || album.id))"
+                    >
                         <!-- Unified card: cover + strip in one bordered container -->
-                        <div class="rounded-2xl bg-bg-elevated border border-border overflow-hidden transition-all shadow-sm group-hover:border-primary/50 group-hover:shadow-md">
-                        <div class="aspect-video relative overflow-hidden bg-bg-elevated">
+                        <div class="relative rounded-2xl bg-bg-elevated border border-border overflow-visible transition-all shadow-sm group-hover:border-primary/50 group-hover:shadow-md">
+                        <div class="aspect-video relative overflow-hidden bg-bg-elevated" :class="getBottomPreviewItems(album).length > 0 ? 'rounded-t-2xl' : 'rounded-2xl'">
                             <MediaRenderer
                                 v-if="album.thumbnail_media"
                                 :media="album.thumbnail_media"
@@ -281,37 +312,11 @@ const submitImport = () => {
                             </div>
                             <div class="absolute inset-0 bg-black/20 opacity-0 group-hover:opacity-100 transition-opacity"></div>
 
-                            <!-- Action Menu Button -->
-                            <div class="absolute top-2 right-2 z-20" @click.stop>
-                                <button @click="toggleActionMenu($event, album.id)" class="w-8 h-8 rounded-full border border-white/20 bg-black/55 backdrop-blur-md text-white flex items-center justify-center opacity-100 md:opacity-0 md:group-hover:opacity-100 transition-all hover:bg-black/70 hover:border-white/40 shadow-lg">
-                                    <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 5v.01M12 12v.01M12 19v.01M12 6a1 1 0 110-2 1 1 0 010 2zm0 7a1 1 0 110-2 1 1 0 010 2zm0 7a1 1 0 110-2 1 1 0 010 2z"/></svg>
-                                </button>
-
-                                <!-- Grid Item Context Menu -->
-                                <div v-if="showActionMenu === album.id" class="absolute right-0 top-full mt-2 w-44 rounded-2xl border border-border/80 bg-bg-card/95 p-1.5 shadow-2xl backdrop-blur-xl z-50 animate-scale-in" @click.stop>
-                                    <button @click="handleAction('Download', album)" class="flex w-full items-center gap-3 rounded-xl px-3.5 py-2.5 text-sm font-medium text-foreground transition-colors hover:bg-bg-hover">
-                                        <svg class="w-4 h-4 text-muted-foreground" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"/></svg> Download
-                                    </button>
-                                    <Link v-if="canManage || $page.props.auth.user.id === album.user_id" :href="route('albums.edit', album.slug || album.id)" class="flex w-full items-center gap-3 rounded-xl px-3.5 py-2.5 text-sm font-medium text-foreground transition-colors hover:bg-bg-hover">
-                                        <svg class="w-4 h-4 text-muted-foreground" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"/></svg> Rename
-                                    </Link>
-                                    <button @click="handleAction('Share', album)" class="flex w-full items-center gap-3 rounded-xl px-3.5 py-2.5 text-sm font-medium text-foreground transition-colors hover:bg-bg-hover">
-                                        <svg class="w-4 h-4 text-muted-foreground" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8.684 13.342C8.886 12.938 9 12.482 9 12c0-.482-.114-.938-.316-1.342m0 2.684a3 3 0 110-2.684m0 2.684l6.632 3.316m-6.632-6l6.632-3.316m0 0a3 3 0 105.367-2.684 3 3 0 00-5.367 2.684zm0 9.316a3 3 0 105.368 2.684 3 3 0 00-5.368-2.684z"/></svg> Share
-                                    </button>
-                                    <button v-if="canManage || $page.props.auth.user.id === album.user_id" @click="handleAction('Delete', album)" class="flex w-full items-center gap-3 rounded-xl px-3.5 py-2.5 text-sm font-medium text-error transition-colors hover:bg-error/10">
-                                        <svg class="w-4 h-4 text-error" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/></svg> Remove
-                                    </button>
-                                </div>
-                            </div>
-
                             <!-- Pin Button -->
                             <div class="absolute top-2 left-2">
                                 <button @click="togglePin($event, album)" class="w-8 h-8 rounded-full flex items-center justify-center transition-all shadow-lg backdrop-blur-md"
                                         :class="pinnedAlbums.includes(album.id) ? 'bg-primary text-primary-foreground opacity-100' : 'bg-black/40 text-white opacity-0 group-hover:opacity-100 hover:bg-black/60'">
-                                    <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" aria-hidden="true">
-                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 17v5" />
-                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 4h8l-1.5 5 2.5 2.5H7L9.5 9 8 4Z" />
-                                    </svg>
+                                    <svg data-v-c3700575="" xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-pin w-4 h-4 fill-current"><path data-v-c3700575="" d="M12 17v5"></path><path data-v-c3700575="" d="M9 10.76a2 2 0 0 1-1.11 1.79l-1.78.9A2 2 0 0 0 5 15.24V16a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1v-.76a2 2 0 0 0-1.11-1.79l-1.78-.9A2 2 0 0 1 15 10.76V7a1 1 0 0 1 1-1 2 2 0 0 0 0-4H8a2 2 0 0 0 0 4 1 1 0 0 1 1 1z"></path></svg>
                                 </button>
                             </div>
 
@@ -321,12 +326,35 @@ const submitImport = () => {
                             </div>
                         </div>
 
-                        <!-- Preview strip: 4 thumbnails inside the same card -->
-                        <div v-if="album.preview_media && album.preview_media.length > 1" class="grid grid-cols-4 gap-px bg-border">
+                        <!-- Action Menu Button -->
+                        <div class="absolute top-2 right-2 z-30" @click.stop>
+                            <button @click="toggleActionMenu($event, album.id)" class="w-8 h-8 rounded-full border border-white/20 bg-black/55 backdrop-blur-md text-white flex items-center justify-center opacity-100 md:opacity-0 md:group-hover:opacity-100 transition-all hover:bg-black/70 hover:border-white/40 shadow-lg">
+                                <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 5v.01M12 12v.01M12 19v.01M12 6a1 1 0 110-2 1 1 0 010 2zm0 7a1 1 0 110-2 1 1 0 010 2zm0 7a1 1 0 110-2 1 1 0 010 2z"/></svg>
+                            </button>
+
+                            <!-- Grid Item Context Menu -->
+                            <div v-if="showActionMenu === album.id" class="absolute right-0 top-full mt-2 w-44 rounded-2xl border border-border/80 bg-bg-card/95 p-1.5 shadow-2xl backdrop-blur-xl z-[9999] animate-scale-in" @click.stop>
+                                <button @click="handleAction('Download', album)" class="flex w-full items-center gap-3 rounded-xl px-3.5 py-2.5 text-sm font-medium text-foreground transition-colors hover:bg-bg-hover">
+                                    <svg class="w-4 h-4 text-muted-foreground" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"/></svg> Download
+                                </button>
+                                <Link v-if="canManage || $page.props.auth.user.id === album.user_id" :href="route('albums.edit', album.slug || album.id)" class="flex w-full items-center gap-3 rounded-xl px-3.5 py-2.5 text-sm font-medium text-foreground transition-colors hover:bg-bg-hover">
+                                    <svg class="w-4 h-4 text-muted-foreground" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"/></svg> Rename
+                                </Link>
+                                <button @click="handleAction('Share', album)" class="flex w-full items-center gap-3 rounded-xl px-3.5 py-2.5 text-sm font-medium text-foreground transition-colors hover:bg-bg-hover">
+                                    <svg class="w-4 h-4 text-muted-foreground" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8.684 13.342C8.886 12.938 9 12.482 9 12c0-.482-.114-.938-.316-1.342m0 2.684a3 3 0 110-2.684m0 2.684l6.632 3.316m-6.632-6l6.632-3.316m0 0a3 3 0 105.367-2.684 3 3 0 00-5.367 2.684zm0 9.316a3 3 0 105.368 2.684 3 3 0 00-5.368-2.684z"/></svg> Share
+                                </button>
+                                <button v-if="canManage || $page.props.auth.user.id === album.user_id" @click="handleAction('Delete', album)" class="flex w-full items-center gap-3 rounded-xl px-3.5 py-2.5 text-sm font-medium text-error transition-colors hover:bg-error/10">
+                                    <svg class="w-4 h-4 text-error" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/></svg> Remove
+                                </button>
+                            </div>
+                        </div>
+
+                        <!-- Preview strip: fixed-height row so all cards keep consistent size -->
+                        <div v-if="getBottomPreviewItems(album).length > 0" class="flex h-24 gap-px bg-border overflow-hidden rounded-b-2xl">
                             <div
-                                v-for="(pm, idx) in album.preview_media.slice(1)"
+                                v-for="(pm, idx) in getBottomPreviewItems(album)"
                                 :key="idx"
-                                class="aspect-square overflow-hidden bg-bg-elevated"
+                                class="relative h-full min-w-0 flex-1 overflow-hidden bg-bg-elevated"
                             >
                                 <MediaRenderer
                                     :media="pm"
@@ -335,6 +363,12 @@ const submitImport = () => {
                                     video-class="w-full h-full object-cover"
                                     fallback-class="w-full h-full bg-primary/5"
                                 />
+                                <div
+                                    v-if="isOverflowPreviewTile(album, idx)"
+                                    class="absolute inset-0 bg-black/55 backdrop-blur-[1px] flex items-center justify-center"
+                                >
+                                    <span class="text-white text-sm font-bold tracking-wide">{{ getHiddenPreviewCount(album) }}+</span>
+                                </div>
                             </div>
                         </div>
                         </div><!-- end unified card -->
@@ -351,7 +385,7 @@ const submitImport = () => {
                 </template>
             </div>
 
-            <div v-else class="bg-bg-card border border-border rounded-2xl overflow-hidden">
+            <div v-else class="bg-bg-card border border-border rounded-2xl overflow-visible">
                 <div class="grid grid-cols-[1fr_120px_120px_150px_40px] items-center px-6 py-3 border-b border-border bg-bg-elevated/50">
                     <span class="text-xs font-bold text-muted-foreground uppercase tracking-wider">Name</span>
                     <span class="text-xs font-bold text-muted-foreground uppercase tracking-wider text-center">Items</span>

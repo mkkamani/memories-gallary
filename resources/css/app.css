@@ -203,6 +203,36 @@
         font: inherit;
     }
 
+    input,
+    select,
+    textarea {
+        outline: none;
+    }
+
+    input:focus,
+    input:focus-visible,
+    select:focus,
+    select:focus-visible,
+    textarea:focus,
+    textarea:focus-visible {
+        outline: none !important;
+        border-color: hsl(var(--primary)) !important;
+        box-shadow: 0 0 0 2px hsl(var(--primary) / 0.25) !important;
+    }
+
+    input[type="checkbox"],
+    input[type="radio"] {
+        accent-color: hsl(var(--primary));
+    }
+
+    input[type="checkbox"]:focus,
+    input[type="checkbox"]:focus-visible,
+    input[type="radio"]:focus,
+    input[type="radio"]:focus-visible {
+        outline: none !important;
+        box-shadow: 0 0 0 2px hsl(var(--primary) / 0.3) !important;
+    }
+
     ::selection {
         background: hsla(14, 100%, 56%, 0.3);
         color: hsl(var(--foreground));

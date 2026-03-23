@@ -17,4 +17,8 @@ export default defineConfig({
             },
         }),
     ],
+    server: {
+        // Add your Cloudflare Pages preview host here
+        allowedHosts: ['earl-page-bookmarks-connecticut.trycloudflare.com'],
+    },
 });

@@ -9,6 +9,10 @@ const props = defineProps({
         type: Object,
         required: true,
     },
+    breadcrumbs: {
+        type: Array,
+        default: () => [],
+    },
 });
 
 const page = usePage();
@@ -50,6 +54,8 @@ const flashAlerts = computed(() => {
 });
 
 const totalSelected = computed(() => selectedFiles.value.length);
+const locationTitle = computed(() => props.album?.location || 'Rajkot');
+const breadcrumbTrail = computed(() => [...props.breadcrumbs, props.album]);
 
 const openFileDialog = () => {
     fileInput.value?.click();
@@ -150,7 +156,7 @@ const submitUpload = async () => {
         formData.append('files[]', file);
 
         try {
-            await axios.post(route('albums.upload.store', props.album.slug || props.album.id), formData, {
+            await axios.post(route('albums.upload.store', props.album.path || props.album.slug || props.album.id), formData, {
                 headers: {
                     'Accept': 'application/json'
                 },
@@ -174,7 +180,7 @@ const submitUpload = async () => {
     // After uploading all
     if (failedUploads.value === 0) {
         // Redirect if everything was successful
-        router.get(route('albums.show', props.album.slug || props.album.id));
+        router.get(route('albums.show', props.album.path || props.album.slug || props.album.id));
     } else {
         processing.value = false;
         if (successfulUploads.value > 0) {
@@ -194,11 +200,42 @@ const removeSelectedFile = (index) => {
 
     <AuthenticatedLayout>
         <div class="mx-auto w-full max-w-4xl space-y-6">
-            <div class="flex items-center gap-3">
-                <Link :href="route('albums.show', album.slug || album.id)" class="inline-flex h-10 w-10 items-center justify-center rounded-full border border-border bg-bg-card text-muted-foreground transition hover:text-foreground hover:border-primary/30">
-                    <svg class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7"/></svg>
-                </Link>
-                <h1 class="text-4xl font-heading font-bold text-foreground">Upload to Album</h1>
+            <div class="space-y-3">
+                <div class="flex items-center gap-3">
+                    <Link :href="route('albums.show', album.path || album.slug || album.id)" class="inline-flex h-10 w-10 items-center justify-center rounded-full border border-border bg-bg-card text-muted-foreground transition hover:text-foreground hover:border-primary/30">
+                        <svg class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7"/></svg>
+                    </Link>
+                    <div>
+                        <h1 class="text-4xl font-heading font-bold text-foreground">Upload to Album</h1>
+                        <nav class="flex items-center gap-1 overflow-x-auto whitespace-nowrap text-sm text-muted-foreground">
+                            <Link :href="route('albums.index')" class="hover:text-foreground transition-colors">Albums</Link>
+                            <svg class="h-4 w-4 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/></svg>
+
+                            <Link :href="route('albums.index', { location: album.location || 'Rajkot' })" class="hover:text-foreground transition-colors">
+                                {{ locationTitle }}
+                            </Link>
+
+                            <template v-for="(crumb, index) in breadcrumbTrail" :key="crumb.id || crumb.path || crumb.slug">
+                                <svg class="h-4 w-4 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/></svg>
+
+                                <span
+                                    v-if="index === breadcrumbTrail.length - 1"
+                                    class="font-semibold text-foreground"
+                                >
+                                    {{ crumb.title }}
+                                </span>
+
+                                <Link
+                                    v-else
+                                    :href="route('albums.show', crumb.path || crumb.slug || crumb.id)"
+                                    class="hover:text-foreground transition-colors"
+                                >
+                                    {{ crumb.title }}
+                                </Link>
+                            </template>
+                        </nav>
+                    </div>
+                </div>
             </div>
 
             <section class="overflow-hidden rounded-2xl border border-border bg-bg-card shadow-sm">
@@ -295,7 +332,7 @@ const removeSelectedFile = (index) => {
                     </div>
 
                     <div class="flex justify-end gap-3 pt-2">
-                        <Link :href="route('albums.show', album.slug || album.id)" class="inline-flex h-11 items-center rounded-pill px-6 text-sm font-bold text-foreground transition hover:bg-bg-hover" :class="{ 'pointer-events-none opacity-50': processing }">Cancel</Link>
+                        <Link :href="route('albums.show', album.path || album.slug || album.id)" class="inline-flex h-11 items-center rounded-pill px-6 text-sm font-bold text-foreground transition hover:bg-bg-hover" :class="{ 'pointer-events-none opacity-50': processing }">Cancel</Link>
                         <button
                             type="button"
                             class="inline-flex h-11 items-center rounded-pill bg-primary px-7 text-sm font-bold text-primary-foreground shadow-md transition hover:bg-accent-hover disabled:cursor-not-allowed disabled:opacity-60"

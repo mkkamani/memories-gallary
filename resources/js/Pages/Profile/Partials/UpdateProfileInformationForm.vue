@@ -18,6 +18,7 @@ const form = useForm({
     name: user.name,
     email: user.email,
     role: String(user.role || 'member').toLowerCase(),
+    location: user.location || 'Rajkot',
 });
 
 const roleLabel = computed(() => {
@@ -72,6 +73,40 @@ const canEditRole = computed(() => ['admin', 'manager'].includes(String(user.rol
                 />
 
                 <InputError class="mt-2" :message="form.errors.email" />
+            </div>
+
+            <div>
+                <label class="block mb-2 text-xs font-extrabold uppercase tracking-wide text-muted-foreground">Location</label>
+
+                <div class="grid gap-3 sm:grid-cols-2">
+                    <label
+                        class="flex cursor-pointer items-center gap-3 rounded-xl border px-4 py-3 transition"
+                        :class="form.location === 'Ahmedabad' ? 'border-primary/40 bg-primary/5' : 'border-border bg-bg-secondary hover:border-primary/25'"
+                    >
+                        <input
+                            v-model="form.location"
+                            type="radio"
+                            value="Ahmedabad"
+                            class="h-4 w-4 border-border text-primary focus:ring-primary"
+                        />
+                        <span class="text-sm font-semibold text-foreground">Ahmedabad</span>
+                    </label>
+
+                    <label
+                        class="flex cursor-pointer items-center gap-3 rounded-xl border px-4 py-3 transition"
+                        :class="form.location === 'Rajkot' ? 'border-primary/40 bg-primary/5' : 'border-border bg-bg-secondary hover:border-primary/25'"
+                    >
+                        <input
+                            v-model="form.location"
+                            type="radio"
+                            value="Rajkot"
+                            class="h-4 w-4 border-border text-primary focus:ring-primary"
+                        />
+                        <span class="text-sm font-semibold text-foreground">Rajkot</span>
+                    </label>
+                </div>
+
+                <InputError class="mt-2" :message="form.errors.location" />
             </div>
 
             <div v-if="canEditRole">

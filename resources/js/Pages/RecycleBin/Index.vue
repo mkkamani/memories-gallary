@@ -194,13 +194,13 @@ const modalDescription = computed(() => {
     <AuthenticatedLayout>
         <div class="animate-fade-in text-foreground space-y-8 pb-6" @click="closeCardMenu">
             <section class="relative overflow-hidden rounded-[2rem] border border-border bg-bg-card shadow-sm">
-                <div class="absolute inset-0 bg-[radial-gradient(circle_at_right,rgba(255,96,43,0.08),transparent_28%),linear-gradient(135deg,rgba(255,255,255,0.88),rgba(255,248,244,0.96))]"></div>
+                <div class="absolute inset-0 bg-[radial-gradient(circle_at_right,rgba(255,96,43,0.08),transparent_28%),linear-gradient(135deg,rgba(255,255,255,0.88),rgba(255,248,244,0.96))] dark:bg-[radial-gradient(circle_at_right,rgba(255,96,43,0.18),transparent_32%),linear-gradient(135deg,rgba(17,24,39,0.9),rgba(10,12,24,0.96))]"></div>
                 <div class="absolute -right-50 -top-16 h-52 w-52 rounded-full bg-primary/10 blur-3xl"></div>
                 <div class="absolute left-10 bottom-0 h-24 w-24 rounded-full bg-orange-500/10 blur-2xl"></div>
 
                 <div class="relative space-y-6 px-6 py-7 lg:px-8">
                     <div class="space-y-5">
-                        <div class="inline-flex items-center gap-2 rounded-full border border-primary/15 bg-white/70 px-3 py-1 text-[11px] font-bold uppercase tracking-[0.24em] text-primary shadow-sm backdrop-blur-sm">
+                        <div class="inline-flex items-center gap-2 rounded-full border border-primary/20 bg-bg-card/70 px-3 py-1 text-[11px] font-bold uppercase tracking-[0.24em] text-primary shadow-sm backdrop-blur-sm">
                             Recovery Workspace
                         </div>
 
@@ -227,7 +227,7 @@ const modalDescription = computed(() => {
                         <article
                             v-for="card in stats"
                             :key="card.label"
-                            class="relative overflow-hidden rounded-3xl border border-border/80 bg-white/80 p-4 shadow-sm backdrop-blur-sm"
+                            class="relative overflow-hidden rounded-3xl border border-border/80 bg-bg-card/80 p-4 shadow-sm backdrop-blur-sm"
                         >
                             <div class="absolute inset-0 bg-gradient-to-br" :class="card.accent"></div>
                             <div class="relative flex items-start justify-between gap-3">
@@ -236,7 +236,7 @@ const modalDescription = computed(() => {
                                     <p class="mt-3 text-3xl font-bold text-foreground">{{ card.value }}</p>
                                     <p class="mt-2 text-xs leading-5 text-muted-foreground">{{ card.meta }}</p>
                                 </div>
-                                <div class="flex h-11 w-11 items-center justify-center rounded-2xl border border-white/70 bg-white/70 shadow-sm" :class="card.text">
+                                <div class="flex h-11 w-11 items-center justify-center rounded-2xl border border-border/70 bg-bg-card/80 shadow-sm" :class="card.text">
                                     <svg class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
                                         <path stroke-linecap="round" stroke-linejoin="round" :d="card.icon" />
                                     </svg>
@@ -385,7 +385,7 @@ const modalDescription = computed(() => {
                                 >
                                     {{ retentionLabel(item.deleted_at) }}
                                 </span>
-                                <span v-if="item.file_type === 'video'" class="rounded-full bg-white/85 px-2.5 py-1 text-[10px] font-bold text-foreground shadow-sm">
+                                <span v-if="item.file_type === 'video'" class="rounded-full border border-border/60 bg-bg-card/85 px-2.5 py-1 text-[10px] font-bold text-foreground shadow-sm">
                                     Video
                                 </span>
                             </div>

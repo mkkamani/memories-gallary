@@ -2,12 +2,13 @@
 
 namespace App\Models;
 
-use Illuminate\Contracts\Auth\MustVerifyEmail;
+// use Illuminate\Contracts\Auth\MustVerifyEmail;
+use App\Notifications\ResetPasswordNotification;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Notifications\Notifiable;
 
-class User extends Authenticatable implements MustVerifyEmail
+class User extends Authenticatable
 {
     /** @use HasFactory<\Database\Factories\UserFactory> */
     use HasFactory, Notifiable;
@@ -58,6 +59,11 @@ class User extends Authenticatable implements MustVerifyEmail
         ];
     }
 
+    public function getLocationAttribute($value): string
+    {
+        return $value ?: 'Rajkot';
+    }
+
     /**
      * Get the user's avatar URL.
      */
@@ -93,5 +99,10 @@ class User extends Authenticatable implements MustVerifyEmail
     {
         return $this->belongsToMany(Album::class, 'pinned_albums')
             ->withTimestamps();
+    }
+
+    public function sendPasswordResetNotification($token): void
+    {
+        $this->notify(new ResetPasswordNotification($token));
     }
 }

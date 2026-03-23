@@ -42,7 +42,7 @@ const features = [
 </script>
 
 <template>
-    <Head title="Welcome to Cypherox Technologies" />
+    <Head title="Welcome to Cypherox Technologies Memories" />
 
     <div class="min-h-screen bg-[#0a0a0a] text-white overflow-hidden font-sans relative flex flex-col isolate">
         <PublicBackgroundScene />

@@ -38,7 +38,7 @@ const handleAvatarChange = (e) => {
     const file = e.target.files[0];
     if (file) {
         avatarForm.avatar = file;
-        avatarForm.post(route('profile.update'), { 
+        avatarForm.post(route('profile.update'), {
             preserveScroll: true,
             onSuccess: () => {
                 avatarForm.reset('avatar');
@@ -84,6 +84,7 @@ const handleAvatarChange = (e) => {
 
                         <h2 class="text-3xl font-bold text-foreground">{{ user.name }}</h2>
                         <p class="text-sm text-muted-foreground mt-1">{{ user.email }}</p>
+                        <p class="text-xs text-muted-foreground mt-1">{{ user.location || 'Rajkot' }}</p>
 
                         <span class="mt-4 inline-flex rounded-pill px-3 py-1 text-xs font-bold uppercase tracking-wide bg-primary/15 text-primary border border-primary/30">
                             {{ user.role || 'Member' }}

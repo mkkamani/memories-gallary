@@ -43,6 +43,10 @@ class AlbumService
             $data["slug"] = $this->generateUniqueSlug($data["title"]);
         }
 
+        if (empty($data['location'])) {
+            $data['location'] = $user->location ?: 'Rajkot';
+        }
+
         // Create the album row (r2_path is computed after we have the id)
         $album = Album::create($data);
 

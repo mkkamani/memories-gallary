@@ -1,5 +1,5 @@
 <script setup>
-import { ref, computed, onMounted, watch } from 'vue';
+import { ref, computed, onMounted, onBeforeUnmount, watch } from 'vue';
 import { Link, router, usePage } from '@inertiajs/vue3';
 import { getInitials } from '@/utils/initials';
 import {
@@ -31,69 +31,104 @@ const showNotifications = ref(false);
 const scrolled = ref(false);
 
 // ── Flash / Toast ─────────────────────────────────────────────────────────────
-const toast = ref(null);   // { type: 'success'|'error'|'warning'|'info', message: string }
-let toastTimer = null;
+const toasts = ref([]); // [{ id, type, message }]
+const toastHovered = ref(false);
+let toastId = 0;
+const toastTimers = new Map();
+const TOAST_DURATION_MS = 5000;
 
-const toastStyles = computed(() => {
-    switch (toast.value?.type) {
-        case 'success': return 'border-emerald-300 bg-emerald-600 text-white shadow-emerald-600/35';
-        case 'error':   return 'border-red-300 bg-red-600 text-white shadow-red-600/35';
-        case 'warning': return 'border-amber-300 bg-amber-500 text-slate-900 shadow-amber-500/30';
-        case 'info':    return 'border-blue-300 bg-blue-600 text-white shadow-blue-600/35';
-        default:        return 'border-slate-300 bg-slate-700 text-white shadow-slate-700/35';
-    }
-});
-
-const toastIconBoxStyles = computed(() => {
-    switch (toast.value?.type) {
-        case 'success': return 'bg-emerald-500/30 text-white';
-        case 'error':   return 'bg-red-500/30 text-white';
-        case 'warning': return 'bg-amber-100/60 text-amber-900';
-        case 'info':    return 'bg-blue-500/30 text-white';
-        default:        return 'bg-slate-500/30 text-white';
-    }
-});
-
-const toastTitle = computed(() => {
-    switch (toast.value?.type) {
-        case 'success': return 'Success';
-        case 'error':   return 'Error';
-        case 'warning': return 'Warning';
-        case 'info':    return 'Info';
-        default:        return 'Notice';
-    }
-});
-
-const toastIcon = computed(() => {
-    switch (toast.value?.type) {
-        case 'success': return 'M5 13l4 4L19 7';
-        case 'error':   return 'M6 18L18 6M6 6l12 12';
-        case 'warning': return 'M12 9v2m0 4h.01M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z';
-        case 'info':    return 'M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z';
-        default:        return '';
-    }
-});
-
-const showToast = (type, message) => {
-    if (toastTimer) clearTimeout(toastTimer);
-    toast.value = { type, message };
-    toastTimer = setTimeout(() => { toast.value = null; }, 4500);
+const toastUi = {
+    success: {
+        card: 'border-emerald-300/70 bg-emerald-100/90 text-emerald-900 shadow-emerald-300/40',
+        iconWrap: 'bg-emerald-700 text-emerald-100',
+        title: 'Success',
+        icon: 'M5 13l4 4L19 7',
+    },
+    error: {
+        card: 'border-red-300/70 bg-red-100/90 text-red-900 shadow-red-300/40',
+        iconWrap: 'bg-red-700 text-red-100',
+        title: 'Error',
+        icon: 'M6 18L18 6M6 6l12 12',
+    },
+    warning: {
+        card: 'border-amber-300/70 bg-amber-100/90 text-amber-900 shadow-amber-300/40',
+        iconWrap: 'bg-amber-700 text-amber-100',
+        title: 'Warning',
+        icon: 'M12 9v2m0 4h.01M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z',
+    },
+    info: {
+        card: 'border-blue-300/70 bg-blue-100/90 text-blue-900 shadow-blue-300/40',
+        iconWrap: 'bg-blue-700 text-blue-100',
+        title: 'Info',
+        icon: 'M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z',
+    },
+    default: {
+        card: 'border-slate-300/70 bg-slate-100/90 text-slate-900 shadow-slate-300/40',
+        iconWrap: 'bg-slate-700 text-slate-100',
+        title: 'Notice',
+        icon: 'M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z',
+    },
 };
 
-const dismissToast = () => {
-    if (toastTimer) clearTimeout(toastTimer);
-    toast.value = null;
+const getToastConfig = (type) => toastUi[type] || toastUi.default;
+
+const pushToast = (type, message) => {
+    if (!message) return;
+
+    const alreadyQueued = toasts.value.some(
+        (item) => item.type === type && item.message === message,
+    );
+
+    if (alreadyQueued) {
+        return;
+    }
+
+    const id = ++toastId;
+    toasts.value.unshift({ id, type, message });
+
+    const timer = setTimeout(() => {
+        dismissToast(id);
+    }, TOAST_DURATION_MS);
+
+    toastTimers.set(id, timer);
 };
+
+const dismissToast = (id) => {
+    const timer = toastTimers.get(id);
+    if (timer) {
+        clearTimeout(timer);
+        toastTimers.delete(id);
+    }
+
+    toasts.value = toasts.value.filter((item) => item.id !== id);
+};
+
+const clearAllToasts = () => {
+    for (const timer of toastTimers.values()) {
+        clearTimeout(timer);
+    }
+    toastTimers.clear();
+    toasts.value = [];
+};
+
+const visibleToasts = computed(() => {
+    if (toastHovered.value) {
+        return toasts.value;
+    }
+
+    return toasts.value.slice(0, 1);
+});
 
 // Watch for flash messages sent from the server via Inertia shared props
 watch(
     () => page.props.flash,
     (flash) => {
         if (!flash) return;
-        if (flash.success) showToast('success', flash.success);
-        else if (flash.error)   showToast('error',   flash.error);
-        else if (flash.warning) showToast('warning', flash.warning);
-        else if (flash.info)    showToast('info',    flash.info);
+
+        if (flash.success) pushToast('success', flash.success);
+        if (flash.error) pushToast('error', flash.error);
+        if (flash.warning) pushToast('warning', flash.warning);
+        if (flash.info) pushToast('info', flash.info);
     },
     { deep: true, immediate: true },
 );
@@ -164,6 +199,10 @@ onMounted(() => {
             showNotifications.value = false;
         }
     });
+});
+
+onBeforeUnmount(() => {
+    clearAllToasts();
 });
 
 const navItems = computed(() => {
@@ -339,38 +378,58 @@ const isActive = (item) => {
             </div>
         </header>
 
-        <!-- ── Toast notification ───────────────────────────────────────────── -->
-        <Transition
-            enter-active-class="transition duration-300 ease-out"
-            enter-from-class="opacity-0 translate-y-[-0.75rem] translate-x-2"
-            enter-to-class="opacity-100 translate-y-0 translate-x-0"
-            leave-active-class="transition duration-200 ease-in"
-            leave-from-class="opacity-100 translate-y-0 translate-x-0"
-            leave-to-class="opacity-0 translate-y-[-0.5rem] translate-x-2"
+        <!-- ── Stacked notifications (hover to expand) ─────────────────────── -->
+        <div
+            v-if="toasts.length"
+            class="fixed top-20 right-4 z-[200] w-[88vw] max-w-xs"
+            @mouseenter="toastHovered = true"
+            @mouseleave="toastHovered = false"
         >
-            <div
-                v-if="toast"
-                class="fixed top-20 right-4 z-[200] flex items-start gap-3 rounded-2xl border px-4 py-3 shadow-2xl backdrop-blur-xl max-w-[92vw] sm:max-w-md"
-                :class="toastStyles"
-            >
-                <div class="mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-xl" :class="toastIconBoxStyles">
-                    <svg class="h-4.5 w-4.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
-                        <path stroke-linecap="round" stroke-linejoin="round" :d="toastIcon" />
-                    </svg>
-                </div>
+            <div class="relative">
+                <!-- Back cards to mimic the layered design when collapsed -->
+                <div
+                    v-if="!toastHovered && toasts.length > 1"
+                    class="pointer-events-none absolute inset-x-2 top-2 h-12 rounded-2xl border border-white/50 bg-white/55 shadow-lg backdrop-blur-md"
+                ></div>
+                <div
+                    v-if="!toastHovered && toasts.length > 2"
+                    class="pointer-events-none absolute inset-x-4 top-4 h-12 rounded-2xl border border-white/45 bg-white/45 shadow-md backdrop-blur-md"
+                ></div>
 
-                <div class="min-w-0 flex-1">
-                    <p class="text-xs font-bold uppercase tracking-[0.18em] opacity-90">{{ toastTitle }}</p>
-                    <p class="mt-0.5 text-sm font-semibold leading-5">{{ toast.message }}</p>
-                </div>
+                <TransitionGroup
+                    name="toast-stack"
+                    tag="div"
+                    class="relative space-y-2"
+                >
+                    <div
+                        v-for="toast in visibleToasts"
+                        :key="toast.id"
+                        class="relative flex items-start gap-2 rounded-xl border px-3 py-2.5 shadow-xl backdrop-blur-md"
+                        :class="getToastConfig(toast.type).card"
+                    >
+                        <div class="mt-0.5 flex h-6 w-6 shrink-0 items-center justify-center rounded-full" :class="getToastConfig(toast.type).iconWrap">
+                            <svg class="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                                <path stroke-linecap="round" stroke-linejoin="round" :d="getToastConfig(toast.type).icon" />
+                            </svg>
+                        </div>
 
-                <button @click="dismissToast" class="ml-1 rounded-lg p-1 opacity-80 transition-opacity hover:bg-black/10 hover:opacity-100">
-                    <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
-                        <path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12" />
-                    </svg>
-                </button>
+                        <div class="min-w-0 flex-1 pr-5">
+                            <p class="text-[10px] font-extrabold uppercase tracking-[0.14em] opacity-85">{{ getToastConfig(toast.type).title }}</p>
+                            <p class="mt-0.5 text-xs font-semibold leading-4">{{ toast.message }}</p>
+                        </div>
+
+                        <button
+                            @click="dismissToast(toast.id)"
+                            class="absolute right-2.5 top-2.5 rounded-full p-1 text-current/60 transition hover:bg-black/10 hover:text-current"
+                        >
+                            <svg class="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                                <path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12" />
+                            </svg>
+                        </button>
+                    </div>
+                </TransitionGroup>
             </div>
-        </Transition>
+        </div>
         <!-- ─────────────────────────────────────────────────────────────────── -->
 
         <!-- Main Content area -->
@@ -402,5 +461,17 @@ const isActive = (item) => {
 }
 .pb-safe {
     padding-bottom: env(safe-area-inset-bottom);
+}
+
+.toast-stack-enter-active,
+.toast-stack-leave-active,
+.toast-stack-move {
+    transition: all 220ms ease;
+}
+
+.toast-stack-enter-from,
+.toast-stack-leave-to {
+    opacity: 0;
+    transform: translateY(-8px) scale(0.98);
 }
 </style>

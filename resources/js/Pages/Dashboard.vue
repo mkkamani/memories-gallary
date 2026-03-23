@@ -221,15 +221,15 @@ const memberUsagePercent = computed(() => {
                             <span v-else>Recent Media Uploads</span>
                         </h3>
 
-                        <div class="columns-2 sm:columns-3 gap-4 space-y-4">
+                        <div class="columns-2 sm:columns-3 gap-4">
                             <template v-for="(item, i) in (userRole === 'member' ? myRecentUploads : recentMedia)" :key="item.id">
-                                <div @click="openPreview(item, userRole === 'member' ? myRecentUploads : recentMedia)" class="group relative inline-block w-full break-inside-avoid rounded-xl overflow-hidden border border-border bg-bg-elevated cursor-pointer hover:border-primary/50 transition-all shadow-sm hover:shadow-lg animate-fade-in-up">
+                                <div @click="openPreview(item, userRole === 'member' ? myRecentUploads : recentMedia)" class="group relative inline-block w-full mb-4 break-inside-avoid rounded-xl overflow-hidden border border-border bg-bg-elevated cursor-pointer hover:border-primary/50 transition-all shadow-sm hover:shadow-lg animate-fade-in-up">
                                     <div class="relative">
                                         <MediaRenderer
                                             :media="item"
                                             :alt="item.file_name"
                                             :use-thumbnail="true"
-                                            image-class="w-full h-auto object-contain transition-transform duration-700 group-hover:scale-105 rounded-xl"
+                                            image-class="w-full h-auto object-cover transition-transform duration-700 group-hover:scale-105 rounded-xl"
                                             video-class="w-full h-auto rounded-xl"
                                             fallback-class="flex min-h-[10rem] w-full items-center justify-center rounded-xl bg-bg-hover text-xs font-bold uppercase tracking-[0.24em] text-muted-foreground"
                                         />

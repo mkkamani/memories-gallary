@@ -42,15 +42,15 @@ Route::middleware(["auth"])->group(function () {
         "togglePin",
     ])->name("albums.pin-toggle");
 
-    // Per-album upload page & handler
-    Route::get("/albums/{album}/upload", [
+    // Per-album upload page & handler using full nested path
+    Route::get("/albums/{path}/upload", [
         AlbumController::class,
         "uploadPage",
-    ])->name("albums.upload");
-    Route::post("/albums/{album}/upload", [
+    ])->where("path", ".*")->name("albums.upload");
+    Route::post("/albums/{path}/upload", [
         AlbumController::class,
         "uploadStore",
-    ])->name("albums.upload.store");
+    ])->where("path", ".*")->name("albums.upload.store");
 
     // Standard resource routes (index, create, store, edit, update, destroy)
     // MUST come before the generic {path} route so that /albums/create isn't caught as a path

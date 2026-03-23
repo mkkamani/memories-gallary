@@ -5,6 +5,7 @@ namespace App\Models;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\SoftDeletes;
+use Illuminate\Support\Str;
 use App\Models\User;
 use App\Models\Media;
 use App\Models\Tag;
@@ -26,6 +27,13 @@ class Album extends Model
         while ($parent) {
             array_unshift($slugs, $parent->slug);
             $parent = $parent->parent;
+        }
+
+        $location = (string) ($this->location ?: 'Rajkot');
+        $locationSlug = Str::slug($location);
+
+        if ($locationSlug !== '') {
+            array_unshift($slugs, $locationSlug);
         }
 
         return implode('/', $slugs);

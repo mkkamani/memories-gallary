@@ -8,7 +8,7 @@ import MediaRenderer from '@/Components/MediaRenderer.vue';
 import DangerButton from '@/Components/DangerButton.vue';
 import { useMediaPreview } from '@/composables/useMediaPreview';
 import { downloadFile, formatFileSize } from '@/utils/media';
-import { useInfiniteScroll } from '@vueuse/core';
+// import { useInfiniteScroll } from '@vueuse/core';
 import axios from 'axios';
 
 const props = defineProps({
@@ -26,10 +26,13 @@ const showNewMenu = ref(false);
 const showActionMenu = ref(null);
 const showNewFolderModal = ref(false);
 const showDeleteModal = ref(false);
+const showRenameModal = ref(false);
 const itemToDelete = ref(null);
+const itemToRename = ref(null);
 const deleteType = ref('album');
 
 const newFolder = ref({ title: '', description: '' });
+const renameForm = ref({ title: '' });
 const isPinned = ref(!!props.album?.is_pinned);
 const isPinProcessing = ref(false);
 
@@ -81,8 +84,6 @@ function removeDeletedMediaFromList(mediaId) {
     nextTick(() => recalcAllSpans());
 }
 
-// The previous original onMounted listener was here but was removed during a refactor.
-onBeforeUnmount(() => window.removeEventListener('resize', recalcAllSpans));
 // ─────────────────────────────────────────────────────────────────────────────
 
 const canManage = computed(() => ['admin', 'manager'].includes(user.role));
@@ -91,6 +92,8 @@ const canModify = computed(() => canManage.value || props.album.user_id === user
 const canUpload = computed(() => !props.album.is_system && canContribute.value);
 const canCreateFolder = computed(() => !props.album.is_system && canContribute.value);
 const canShowToolbar = computed(() => canUpload.value || canCreateFolder.value);
+const albumLocation = computed(() => props.album?.location || 'Rajkot');
+const locationIndexLink = computed(() => route('albums.index', { location: albumLocation.value }));
 const parentAlbumSlug = computed(() => {
     if (!props.breadcrumbs?.length) {
         return null;
@@ -104,27 +107,36 @@ const folders = computed(() => folderItems.value);
 const files = ref([...(props.mediaData?.data || [])]);
 const nextPageUrl = ref(props.mediaData?.next_page_url || null);
 const isLoadingMore = ref(false);
+const loadMore = async () => {
+    if (!nextPageUrl.value || isLoadingMore.value) return;
 
-useInfiniteScroll(
-    window,
-    async () => {
-        if (!nextPageUrl.value || isLoadingMore.value) return;
-
-        isLoadingMore.value = true;
-        try {
-            const response = await axios.get(nextPageUrl.value, {
-                headers: { 'Accept': 'application/json' }
-            });
+    isLoadingMore.value = true;
+    try {
+        const response = await axios.get(nextPageUrl.value, {
+            headers: {
+                'Accept': 'application/json',
+                'X-Requested-With': 'XMLHttpRequest'
+            }
+        });
+        if (response.data.data && Array.isArray(response.data.data)) {
             files.value.push(...response.data.data);
-            nextPageUrl.value = response.data.next_page_url;
-        } catch (e) {
-            console.error(e);
-        } finally {
-            isLoadingMore.value = false;
         }
-    },
-    { distance: 10 }
-);
+        nextPageUrl.value = response.data.next_page_url || null;
+        nextTick(() => recalcAllSpans());
+    } catch (e) {
+        console.error('[Load More] Error:', e);
+    } finally {
+        isLoadingMore.value = false;
+    }
+};
+
+// useInfiniteScroll(
+//     window,
+//     async () => {
+//         await loadMore();
+//     },
+//     { distance: 500 }
+// );
 
 const filteredFolders = computed(() => {
     if (filter.value === 'Photos' || filter.value === 'Videos') return [];
@@ -159,6 +171,9 @@ onMounted(() => {
     nextTick(() => recalcAllSpans());
 });
 
+onBeforeUnmount(() => {
+    window.removeEventListener('resize', recalcAllSpans);
+});
 
 const toggleActionMenu = (e, id) => {
     e.stopPropagation();
@@ -193,29 +208,19 @@ const createFolderError = ref('');
 
 const createFolder = async () => {
     if (!newFolder.value.title.trim()) return;
-    isCreatingFolder.value = true;
-    createFolderError.value = '';
-    try {
-        const response = await axios.post(route('albums.store'), {
-            title: newFolder.value.title,
-            description: newFolder.value.description,
-            parent_id: props.album.id,
-            location: props.album.location,
-        }, {
-            headers: { 'Accept': 'application/json', 'X-Requested-With': 'XMLHttpRequest' },
-        });
-        // Push the new folder into folderItems so it shows instantly
-        const newAlbum = response.data?.album;
-        if (newAlbum) {
-            folderItems.value.push(newAlbum);
+    router.post(route('albums.store'), {
+        title: newFolder.value.title,
+        description: newFolder.value.description,
+        parent_id: props.album.id,
+        location: props.album.location,
+    }, {
+        preserveState: false,
+        preserveScroll: true,
+        onSuccess: () => {
+            showNewFolderModal.value = false;
+            newFolder.value = { title: '', description: '' };
         }
-        showNewFolderModal.value = false;
-        newFolder.value = { title: '', description: '' };
-    } catch (err) {
-        createFolderError.value = err.response?.data?.message || 'Failed to create folder.';
-    } finally {
-        isCreatingFolder.value = false;
-    }
+    });
 };
 
 const confirmDelete = (item, type) => {
@@ -223,6 +228,32 @@ const confirmDelete = (item, type) => {
     deleteType.value = type;
     showActionMenu.value = null;
     showDeleteModal.value = true;
+};
+
+const openRenameModal = (folder) => {
+    itemToRename.value = folder;
+    renameForm.value = { title: folder?.title || '' };
+    showActionMenu.value = null;
+    showRenameModal.value = true;
+};
+
+const renameFolder = () => {
+    if (!itemToRename.value || !renameForm.value.title.trim()) return;
+
+    const currentPath = window.location.pathname.replace(/^\/albums\//, '');
+
+    router.put(route('albums.update', itemToRename.value.slug || itemToRename.value.id), {
+        title: renameForm.value.title.trim(),
+        return_to_path: currentPath,
+    }, {
+        preserveState: false,
+        preserveScroll: true,
+        onSuccess: () => {
+            showRenameModal.value = false;
+            itemToRename.value = null;
+            renameForm.value = { title: '' };
+        },
+    });
 };
 
 const deleteItem = () => {
@@ -305,6 +336,11 @@ const {
                     <div class="flex items-center gap-1 text-sm text-muted-foreground whitespace-nowrap min-w-0 flex-1">
                         <Link :href="route('albums.index')" class="hover:text-foreground cursor-pointer transition-colors">Albums</Link>
 
+                        <svg class="w-4 h-4 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/></svg>
+                        <Link :href="locationIndexLink" class="hover:text-foreground cursor-pointer transition-colors capitalize">
+                            {{ albumLocation }}
+                        </Link>
+
                         <template v-for="crumb in breadcrumbs" :key="crumb.id">
                             <svg class="w-4 h-4 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/></svg>
                             <Link :href="route('albums.show', crumb.path || crumb.slug || crumb.id)" class="hover:text-foreground cursor-pointer transition-colors truncate">
@@ -336,7 +372,7 @@ const {
                                 New folder
                             </button>
                             <div v-if="canCreateFolder && canUpload" class="h-px bg-border my-1"></div>
-                            <Link v-if="canUpload" :href="route('albums.upload', album.slug || album.id)" @click="showNewMenu = false" class="w-full flex items-center gap-3 px-4 py-2.5 text-sm text-foreground hover:bg-bg-hover transition-colors">
+                            <Link v-if="canUpload" :href="route('albums.upload', album.path || album.slug || album.id)" @click="showNewMenu = false" class="w-full flex items-center gap-3 px-4 py-2.5 text-sm text-foreground hover:bg-bg-hover transition-colors">
                                 <svg class="w-4 h-4 text-primary" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12"/></svg>
                                 File upload
                             </Link>
@@ -403,7 +439,7 @@ const {
                                 <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 12h.01M12 12h.01M19 12h.01M6 12a1 1 0 11-2 0 1 1 0 012 0zm7 0a1 1 0 11-2 0 1 1 0 012 0zm7 0a1 1 0 11-2 0 1 1 0 012 0z"/></svg>
                             </button>
                             <div v-if="showActionMenu === 'folder-'+folder.id" class="absolute right-0 top-full mt-2 w-44 rounded-2xl border border-border/80 bg-bg-card/95 p-1.5 shadow-2xl backdrop-blur-xl z-[9999] animate-scale-in folder-menu-popover">
-                                <button v-if="canManage || folder.user_id === user.id" type="button" class="flex w-full items-center gap-3 rounded-xl px-3.5 py-2.5 text-sm font-medium text-foreground transition-colors hover:bg-bg-hover" @click.prevent.stop="router.visit(route('albums.edit', folder.slug || folder.id)); closeActionMenu();">
+                                <button v-if="canManage || folder.user_id === user.id" type="button" class="flex w-full items-center gap-3 rounded-xl px-3.5 py-2.5 text-sm font-medium text-foreground transition-colors hover:bg-bg-hover" @click.prevent.stop="openRenameModal(folder)">
                                     <svg class="w-4 h-4 text-muted-foreground" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"/></svg>
                                     Rename
                                 </button>
@@ -539,10 +575,31 @@ const {
                 </div>
             </div>
 
-            <!-- Loading Indicator -->
-            <div v-if="isLoadingMore" class="py-6 flex justify-center text-muted-foreground animate-pulse">
-                <div class="orange-loader"></div>
+
+            <div v-if="nextPageUrl" class="py-8 flex justify-center">
+                <button
+                    @click="loadMore"
+                    :disabled="isLoadingMore"
+                    class="flex items-center gap-3 h-11 px-8 rounded-pill bg-bg-card border border-border text-sm font-bold text-foreground shadow-sm hover:bg-bg-hover hover:border-primary/40 transition-all disabled:opacity-60 disabled:cursor-not-allowed"
+                >
+                    <svg v-if="isLoadingMore" class="w-4 h-4 animate-spin text-primary" fill="none" viewBox="0 0 24 24">
+                        <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"/>
+                        <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"/>
+                    </svg>
+                    <svg v-else class="w-4 h-4 text-muted-foreground" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/>
+                    </svg>
+                    <span>{{ isLoadingMore ? 'Loading...' : 'Load More' }}</span>
+                </button>
             </div>
+
+
+            <!-- <div v-if="isLoadingMore" class="py-12 flex justify-center items-center">
+                <div class="flex flex-col items-center gap-3">
+                    <div class="orange-loader"></div>
+                    <p class="text-sm text-muted-foreground font-medium tracking-wide">Loading more images...</p>
+                </div>
+            </div> -->
 
             <!-- Empty State -->
             <div v-if="filteredFiles.length === 0 && filteredFolders.length === 0" class="flex flex-col items-center justify-center py-20 bg-bg-card border border-dashed border-border rounded-3xl animate-fade-in">
@@ -589,6 +646,30 @@ const {
                             <svg v-if="isCreatingFolder" class="w-4 h-4 animate-spin" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg>
                             {{ isCreatingFolder ? 'Creating...' : 'Create Folder' }}
                         </button>
+                    </div>
+                </form>
+            </div>
+        </Modal>
+
+        <!-- Rename Folder Modal -->
+        <Modal :show="showRenameModal" @close="showRenameModal = false" max-width="md" contained>
+            <div class="p-8 bg-bg-card border border-border rounded-xl">
+                <div class="flex items-center gap-3 mb-6">
+                    <div class="w-10 h-10 rounded-xl bg-primary/10 flex items-center justify-center text-primary">
+                        <svg class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"/></svg>
+                    </div>
+                    <h2 class="text-xl font-bold text-foreground">Rename Folder</h2>
+                </div>
+
+                <form @submit.prevent="renameFolder" class="space-y-6">
+                    <div class="space-y-2">
+                        <label class="text-xs font-bold text-muted-foreground uppercase tracking-wider">Folder Name</label>
+                        <input type="text" v-model="renameForm.title" placeholder="Enter new folder name" class="w-full h-12 px-4 rounded-xl bg-bg-elevated border border-border text-sm text-foreground focus:outline-none focus:border-primary transition-all shadow-inner" required />
+                    </div>
+
+                    <div class="flex justify-end gap-3 pt-4">
+                        <button type="button" @click="showRenameModal = false" class="h-11 px-6 rounded-pill text-sm font-bold text-foreground hover:bg-bg-hover transition-all">Cancel</button>
+                        <button type="submit" class="h-11 px-8 rounded-pill bg-primary text-primary-foreground text-sm font-bold shadow-lg shadow-primary/20 hover:scale-105 active:scale-95 transition-all">Rename Folder</button>
                     </div>
                 </form>
             </div>

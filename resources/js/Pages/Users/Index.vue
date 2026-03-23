@@ -14,34 +14,75 @@ const props = defineProps({
 const search = ref(props.filters.search || '');
 const searchInputKey = ref(0);
 const roleFilter = ref(props.filters.role || 'all');
+const locationFilter = ref(props.filters.location || 'all');
+const perPageFilter = ref(props.filters.per_page || '5');
+const sortBy = ref(props.filters.sort_by || 'created_at');
+const sortDirection = ref(props.filters.sort_direction || 'desc');
 const showModal = ref(false);
 const showDeleteModal = ref(false);
 const isEditing = ref(false);
 const userToDelete = ref(null);
 
 const roleTabs = [
-    { value: 'all', label: 'All' },
+    { value: 'all', label: 'All roles' },
     { value: 'admin', label: 'Admin' },
     { value: 'manager', label: 'Manager' },
     { value: 'member', label: 'Member' },
+];
+
+const locationTabs = [
+    { value: 'all', label: 'All Locations' },
+    { value: 'Ahmedabad', label: 'Ahmedabad' },
+    { value: 'Rajkot', label: 'Rajkot' },
 ];
 
 const form = useForm({
     id: null,
     name: '',
     email: '',
+    password_mode: 'auto',
     password: '',
     password_confirmation: '',
     role: 'member',
     location: '',
 });
 
-watch([search, roleFilter], debounce(() => {
+watch([search, roleFilter, locationFilter, perPageFilter], debounce(() => {
     router.get(route('users.index'), {
         search: search.value,
         role: roleFilter.value,
+        location: locationFilter.value,
+        per_page: perPageFilter.value,
+        sort_by: sortBy.value,
+        sort_direction: sortDirection.value,
     }, { preserveState: true, replace: true });
 }, 300));
+
+const toggleSort = (column) => {
+    if (sortBy.value === column) {
+        sortDirection.value = sortDirection.value === 'asc' ? 'desc' : 'asc';
+    } else {
+        sortBy.value = column;
+        sortDirection.value = 'asc';
+    }
+
+    router.get(route('users.index'), {
+        search: search.value,
+        role: roleFilter.value,
+        location: locationFilter.value,
+        per_page: perPageFilter.value,
+        sort_by: sortBy.value,
+        sort_direction: sortDirection.value,
+    }, { preserveState: true, replace: true });
+};
+
+const sortIconClass = (column, direction) => {
+    if (sortBy.value === column && sortDirection.value === direction) {
+        return 'text-primary';
+    }
+
+    return 'text-muted-foreground/40';
+};
 
 const roleBadgeClass = (role) => {
     if (role === 'admin') return 'bg-primary text-white';
@@ -93,6 +134,7 @@ const openCreateModal = (event) => {
     form.clearErrors();
     form.role = 'member';
     form.location = 'Ahmedabad';
+    form.password_mode = 'auto';
     showModal.value = true;
     preserveSearchField();
 };
@@ -116,6 +158,9 @@ const openEditModal = (event, user) => {
 const closeModal = () => {
     showModal.value = false;
     form.reset();
+    form.role = 'member';
+    form.location = '';
+    form.password_mode = 'auto';
 };
 
 const submit = () => {
@@ -169,17 +214,40 @@ const deleteUser = () => {
 
             <div class="overflow-hidden rounded-[1.75rem] border border-border bg-bg-card shadow-sm animate-fade-in-up">
                 <div class="flex flex-col gap-4 border-b border-border bg-bg-card px-4 py-4 md:flex-row md:items-center md:justify-between md:px-6">
-                    <div class="flex flex-wrap items-center gap-2">
-                        <button
-                            v-for="tab in roleTabs"
-                            :key="tab.value"
-                            type="button"
-                            @click="roleFilter = tab.value"
-                            class="inline-flex h-9 items-center rounded-full px-4 text-sm font-semibold transition-all"
-                            :class="roleFilter === tab.value ? 'bg-primary text-white shadow-sm' : 'bg-bg-elevated text-muted-foreground hover:bg-bg-hover hover:text-foreground'"
-                        >
-                            {{ tab.label }}
-                        </button>
+                    <div class="flex flex-col gap-3 sm:flex-row sm:items-end sm:gap-3">
+                        <div class="min-w-[170px]">
+                            <label class="mb-1.5 block text-[11px] font-bold uppercase tracking-[0.12em] text-muted-foreground">Role</label>
+                            <div class="relative">
+                                <select
+                                    v-model="roleFilter"
+                                    class="shopify-select h-11 w-full appearance-none rounded-xl border border-border bg-bg-elevated pl-4 pr-10 text-sm font-semibold text-foreground shadow-sm transition focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary"
+                                >
+                                    <option v-for="option in roleTabs" :key="option.value" :value="option.value">
+                                        {{ option.label }}
+                                    </option>
+                                </select>
+                                <svg class="pointer-events-none absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7" />
+                                </svg>
+                            </div>
+                        </div>
+
+                        <div class="min-w-[190px]">
+                            <label class="mb-1.5 block text-[11px] font-bold uppercase tracking-[0.12em] text-muted-foreground">Location</label>
+                            <div class="relative">
+                                <select
+                                    v-model="locationFilter"
+                                    class="shopify-select h-11 w-full appearance-none rounded-xl border border-border bg-bg-elevated pl-4 pr-10 text-sm font-semibold text-foreground shadow-sm transition focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary"
+                                >
+                                    <option v-for="option in locationTabs" :key="option.value" :value="option.value">
+                                        {{ option.label }}
+                                    </option>
+                                </select>
+                                <svg class="pointer-events-none absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7" />
+                                </svg>
+                            </div>
+                        </div>
                     </div>
 
                     <div class="relative w-full md:w-72">
@@ -193,8 +261,20 @@ const deleteUser = () => {
                 <div class="overflow-x-auto">
                     <div class="min-w-[980px]">
                         <div class="grid grid-cols-[1.45fr_1.6fr_0.95fr_1.15fr_1fr_0.95fr] items-center gap-6 border-b border-border bg-bg-elevated/40 px-6 py-4">
-                            <span class="text-xs font-bold text-muted-foreground uppercase tracking-wider">User</span>
-                            <span class="text-xs font-bold text-muted-foreground uppercase tracking-wider">Email</span>
+                            <button type="button" @click="toggleSort('name')" class="inline-flex items-center gap-2 text-left text-xs font-bold uppercase tracking-wider text-muted-foreground transition hover:text-foreground">
+                                <span>User</span>
+                                <span class="flex flex-col leading-none">
+                                    <svg class="h-2.5 w-2.5" :class="sortIconClass('name', 'asc')" fill="currentColor" viewBox="0 0 20 20"><path d="M10 6l-4 4h8l-4-4z" /></svg>
+                                    <svg class="h-2.5 w-2.5 -mt-0.5" :class="sortIconClass('name', 'desc')" fill="currentColor" viewBox="0 0 20 20"><path d="M10 14l4-4H6l4 4z" /></svg>
+                                </span>
+                            </button>
+                            <button type="button" @click="toggleSort('email')" class="inline-flex items-center gap-2 text-left text-xs font-bold uppercase tracking-wider text-muted-foreground transition hover:text-foreground">
+                                <span>Email</span>
+                                <span class="flex flex-col leading-none">
+                                    <svg class="h-2.5 w-2.5" :class="sortIconClass('email', 'asc')" fill="currentColor" viewBox="0 0 20 20"><path d="M10 6l-4 4h8l-4-4z" /></svg>
+                                    <svg class="h-2.5 w-2.5 -mt-0.5" :class="sortIconClass('email', 'desc')" fill="currentColor" viewBox="0 0 20 20"><path d="M10 14l4-4H6l4 4z" /></svg>
+                                </span>
+                            </button>
                             <span class="text-xs font-bold text-muted-foreground uppercase tracking-wider">Role</span>
                             <span class="text-xs font-bold text-muted-foreground uppercase tracking-wider">Location</span>
                             <span class="text-xs font-bold text-muted-foreground uppercase tracking-wider">Joined</span>
@@ -249,9 +329,18 @@ const deleteUser = () => {
 
                 <div class="flex flex-col gap-4 border-t border-border px-4 py-4 md:flex-row md:items-center md:justify-between md:px-6">
                     <div class="flex items-center gap-4 text-sm text-muted-foreground">
-                        <select class="h-10 rounded-lg border border-border bg-bg-elevated px-3 text-sm text-foreground focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary">
-                            <option selected>10</option>
-                        </select>
+                        <div class="relative">
+                            <select v-model="perPageFilter" class="shopify-select h-10 rounded-lg border border-border bg-bg-elevated pl-3 pr-8 text-sm text-foreground focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary">
+                                <option value="5">5</option>
+                                <option value="10">10</option>
+                                <option value="25">25</option>
+                                <option value="50">50</option>
+                                <option value="all">All</option>
+                            </select>
+                            <svg class="pointer-events-none absolute right-2.5 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7" />
+                            </svg>
+                        </div>
                         <span>{{ paginationSummary }}</span>
                     </div>
 
@@ -271,7 +360,7 @@ const deleteUser = () => {
             </div>
 
             <!-- Create/Edit Modal -->
-            <Modal :show="showModal" @close="closeModal" max-width="md" contained>
+            <Modal :show="showModal" @close="closeModal" max-width="md">
                 <div class="p-8 bg-bg-card border border-border rounded-xl">
                     <div class="flex items-center gap-3 mb-6">
                         <div class="w-10 h-10 rounded-xl bg-primary/10 flex items-center justify-center text-primary">
@@ -297,34 +386,92 @@ const deleteUser = () => {
 
                         <div>
                             <label class="text-xs font-bold text-muted-foreground uppercase tracking-wider mb-2 block">Role</label>
-                            <select v-model="form.role" class="w-full h-11 px-4 rounded-xl bg-bg-elevated border border-border text-sm text-foreground focus:outline-none focus:border-primary transition-all shadow-inner uppercase tracking-wide font-medium text-xs">
-                                <option value="member">Member</option>
-                                <option value="manager">Manager</option>
-                                <option value="admin">Admin</option>
-                            </select>
+                            <div class="relative">
+                                <select v-model="form.role" class="shopify-select w-full h-11 appearance-none rounded-xl border border-border bg-bg-elevated pl-4 pr-10 text-sm font-semibold text-foreground focus:outline-none focus:border-primary transition-all shadow-inner">
+                                    <option value="member">Member</option>
+                                    <option value="manager">Manager</option>
+                                    <option value="admin">Admin</option>
+                                </select>
+                                <svg class="pointer-events-none absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7" />
+                                </svg>
+                            </div>
                             <p v-if="form.errors.role" class="text-error text-xs mt-1">{{ form.errors.role }}</p>
                         </div>
 
                         <div>
                             <label class="text-xs font-bold text-muted-foreground uppercase tracking-wider mb-2 block">Location</label>
-                            <select v-model="form.location" class="w-full h-11 px-4 rounded-xl bg-bg-elevated border border-border text-sm text-foreground focus:outline-none focus:border-primary transition-all shadow-inner uppercase tracking-wide font-medium text-xs appearance-none">
-                                <option value="" disabled>Select Location...</option>
-                                <option value="Ahmedabad">Ahmedabad</option>
-                                <option value="Rajkot">Rajkot</option>
-                            </select>
+                            <div class="relative">
+                                <select v-model="form.location" class="shopify-select w-full h-11 appearance-none rounded-xl border border-border bg-bg-elevated pl-4 pr-10 text-sm font-semibold text-foreground focus:outline-none focus:border-primary transition-all shadow-inner">
+                                    <option value="" disabled>Select location...</option>
+                                    <option value="Ahmedabad">Ahmedabad</option>
+                                    <option value="Rajkot">Rajkot</option>
+                                </select>
+                                <svg class="pointer-events-none absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7" />
+                                </svg>
+                            </div>
                             <p v-if="form.errors.location" class="text-error text-xs mt-1">{{ form.errors.location }}</p>
                         </div>
 
-                        <div>
-                            <label class="text-xs font-bold text-muted-foreground uppercase tracking-wider mb-2 block">Password</label>
-                            <input v-model="form.password" type="password" class="w-full h-11 px-4 rounded-xl bg-bg-elevated border border-border text-sm text-foreground focus:outline-none focus:border-primary transition-all shadow-inner" :required="!isEditing" />
-                            <p v-if="form.errors.password" class="text-error text-xs mt-1">{{ form.errors.password }}</p>
-                        </div>
+                        <template v-if="!isEditing">
+                            <div>
+                                <label class="text-xs font-bold text-muted-foreground uppercase tracking-wider mb-2 block">Password Setup</label>
+                                <div class="grid gap-2 sm:grid-cols-2">
+                                    <label class="flex cursor-pointer items-center gap-3 rounded-xl border px-4 py-3 transition"
+                                        :class="form.password_mode === 'auto' ? 'border-primary/40 bg-primary/5' : 'border-border bg-bg-elevated/40 hover:border-primary/25'">
+                                        <input v-model="form.password_mode" type="radio" value="auto" class="h-4 w-4 border-border text-primary focus:ring-primary" />
+                                        <span class="min-w-0">
+                                            <span class="block text-sm font-semibold text-foreground">Auto-generate</span>
+                                            <span class="mt-1 block text-xs text-muted-foreground">System creates a password and sends it by email.</span>
+                                        </span>
+                                    </label>
 
-                        <div>
-                            <label class="text-xs font-bold text-muted-foreground uppercase tracking-wider mb-2 block">Confirm Password</label>
-                            <input v-model="form.password_confirmation" type="password" class="w-full h-11 px-4 rounded-xl bg-bg-elevated border border-border text-sm text-foreground focus:outline-none focus:border-primary transition-all shadow-inner" :required="!isEditing" />
-                        </div>
+                                    <label class="flex cursor-pointer items-center gap-3 rounded-xl border px-4 py-3 transition"
+                                        :class="form.password_mode === 'manual' ? 'border-primary/40 bg-primary/5' : 'border-border bg-bg-elevated/40 hover:border-primary/25'">
+                                        <input v-model="form.password_mode" type="radio" value="manual" class="h-4 w-4 border-border text-primary focus:ring-primary" />
+                                        <span class="min-w-0">
+                                            <span class="block text-sm font-semibold text-foreground">Set manually</span>
+                                            <span class="mt-1 block text-xs text-muted-foreground">Admin enters password now and it is sent to user.</span>
+                                        </span>
+                                    </label>
+                                </div>
+                                <p v-if="form.errors.password_mode" class="text-error text-xs mt-1">{{ form.errors.password_mode }}</p>
+                            </div>
+
+                            <div v-if="form.password_mode === 'auto'" class="rounded-xl border border-primary/20 bg-primary/5 px-4 py-3">
+                                <p class="text-sm font-semibold text-foreground">Password will be auto-generated</p>
+                                <p class="mt-1 text-xs text-muted-foreground">
+                                    A credentials email with login link, assigned role, email, and auto-generated password will be sent to this user.
+                                </p>
+                            </div>
+
+                            <template v-else>
+                                <div>
+                                    <label class="text-xs font-bold text-muted-foreground uppercase tracking-wider mb-2 block">Password</label>
+                                    <input v-model="form.password" type="password" class="w-full h-11 px-4 rounded-xl bg-bg-elevated border border-border text-sm text-foreground focus:outline-none focus:border-primary transition-all shadow-inner" />
+                                    <p v-if="form.errors.password" class="text-error text-xs mt-1">{{ form.errors.password }}</p>
+                                </div>
+
+                                <div>
+                                    <label class="text-xs font-bold text-muted-foreground uppercase tracking-wider mb-2 block">Confirm Password</label>
+                                    <input v-model="form.password_confirmation" type="password" class="w-full h-11 px-4 rounded-xl bg-bg-elevated border border-border text-sm text-foreground focus:outline-none focus:border-primary transition-all shadow-inner" />
+                                </div>
+                            </template>
+                        </template>
+
+                        <template v-else>
+                            <div>
+                                <label class="text-xs font-bold text-muted-foreground uppercase tracking-wider mb-2 block">New Password (Optional)</label>
+                                <input v-model="form.password" type="password" class="w-full h-11 px-4 rounded-xl bg-bg-elevated border border-border text-sm text-foreground focus:outline-none focus:border-primary transition-all shadow-inner" />
+                                <p v-if="form.errors.password" class="text-error text-xs mt-1">{{ form.errors.password }}</p>
+                            </div>
+
+                            <div>
+                                <label class="text-xs font-bold text-muted-foreground uppercase tracking-wider mb-2 block">Confirm New Password</label>
+                                <input v-model="form.password_confirmation" type="password" class="w-full h-11 px-4 rounded-xl bg-bg-elevated border border-border text-sm text-foreground focus:outline-none focus:border-primary transition-all shadow-inner" />
+                            </div>
+                        </template>
                     </div>
 
                     <div class="mt-8 flex justify-end gap-3">
@@ -338,7 +485,7 @@ const deleteUser = () => {
             </Modal>
 
             <!-- Delete Confirmation Modal -->
-            <Modal :show="showDeleteModal" @close="showDeleteModal = false" max-width="sm" contained>
+            <Modal :show="showDeleteModal" @close="showDeleteModal = false" max-width="sm">
                 <div class="p-6 bg-bg-card border border-border rounded-xl">
                     <h2 class="text-lg font-bold text-foreground">Delete User</h2>
 
@@ -355,3 +502,16 @@ const deleteUser = () => {
         </div>
     </AuthenticatedLayout>
 </template>
+
+<style scoped>
+.shopify-select {
+    -webkit-appearance: none;
+    -moz-appearance: none;
+    appearance: none;
+    background-image: none !important;
+}
+
+.shopify-select::-ms-expand {
+    display: none;
+}
+</style>

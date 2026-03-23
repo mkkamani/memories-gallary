@@ -53,7 +53,7 @@ class AlbumController extends Controller
         }
 
         // Location filter
-        $userLocation = auth()->user()->location;
+        $userLocation = auth()->user()->location ?: "Rajkot";
         $locationFilter = $request->has("location")
             ? $request->location
             : $userLocation;
@@ -179,6 +179,7 @@ class AlbumController extends Controller
                 $breadcrumbs = $parent
                     ->ancestors()
                     ->reverse()
+                    ->values()
                     ->map(
                         fn($a) => [
                             "id" => $a->id,
@@ -279,7 +280,9 @@ class AlbumController extends Controller
         // otherwise go to the albums index.
         if (!empty($data["parent_id"])) {
             $parent = Album::find($data["parent_id"]);
-            return redirect()->route("albums.show", $parent?->slug ?? "albums.index");
+            return $parent
+                ? redirect()->route("albums.show", $parent->path)
+                : redirect()->route("albums.index");
         }
 
         return redirect()->route("albums.index");
@@ -463,7 +466,7 @@ class AlbumController extends Controller
         }
 
         return redirect()
-            ->route("albums.show", $baseAlbum)
+                ->route("albums.show", $baseAlbum->path)
             ->with("success", "Album imported successfully.");
     }
 
@@ -530,8 +533,21 @@ class AlbumController extends Controller
     // Upload Page / Upload Store
     // -------------------------------------------------------------------------
 
-    public function uploadPage(Album $album)
+    public function uploadPage(string $path, Request $request)
     {
+        $album = $this->resolveAlbumFromPath($path);
+
+        $requestedPath = trim((string) $path, '/');
+        $canonicalPath = (string) $album->path;
+        if ($requestedPath !== $canonicalPath) {
+            $queryString = $request->getQueryString();
+            $canonicalUrl = route('albums.upload', $canonicalPath);
+
+            return redirect()->to(
+                $queryString ? ($canonicalUrl . '?' . $queryString) : $canonicalUrl,
+            );
+        }
+
         $this->authorize("view", $album);
 
         $album->load([
@@ -539,10 +555,25 @@ class AlbumController extends Controller
             "media" => fn($q) => $q->latest()->limit(1),
         ]);
 
+        $breadcrumbs = $album
+            ->ancestors()
+            ->reverse()
+            ->values()
+            ->map(
+                fn($a) => [
+                    "id" => $a->id,
+                    "slug" => $a->slug,
+                    "path" => $a->path,
+                    "title" => $a->title,
+                ],
+            )
+            ->toArray();
+
         return Inertia::render("Albums/Upload", [
             "album" => [
                 "id" => $album->id,
                 "slug" => $album->slug,
+                "path" => $album->path,
                 "title" => $album->title,
                 "description" => $album->description,
                 "location" => $album->location,
@@ -557,16 +588,19 @@ class AlbumController extends Controller
                     ]
                     : null,
             ],
+            "breadcrumbs" => $breadcrumbs,
         ]);
     }
 
     public function uploadStore(
         Request $request,
-        Album $album,
+        string $path,
         MediaService $mediaService,
         AlbumService $albumService,
         ActivityLogService $logService,
     ) {
+        $album = $this->resolveAlbumFromPath($path);
+
         $this->authorize("view", $album);
 
         // ── PHP-level upload pre-flight ───────────────────────────────────────
@@ -709,7 +743,7 @@ class AlbumController extends Controller
                 }
 
                 return redirect()
-                    ->route("albums.show", $album)
+                        ->route("albums.show", $album->path)
                     ->with(
                         "success",
                         "ZIP imported successfully into '{$album->title}'.",
@@ -728,7 +762,7 @@ class AlbumController extends Controller
             }
 
             return redirect()
-                ->route("albums.show", $album)
+                ->route("albums.show", $album->path)
                 ->with(
                     "success",
                     $count === 1
@@ -765,9 +799,18 @@ class AlbumController extends Controller
 
     public function show($path, Request $request)
     {
-        $slug = basename($path);
-        /** @var Album */
-        $album = Album::where('slug', $slug)->firstOrFail();
+        $album = $this->resolveAlbumFromPath((string) $path);
+
+        $requestedPath = trim((string) $path, '/');
+        $canonicalPath = (string) $album->path;
+        if ($requestedPath !== $canonicalPath) {
+            $queryString = $request->getQueryString();
+            $canonicalUrl = route('albums.show', $canonicalPath);
+
+            return redirect()->to(
+                $queryString ? ($canonicalUrl . '?' . $queryString) : $canonicalUrl,
+            );
+        }
 
         $this->authorize("view", $album);
 
@@ -775,11 +818,12 @@ class AlbumController extends Controller
             "is_pinned",
             auth()->user()->pinnedAlbums()->where("albums.id", $album->id)->exists(),
         );
+        $album->setAttribute('path', $album->path);
 
         $paginatedMedia = $album->media()
             ->with("user:id,name,role")
             ->orderBy("created_at", "desc")
-            ->paginate(10)
+            ->paginate(20)
             ->withQueryString();
 
         if ($request->wantsJson() && !$request->header('X-Inertia')) {
@@ -802,6 +846,7 @@ class AlbumController extends Controller
         if ($album->children) {
             $album->children->transform(function ($child) {
                 $thumbnailMedia = $child->media->first();
+                $child->setAttribute('path', $child->path);
                 $child->thumbnail = $thumbnailMedia?->url;
                 $child->thumbnail_media = $thumbnailMedia
                     ? [
@@ -819,6 +864,7 @@ class AlbumController extends Controller
         $breadcrumbs = $album
             ->ancestors()
             ->reverse()
+            ->values()
             ->map(
                 fn($a) => [
                     "id" => $a->id,
@@ -876,7 +922,14 @@ class AlbumController extends Controller
         $this->authorize("update", $album);
 
         return Inertia::render("Albums/Edit", [
-            "album" => $album,
+            "album" => [
+                "id" => $album->id,
+                "slug" => $album->slug,
+                "path" => $album->path,
+                "title" => $album->title,
+                "description" => $album->description,
+                "location" => $album->location,
+            ],
         ]);
     }
 
@@ -892,13 +945,25 @@ class AlbumController extends Controller
             "title" => "required|string|max:255",
             "description" => "nullable|string",
             "location" => "nullable|string|in:Rajkot,Ahmedabad",
+            "return_to_path" => "nullable|string|max:2048",
         ]);
+
+        $returnToPath = isset($data["return_to_path"])
+            ? trim((string) $data["return_to_path"], "/")
+            : null;
+        unset($data["return_to_path"]);
 
         $album = $albumService->update($album, $data);
         $logService->logAlbumUpdated($album);
 
+        if (!empty($returnToPath)) {
+            return redirect()
+                ->route("albums.show", $returnToPath)
+                ->with("success", "Album updated successfully.");
+        }
+
         return redirect()
-            ->route("albums.show", $album)
+            ->route("albums.show", $album->path)
             ->with("success", "Album updated successfully.");
     }
 
@@ -956,6 +1021,60 @@ class AlbumController extends Controller
             "k" => $number * 1024,
             default => $number,
         };
+    }
+
+    private function resolveAlbumFromPath(string $path): Album
+    {
+        $segments = array_values(
+            array_filter(explode('/', trim((string) $path, '/'))),
+        );
+
+        if (empty($segments)) {
+            abort(404);
+        }
+
+        $allowedLocations = [
+            'rajkot' => 'Rajkot',
+            'ahmedabad' => 'Ahmedabad',
+        ];
+
+        $location = null;
+        $firstSegment = strtolower($segments[0]);
+        if (array_key_exists($firstSegment, $allowedLocations)) {
+            $location = $allowedLocations[$firstSegment];
+            array_shift($segments);
+        }
+
+        if ($location === null) {
+            $location = auth()->user()->location ?: 'Rajkot';
+        }
+
+        if (empty($segments)) {
+            abort(404);
+        }
+
+        $parentId = null;
+        $album = null;
+
+        foreach ($segments as $slug) {
+            $query = Album::query()
+                ->where('slug', $slug)
+                ->where('parent_id', $parentId);
+
+            if ($location !== null) {
+                $query->where('location', $location);
+            }
+
+            $album = $query->first();
+
+            if (!$album) {
+                abort(404);
+            }
+
+            $parentId = $album->id;
+        }
+
+        return $album;
     }
 
     private function importZipIntoAlbum(
@@ -1037,7 +1156,7 @@ class AlbumController extends Controller
                 ->where("user_id", auth()->id())
                 ->where("created_at", ">=", now()->subDays(30))
                 ->orderBy("created_at", "desc")
-                ->paginate(10)
+                ->paginate(20)
                 ->withQueryString();
 
             $album = [
@@ -1055,7 +1174,7 @@ class AlbumController extends Controller
                 ->whereRaw("DAY(created_at) = ?", [now()->day])
                 ->whereRaw("YEAR(created_at) < ?", [now()->year])
                 ->orderBy("created_at", "desc")
-                ->paginate(10)
+                ->paginate(20)
                 ->withQueryString();
 
             $album = [

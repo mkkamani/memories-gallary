@@ -50,6 +50,7 @@ const emit = defineEmits(['load']);
 const resolvedUrl = ref('');
 const conversionFailed = ref(false);
 const isLoading = ref(false);
+const hasImageLoaded = ref(false);
 
 let objectUrl = null;
 let runId = 0;
@@ -92,6 +93,7 @@ const syncUrl = async () => {
     cleanupObjectUrl();
     conversionFailed.value = false;
     isLoading.value = false;
+    hasImageLoaded.value = false;
     resolvedUrl.value = props.media?.url || '';
 
     if (!props.media?.url || isVideo.value || !isHeic.value) {
@@ -142,6 +144,7 @@ const syncUrl = async () => {
 
 const onImgLoad = (e) => {
     const img = e.target;
+    hasImageLoaded.value = true;
     emit('load', { naturalWidth: img.naturalWidth, naturalHeight: img.naturalHeight });
 };
 
@@ -151,6 +154,7 @@ const onVideoMeta = (e) => {
 };
 
 const onImageError = () => {
+    hasImageLoaded.value = true;
     if (isHeic.value) {
         conversionFailed.value = true;
     }
@@ -187,18 +191,44 @@ onBeforeUnmount(() => {
         <div class="orange-loader"></div>
     </div>
 
-    <img
-        v-else-if="!conversionFailed"
-        v-bind="$attrs"
-        :src="resolvedUrl"
-        :alt="alt || media?.file_name || 'Media'"
-        :class="imageClass"
-        loading="lazy"
-        @load="onImgLoad"
-        @error="onImageError"
-    />
+    <div v-else-if="!conversionFailed" class="relative flex items-center justify-center w-full h-full overflow-hidden">
+        <div v-if="!hasImageLoaded" class="media-blur-placeholder" aria-hidden="true"></div>
+        <img
+            v-bind="$attrs"
+            :src="resolvedUrl"
+            :alt="alt || media?.file_name || 'Media'"
+            :class="[imageClass, hasImageLoaded ? 'media-image-ready' : 'media-image-loading']"
+            loading="lazy"
+            @load="onImgLoad"
+            @error="onImageError"
+        />
+    </div>
 
     <div v-else :class="fallbackClass">
         {{ fallbackLabel }}
     </div>
 </template>
+
+<style scoped>
+.media-blur-placeholder {
+    position: absolute;
+    inset: 0;
+    background: linear-gradient(135deg, rgba(243, 244, 246, 0.95), rgba(229, 231, 235, 0.95));
+    filter: blur(14px);
+    transform: scale(1.02);
+}
+
+.media-image-loading {
+    opacity: 0.7;
+    filter: blur(14px);
+    transform: scale(1.03);
+    transition: opacity 280ms ease, filter 320ms ease, transform 320ms ease;
+}
+
+.media-image-ready {
+    opacity: 1;
+    filter: blur(0);
+    transform: scale(1);
+    transition: opacity 280ms ease, filter 320ms ease, transform 320ms ease;
+}
+</style>
