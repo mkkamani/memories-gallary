@@ -7,6 +7,7 @@ use App\Models\Media;
 use App\Models\User;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\Log;
+use App\Interfaces\StorageServiceInterface;
 
 class MediaService
 {

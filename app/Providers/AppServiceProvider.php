@@ -5,7 +5,7 @@ namespace App\Providers;
 use Illuminate\Support\Facades\Vite;
 use Illuminate\Support\ServiceProvider;
 use Illuminate\Support\Facades\Schema;
-use App\Services\StorageServiceInterface;
+use App\Interfaces\StorageServiceInterface;
 use App\Services\R2StorageService;
 
 class AppServiceProvider extends ServiceProvider

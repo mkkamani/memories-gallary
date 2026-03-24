@@ -2,9 +2,11 @@
 
 namespace App\Services;
 
-use App\Models\Album;
 use App\Models\User;
+use App\Models\Album;
 use Illuminate\Support\Str;
+use Illuminate\Support\Facades\Log;
+use App\Interfaces\StorageServiceInterface;
 
 class AlbumService
 {
@@ -58,7 +60,7 @@ class AlbumService
         try {
             $this->storageService->createDirectory($r2Path);
         } catch (\Throwable $e) {
-            \Log::error("AlbumService: failed to create R2 directory.", [
+            Log::error("AlbumService: failed to create R2 directory.", [
                 "album_id" => $album->id,
                 "r2_path" => $r2Path,
                 "error" => $e->getMessage(),
