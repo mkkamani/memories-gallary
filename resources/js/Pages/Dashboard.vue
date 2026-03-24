@@ -163,14 +163,6 @@ const memberUsagePercent = computed(() => {
                         <div><p class="text-xs font-bold text-muted-foreground uppercase tracking-widest">Albums Joined</p><h3 class="text-3xl font-bold font-mono text-foreground mt-1">{{ stats.totalAlbums }}</h3></div>
                         <div class="dash-icon-box"><svg class="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 7v10a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-6l-2-2H5a2 2 0 00-2 2z"/></svg></div>
                     </div>
-                    <div class="dash-card flex items-center justify-between lg:col-span-1">
-                        <div>
-                            <p class="text-xs font-bold text-muted-foreground uppercase tracking-widest">My Storage</p>
-                            <h3 class="text-3xl font-bold font-mono text-foreground mt-1">{{ stats.myStorageUsed }}</h3>
-                            <p class="text-[10px] text-muted-foreground mt-1">{{ stats.myUploadsCount }} files uploaded</p>
-                        </div>
-                        <div class="dash-icon-box"><svg class="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7v8a2 2 0 002 2h6M8 7V5a2 2 0 012-2h4.586a1 1 0 01.707.293l4.414 4.414a1 1 0 01.293.707V15a2 2 0 01-2 2h-2M8 7H6a2 2 0 00-2 2v10a2 2 0 002 2h8a2 2 0 002-2v-2"/></svg></div>
-                    </div>
                 </template>
             </div>
 
@@ -274,7 +266,7 @@ const memberUsagePercent = computed(() => {
                         </div>
                     </template>
 
-                    <div class="dash-card !p-6 space-y-4">
+                    <div v-if="userRole === 'admin'" class="dash-card !p-6 space-y-4">
                         <h3 class="font-heading font-bold text-sm uppercase tracking-widest text-foreground">Usage Summary</h3>
                         <div class="space-y-4">
                             <div>

@@ -166,6 +166,34 @@ const totalFileCount = computed(() => {
     return files.value.length;
 });
 
+const emptyStateText = computed(() => {
+    if (filter.value === 'Videos') {
+        return {
+            title: 'No video found.',
+            message: 'Click "New" to upload media/folder.',
+        };
+    }
+
+    if (filter.value === 'Photos') {
+        return {
+            title: 'No photo found.',
+            message: 'Click "New" to upload media/folder.',
+        };
+    }
+
+    if (filter.value === 'Folders') {
+        return {
+            title: 'No folder found.',
+            message: 'Click "New" to upload media/folder.',
+        };
+    }
+
+    return {
+        title: 'This album is empty.',
+        message: 'Click "New" to upload media/folder.',
+    };
+});
+
 onMounted(() => {
     window.addEventListener('resize', recalcAllSpans);
     nextTick(() => recalcAllSpans());
@@ -416,16 +444,7 @@ const {
                             showActionMenu === 'folder-'+folder.id ? 'z-50 menu-open' : '',
                         ]">
                         <div class="w-14 h-14 rounded-xl bg-primary/5 flex items-center justify-center shrink-0 transition-transform group-hover:scale-110 overflow-hidden border border-primary/10">
-                            <MediaRenderer
-                                v-if="folder.thumbnail_media"
-                                :media="folder.thumbnail_media"
-                                :alt="folder.title"
-                                :use-thumbnail="true"
-                                image-class="w-full h-full object-cover rounded-xl"
-                                video-class="w-full h-full object-cover rounded-xl"
-                                fallback-class="flex h-full w-full items-center justify-center rounded-xl bg-primary/10 text-[10px] font-bold uppercase tracking-[0.22em] text-primary"
-                            />
-                            <div v-else class="w-full h-full rounded-xl bg-gradient-to-br from-primary/20 to-primary/10 flex items-center justify-center text-primary">
+                            <div class="w-full h-full rounded-xl bg-gradient-to-br from-primary/20 to-primary/10 flex items-center justify-center text-primary">
                                 <svg class="w-6 h-6 fill-current" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 7v10a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-6l-2-2H5a2 2 0 00-2 2z"/></svg>
                             </div>
                         </div>
@@ -606,8 +625,8 @@ const {
                 <div class="w-20 h-20 rounded-full bg-bg-elevated flex items-center justify-center text-muted-foreground mb-6">
                     <svg class="w-10 h-10" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12"/></svg>
                 </div>
-                <h3 class="text-xl font-bold text-foreground">This album is empty</h3>
-                <p class="text-muted-foreground mt-1 text-center">Click New to add folders and upload media<br/>All members can contribute</p>
+                <h3 class="text-xl font-bold text-foreground">{{ emptyStateText.title }}</h3>
+                <p class="text-muted-foreground mt-1 text-center">{{ emptyStateText.message }}</p>
             </div>
 
         </div>

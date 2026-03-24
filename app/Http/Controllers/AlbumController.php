@@ -447,7 +447,7 @@ class AlbumController extends Controller
                 $mediaService,
             );
         } catch (\Throwable $e) {
-            \Log::error("AlbumController: ZIP import failed.", [
+            Log::error("AlbumController: ZIP import failed.", [
                 "file" => $uploadedFile->getClientOriginalName(),
                 "error" => $e->getMessage(),
                 "trace" => $e->getTraceAsString(),
@@ -513,18 +513,29 @@ class AlbumController extends Controller
                 (str_starts_with($mime, "image") ||
                     str_starts_with($mime, "video"))
             ) {
-                $uploadedFile = new \Illuminate\Http\UploadedFile(
-                    $file->getRealPath(),
-                    $file->getFilename(),
-                    $mime,
-                    null,
-                    true,
-                );
-                $mediaService->upload(
-                    $uploadedFile,
-                    auth()->user(),
-                    $parentAlbum,
-                );
+                try {
+                    $uploadedFile = new \Illuminate\Http\UploadedFile(
+                        $file->getRealPath(),
+                        $file->getFilename(),
+                        $mime,
+                        null,
+                        true,
+                    );
+                    $mediaService->upload(
+                        $uploadedFile,
+                        auth()->user(),
+                        $parentAlbum,
+                    );
+
+                    // Free memory after each file to prevent exhaustion
+                    unset($uploadedFile);
+                    gc_collect_cycles();
+                } catch (\Throwable $e) {
+                    Log::warning('Failed to upload extracted media file', [
+                        'file' => $file->getFilename(),
+                        'error' => $e->getMessage(),
+                    ]);
+                }
             }
         }
     }
@@ -599,6 +610,11 @@ class AlbumController extends Controller
         AlbumService $albumService,
         ActivityLogService $logService,
     ) {
+        // Extend time limits for large file uploads
+        set_time_limit(0);  // No time limit for upload processing
+        ini_set('max_execution_time', '0');
+        ini_set('max_input_time', '0');
+
         $album = $this->resolveAlbumFromPath($path);
 
         $this->authorize("view", $album);
@@ -1116,8 +1132,24 @@ class AlbumController extends Controller
                 true,
             );
 
+            // Log extraction start
+            Log::info('ZIP extraction starting', [
+                'size_mb' => round(filesize($zipPath) / 1048576),
+                'memory_mb' => round(memory_get_usage(true) / 1048576),
+            ]);
+
+            // Extract with memory management
             $zip->extractTo($extractPath);
             $zip->close();
+
+            // Free memory after ZIP operations
+            unset($zip);
+            gc_collect_cycles();
+
+            // Log extraction complete
+            Log::info('ZIP extraction complete', [
+                'memory_mb' => round(memory_get_usage(true) / 1048576),
+            ]);
 
             if (
                 \Illuminate\Support\Facades\File::exists(

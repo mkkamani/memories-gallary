@@ -28,10 +28,16 @@ class DashboardController extends Controller
 
     public function index(Request $request)
     {
-        $user = auth()->user();
+        $user = $request->user();
 
         $totalUsers  = User::count();
-        $totalAlbums = Album::count();
+        $albumQuery = Album::query()->whereNull('parent_id');
+
+        if ($user->role !== 'admin' && !empty($user->location)) {
+            $albumQuery->where('location', $user->location);
+        }
+
+        $totalAlbums = (clone $albumQuery)->count();
         $mediaAssets = Media::count();
 
         // ── Storage: sum file_size (bytes) stored at upload time ─────────────
@@ -88,7 +94,7 @@ class DashboardController extends Controller
             });
 
         // Specifically for Manager
-        $myAlbums   = Album::where('user_id', $user->id)->count();
+        $myAlbums   = (clone $albumQuery)->where('user_id', $user->id)->count();
         $newUploads = Media::where('created_at', '>=', now()->subDays(7))->count();
 
         // Specifically for Member

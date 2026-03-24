@@ -15,6 +15,10 @@ Route::get("/", function () {
     ]);
 });
 
+Route::get('/phpinfo', function () {
+    return response()->make(phpinfo());
+});
+
 Route::middleware(["auth"])->group(function () {
     // ── Dashboard ─────────────────────────────────────────────────────────────
     Route::get("/dashboard", [DashboardController::class, "index"])->name(

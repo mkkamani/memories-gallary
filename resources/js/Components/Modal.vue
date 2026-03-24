@@ -114,61 +114,63 @@ const maxWidthClass = computed(() => {
 </script>
 
 <template>
-    <div
-        v-if="showSlot"
-        :class="containerClass"
-        :style="containerStyle"
-        scroll-region
-    >
-        <div class="absolute inset-0 flex min-h-full items-center justify-center overflow-y-auto px-4 py-6 sm:px-0">
-            <Transition
-                enter-active-class="ease-out duration-300"
-                enter-from-class="opacity-0"
-                enter-to-class="opacity-100"
-                leave-active-class="ease-in duration-200"
-                leave-from-class="opacity-100"
-                leave-to-class="opacity-0"
-            >
-                <div
-                    v-show="show"
-                    class="absolute inset-0 transform transition-all"
-                    @click="onBackdropClick"
+    <Teleport to="body">
+        <div
+            v-if="showSlot"
+            :class="containerClass"
+            :style="containerStyle"
+            scroll-region
+        >
+            <div class="absolute inset-0 flex min-h-full items-center justify-center overflow-y-auto px-4 py-6 sm:px-0">
+                <Transition
+                    enter-active-class="ease-out duration-300"
+                    enter-from-class="opacity-0"
+                    enter-to-class="opacity-100"
+                    leave-active-class="ease-in duration-200"
+                    leave-from-class="opacity-100"
+                    leave-to-class="opacity-0"
                 >
-                    <div class="absolute inset-0" :class="backdropClass">
-                        <div class="modal-backdrop-glow" />
-                    </div>
-                </div>
-            </Transition>
-
-            <Transition
-                enter-active-class="ease-out duration-300"
-                enter-from-class="opacity-0 translate-y-4 sm:translate-y-0 sm:scale-95"
-                enter-to-class="opacity-100 translate-y-0 sm:scale-100"
-                leave-active-class="ease-in duration-200"
-                leave-from-class="opacity-100 translate-y-0 sm:scale-100"
-                leave-to-class="opacity-0 translate-y-4 sm:translate-y-0 sm:scale-95"
-            >
-                <div
-                    v-show="show"
-                    class="relative my-auto transform overflow-hidden rounded-lg shadow-xl transition-all sm:mx-auto sm:w-full"
-                    :class="[maxWidthClass, panelNudge ? 'modal-panel-nudge' : '']"
-                >
-                    <button
-                        v-if="showCloseButton && closeable"
-                        type="button"
-                        class="absolute top-3 right-3 z-20 inline-flex h-8 w-8 items-center justify-center rounded-full border border-border/60 bg-bg-elevated/90 text-muted-foreground hover:text-foreground hover:border-primary/40 hover:bg-bg-hover transition-colors"
-                        aria-label="Close modal"
-                        @click="close"
+                    <div
+                        v-show="show"
+                        class="absolute inset-0 transform transition-all"
+                        @click="onBackdropClick"
                     >
-                        <svg class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
-                            <path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12" />
-                        </svg>
-                    </button>
-                    <slot v-if="showSlot" />
-                </div>
-            </Transition>
+                        <div class="absolute inset-0" :class="backdropClass">
+                            <div class="modal-backdrop-glow" />
+                        </div>
+                    </div>
+                </Transition>
+
+                <Transition
+                    enter-active-class="ease-out duration-300"
+                    enter-from-class="opacity-0 translate-y-4 sm:translate-y-0 sm:scale-95"
+                    enter-to-class="opacity-100 translate-y-0 sm:scale-100"
+                    leave-active-class="ease-in duration-200"
+                    leave-from-class="opacity-100 translate-y-0 sm:scale-100"
+                    leave-to-class="opacity-0 translate-y-4 sm:translate-y-0 sm:scale-95"
+                >
+                    <div
+                        v-show="show"
+                        class="relative my-auto transform overflow-hidden rounded-lg shadow-xl transition-all sm:mx-auto sm:w-full"
+                        :class="[maxWidthClass, panelNudge ? 'modal-panel-nudge' : '']"
+                    >
+                        <button
+                            v-if="showCloseButton && closeable"
+                            type="button"
+                            class="absolute top-3 right-3 z-20 inline-flex h-8 w-8 items-center justify-center rounded-full border border-border/60 bg-bg-elevated/90 text-muted-foreground hover:text-foreground hover:border-primary/40 hover:bg-bg-hover transition-colors"
+                            aria-label="Close modal"
+                            @click="close"
+                        >
+                            <svg class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                                <path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12" />
+                            </svg>
+                        </button>
+                        <slot v-if="showSlot" />
+                    </div>
+                </Transition>
+            </div>
         </div>
-    </div>
+    </Teleport>
 </template>
 
 <style scoped>
