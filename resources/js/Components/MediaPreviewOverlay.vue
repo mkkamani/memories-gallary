@@ -215,31 +215,6 @@ const downloadCurrent = () => {
     downloadFile(downloadUrl, props.media.file_name || 'media');
 };
 
-const shareCurrent = async () => {
-    if (!props.media?.url) {
-        return;
-    }
-
-    const payload = {
-        title: mediaLabel.value,
-        text: `Shared from ${uploaderName.value}`,
-        url: props.media.url,
-    };
-
-    try {
-        if (navigator.share) {
-            await navigator.share(payload);
-            return;
-        }
-
-        if (navigator.clipboard?.writeText) {
-            await navigator.clipboard.writeText(props.media.url);
-        }
-    } catch (_error) {
-        // Ignore user-cancelled share flows.
-    }
-};
-
 const onKeydown = (event) => {
     if (!props.show) {
         return;
@@ -380,15 +355,6 @@ onBeforeUnmount(() => {
                         @click="downloadCurrent"
                     >
                         <Download class="h-4 w-4" />
-                    </button>
-
-                    <button
-                        type="button"
-                        class="inline-flex h-9 w-9 items-center justify-center rounded-full border border-white/20 bg-black/45 text-white transition hover:border-primary/55 hover:bg-primary/25"
-                        aria-label="Share"
-                        @click="shareCurrent"
-                    >
-                        <Share2 class="h-4 w-4" />
                     </button>
 
                     <button

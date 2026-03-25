@@ -50,6 +50,12 @@ const props = defineProps({
         type: Boolean,
         default: false,
     },
+    // When true the container positions absolutely (inset:0) to fill whatever
+    // positioned ancestor wraps it — used for fixed-height thumbnail strips.
+    fill: {
+        type: Boolean,
+        default: false,
+    },
 });
 
 const emit = defineEmits(['load']);
@@ -79,6 +85,10 @@ const intrinsicHeight = computed(() => {
     return Number.isFinite(value) && value > 0 ? value : null;
 });
 const containerStyle = computed(() => {
+    if (props.fill) {
+        // Fill mode: stretch to cover the positioned ancestor (e.g. fixed-height strip tiles).
+        return { position: 'absolute', inset: '0', width: '100%', height: '100%' };
+    }
     if (intrinsicWidth.value && intrinsicHeight.value) {
         // Use CSS aspect-ratio only — paddingBottom conflicts and causes double height.
         return { aspectRatio: `${intrinsicWidth.value} / ${intrinsicHeight.value}` };
@@ -253,7 +263,9 @@ onBeforeUnmount(() => {
             :alt="alt || media?.file_name || 'Media'"
             :width="intrinsicWidth || undefined"
             :height="intrinsicHeight || undefined"
-            :class="[imageClass, hasImageLoaded ? 'media-image-ready' : 'media-image-loading']"
+            :class="fill
+                ? [imageClass, hasImageLoaded ? 'media-img-fill media-img-fill--ready' : 'media-img-fill media-img-fill--loading']
+                : [imageClass, hasImageLoaded ? 'media-image-ready' : 'media-image-loading']"
             decoding="async"
             loading="lazy"
             @load="onImgLoad"
@@ -271,6 +283,8 @@ onBeforeUnmount(() => {
 /* ── Grid container ─────────────────────────────────────────────────────── */
 .media-container {
     position: relative;
+    z-index: 0;
+    isolation: isolate;
     width: 100%;
     overflow: hidden;
     display: block;
@@ -341,6 +355,26 @@ onBeforeUnmount(() => {
     display: block;
     opacity: 1;
     transition: opacity 380ms ease;
+}
+
+/* ── Fill-mode image (absolutely fills the .media-container) ────────────── */
+.media-img-fill {
+    position: absolute;
+    inset: 0;
+    z-index: 3;
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    display: block;
+    transition: opacity 250ms ease;
+}
+
+.media-img-fill--loading {
+    opacity: 0;
+}
+
+.media-img-fill--ready {
+    opacity: 1;
 }
 
 /* ── Preview image states (no container, just the <img>) ────────────────── */
