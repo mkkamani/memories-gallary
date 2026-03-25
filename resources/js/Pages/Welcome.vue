@@ -612,7 +612,7 @@ onBeforeUnmount(() => {
 
         <nav class="nav">
             <div class="logo">
-                <img src="/images/cx-logo-light.svg" alt="Cypherox" class="logo-image">
+                <img src="/images/cx-logo-light.svg" alt="Cypherox Memories" class="logo-image">
             </div>
             <div class="nav-status">
                 <div class="nav-dot"></div>
