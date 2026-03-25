@@ -31,7 +31,7 @@ class DashboardController extends Controller
         $user = $request->user();
 
         $totalUsers  = User::count();
-        $albumQuery = Album::query()->whereNull('parent_id');
+        $albumQuery = Album::query()->whereNull('parent_id')->whereNull('deleted_at');
 
         if ($user->role !== 'admin' && !empty($user->location)) {
             $albumQuery->where('location', $user->location);
@@ -99,6 +99,7 @@ class DashboardController extends Controller
 
         // Specifically for Member
         $myUploadsCount  = Media::where('user_id', $user->id)->count();
+        // For members, count only albums they have joined (have media in or created)
         $myRecentUploads = Media::with('user', 'album')
             ->where('user_id', $user->id)
             ->latest()

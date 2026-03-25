@@ -29,17 +29,11 @@ class AlbumController extends Controller
             ->pluck("albums.id")
             ->all();
 
-        $query = Album::with([
-            "media" => function ($q) {
-                $q->orderBy("created_at", "desc")->limit(5);
-            },
-        ])
-            ->withCount(["media", "children"])
-            ->where(function ($q) {
-                // All albums are public; still scope to the current user's own
-                // albums plus any public ones so the query stays consistent.
-                $q->where("user_id", auth()->id())->orWhere("is_public", true);
-            });
+        $query = Album::withCount(["media", "children"])->where(function ($q) {
+            // All albums are public; still scope to the current user's own
+            // albums plus any public ones so the query stays consistent.
+            $q->where("user_id", auth()->id())->orWhere("is_public", true);
+        });
 
         // Nested album navigation
         if ($request->has("parent_id")) {
@@ -66,9 +60,16 @@ class AlbumController extends Controller
             ->latest()
             ->get()
             ->map(function ($album) use ($pinnedAlbumIds) {
-                $thumbnailMedia = $album->media->first();
-                $previewMedia = $album->media->take(5)->map(fn($m) => [
-                    "url"       => $m->url,
+                $nestedAlbumIds = $album->descendants()->pluck("id")->prepend($album->id)->all();
+                $nestedMediaQuery = \App\Models\Media::whereIn("album_id", $nestedAlbumIds)
+                    ->orderBy("created_at", "desc");
+
+                $nestedMedia = $nestedMediaQuery->limit(5)->get();
+                $nestedMediaCount = \App\Models\Media::whereIn("album_id", $nestedAlbumIds)->count();
+
+                $thumbnailMedia = $nestedMedia->first();
+                $previewMedia = $nestedMedia->map(fn ($m) => [
+                    "url" => $m->url,
                     "file_type" => $m->file_type,
                     "file_name" => $m->file_name,
                     "mime_type" => $m->mime_type,
@@ -85,7 +86,7 @@ class AlbumController extends Controller
                     "is_public" => $album->is_public,
                     "user_id" => $album->user_id,
                     "parent_id" => $album->parent_id,
-                    "media_count" => $album->media_count,
+                    "media_count" => $nestedMediaCount,
                     "children_count" => $album->children_count,
                     "thumbnail" => $thumbnailMedia?->url,
                     "thumbnail_media" => $thumbnailMedia
@@ -139,9 +140,9 @@ class AlbumController extends Controller
 
             // Today's Memories – same day in previous years
             $todayMemories = \App\Models\Media::where("user_id", auth()->id())
-                ->whereRaw("MONTH(created_at) = ?", [now()->month])
-                ->whereRaw("DAY(created_at) = ?", [now()->day])
-                ->whereRaw("YEAR(created_at) < ?", [now()->year])
+                ->whereMonth('created_at', now()->month)
+                ->whereDay('created_at', now()->day)
+                ->whereYear('created_at', '<', now()->year)
                 ->orderBy("created_at", "desc")
                 ->get();
 

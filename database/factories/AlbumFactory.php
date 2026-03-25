@@ -2,6 +2,7 @@
 
 namespace Database\Factories;
 
+use App\Models\User;
 use Illuminate\Database\Eloquent\Factories\Factory;
 
 /**
@@ -24,6 +25,7 @@ class AlbumFactory extends Factory
             'type' => fake()->randomElement(['personal', 'event']),
             'is_public' => fake()->boolean(),
             'event_date' => fake()->date(),
+            'location' => 'Rajkot',
         ];
     }
 }

@@ -84,17 +84,13 @@ const validateSelection = (files) => {
         return messages;
     }
 
-    const zipFiles = [];
     const mediaFiles = [];
 
     for (const file of files) {
         const meta = fileTypeMeta(file);
 
         if (meta.kind === 'zip') {
-            if (file.size > 512 * 1024 * 1024) {
-                messages.push(`ZIP file '${file.name}' exceeds 512 MB.`);
-            }
-            zipFiles.push(file);
+            messages.push(`ZIP file uploads are not supported. Please upload individual images or videos.`);
             continue;
         }
 
@@ -106,15 +102,7 @@ const validateSelection = (files) => {
             continue;
         }
 
-        messages.push(`Unsupported file '${file.name}'. Only images, videos, or ZIP files are allowed.`);
-    }
-
-    if (zipFiles.length > 1) {
-        messages.push('Please upload only one ZIP file at a time.');
-    }
-
-    if (zipFiles.length > 0 && mediaFiles.length > 0) {
-        messages.push('Upload either a ZIP file or media files in one request, not both together.');
+        messages.push(`Unsupported file '${file.name}'. Only images and videos are allowed.`);
     }
 
     return messages;
@@ -269,17 +257,22 @@ const removeSelectedFile = (index) => {
 
                     <div
                         class="relative rounded-2xl border-2 border-dashed p-10 text-center transition"
-                        :class="dragActive ? 'border-primary bg-primary/5' : 'border-border bg-bg-elevated/40 hover:border-primary/40 hover:bg-bg-elevated'"
-                        @dragover.prevent="dragActive = true"
-                        @dragleave.prevent="dragActive = false"
-                        @drop.prevent="onDrop"
+                        :class="{
+                            'border-primary bg-primary/5': dragActive && !processing,
+                            'border-border bg-bg-elevated/40 hover:border-primary/40 hover:bg-bg-elevated': !dragActive && !processing,
+                            'border-border/50 bg-bg-elevated/20 opacity-50 cursor-not-allowed': processing
+                        }"
+                        @dragover.prevent="!processing && (dragActive = true)"
+                        @dragleave.prevent="!processing && (dragActive = false)"
+                        @drop.prevent="!processing && onDrop"
                     >
                         <input
                             ref="fileInput"
                             type="file"
                             class="hidden"
                             multiple
-                            accept="image/*,video/*,.zip,.heic,.heif"
+                            accept="image/*,video/*,.heic,.heif"
+                            :disabled="processing"
                             @change="handleInputChange"
                         />
 
@@ -288,11 +281,12 @@ const removeSelectedFile = (index) => {
                         </div>
 
                         <p class="text-2xl font-heading font-bold text-foreground">Drop files here or click to browse</p>
-                        <p class="mt-2 text-sm text-muted-foreground">Upload images, videos, or a ZIP archive to this album</p>
+                        <p class="mt-2 text-sm text-muted-foreground">Upload images and videos to this album</p>
 
                         <button
                             type="button"
-                            class="mt-6 h-11 rounded-pill bg-gradient-to-r from-primary to-accent-hover px-7 text-sm font-bold text-primary-foreground shadow-md transition hover:shadow-primary/20"
+                            class="mt-6 h-11 rounded-pill bg-gradient-to-r from-primary to-accent-hover px-7 text-sm font-bold text-primary-foreground shadow-md transition hover:shadow-primary/20 disabled:opacity-60 disabled:cursor-not-allowed"
+                            :disabled="processing"
                             @click="openFileDialog"
                         >
                             Choose Files

@@ -599,7 +599,7 @@ onBeforeUnmount(() => {
 </script>
 
 <template>
-    <Head title="Dashboard 1" />
+    <Head title="Welcome" />
 
     <div class="landing-one">
         <canvas id="bgc" ref="canvasRef"></canvas>
