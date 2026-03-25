@@ -6,6 +6,7 @@ use App\Models\Album;
 use App\Models\Media;
 use App\Models\User;
 use Illuminate\Http\UploadedFile;
+use Illuminate\Support\Str;
 use Illuminate\Support\Facades\Log;
 use App\Interfaces\StorageServiceInterface;
 
@@ -26,8 +27,15 @@ class MediaService
             $albumPath = $album->r2_path;
         } elseif ($album) {
             // Fallback for albums that were created before r2_path was introduced.
+            $locationSlug = Str::slug((string) ($album->location ?: 'Rajkot'));
+            if ($locationSlug === '') {
+                $locationSlug = 'rajkot';
+            }
+
             $albumPath =
                 "albums/" .
+                $locationSlug .
+                "/" .
                 str_replace(" ", "_", strtolower($album->title)) .
                 "_" .
                 $album->id;

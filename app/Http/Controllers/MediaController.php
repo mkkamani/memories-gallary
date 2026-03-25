@@ -42,7 +42,7 @@ class MediaController extends Controller
      * origin (e.g. Cloudflare R2 presigned URLs) and the browser cannot
      * fetch them directly via JavaScript.
      */
-    public function raw(Media $media)
+    public function raw(Request $request, Media $media)
     {
         $this->authorize("view", $media);
 
@@ -55,6 +55,7 @@ class MediaController extends Controller
 
         $mimeType = $media->mime_type ?: "application/octet-stream";
         $fileName = basename((string) $media->file_name);
+        $disposition = $request->boolean('download') ? 'attachment' : 'inline';
 
         return response()->stream(
             function () use ($stream): void {
@@ -66,7 +67,7 @@ class MediaController extends Controller
             200,
             [
                 "Content-Type" => $mimeType,
-                "Content-Disposition" => 'inline; filename="' . $fileName . '"',
+                "Content-Disposition" => $disposition . '; filename="' . $fileName . '"',
                 "Cache-Control" => "private, max-age=3600",
                 "X-Accel-Buffering" => "no",
             ],

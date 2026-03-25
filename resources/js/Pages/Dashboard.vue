@@ -17,11 +17,11 @@ const props = defineProps({
 });
 
 const formatSize = (bytes) => {
-    if (!bytes) return '0 B';
-    const k = 1024;
+    if (!bytes) return '0.00 B';
+    const k = 1000;
     const sizes = ['B', 'KB', 'MB', 'GB', 'TB'];
     const i = Math.floor(Math.log(bytes) / Math.log(k));
-    return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
+    return (bytes / Math.pow(k, i)).toFixed(2) + ' ' + sizes[i];
 };
 
 const {
@@ -50,19 +50,32 @@ const parseStorageToTB = (value) => {
 
     const unit = (match[2] || 'B').toUpperCase();
     const divisors = {
-        B: 1024 ** 4,
-        KB: 1024 ** 3,
-        MB: 1024 ** 2,
-        GB: 1024,
+        B: 1000 ** 4,
+        KB: 1000 ** 3,
+        MB: 1000 ** 2,
+        GB: 1000,
         TB: 1,
     };
 
     return amount / (divisors[unit] || 1);
 };
 
+const formatStorageLabel = (value) => {
+    if (!value) return '0.00 TB';
+
+    const match = String(value).match(/([\d.]+)\s*(B|KB|MB|GB|TB)?/i);
+    if (!match) return '0.00 TB';
+
+    const amount = parseFloat(match[1]);
+    if (Number.isNaN(amount)) return '0.00 TB';
+
+    const unit = (match[2] || 'B').toUpperCase();
+    return `${amount.toFixed(2)} ${unit}`;
+};
+
 const storageUsedLabel = computed(() => {
-    if (props.userRole === 'member') return props.stats?.myStorageUsed || '0 TB';
-    return props.stats?.storageUsed || '0 TB';
+    if (props.userRole === 'member') return formatStorageLabel(props.stats?.myStorageUsed);
+    return formatStorageLabel(props.stats?.storageUsed);
 });
 
 const storageUsagePercent = computed(() => {

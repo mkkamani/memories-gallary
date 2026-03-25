@@ -143,7 +143,7 @@ class AlbumService
     /**
      * Compute the R2 storage path for an album.
      *
-     * Root album  → albums/{safe-title}_{id}
+        * Root album  → albums/{location}/{safe-title}_{id}
      * Child album → {parent_r2_path}/{safe-title}_{id}
      *
      * The parent's r2_path is used directly when available; otherwise we fall
@@ -169,7 +169,12 @@ class AlbumService
             }
         }
 
-        return "albums/" . $segment;
+        $locationSlug = Str::slug((string) ($album->location ?: 'Rajkot'));
+        if ($locationSlug === '') {
+            $locationSlug = 'rajkot';
+        }
+
+        return "albums/" . $locationSlug . "/" . $segment;
     }
 
     /**

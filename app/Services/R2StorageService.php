@@ -31,6 +31,11 @@ class R2StorageService implements StorageServiceInterface
         return Storage::disk($this->disk);
     }
 
+    protected function diskDriver(): string
+    {
+        return (string) config("filesystems.disks.{$this->disk}.driver", 'local');
+    }
+
     /**
      * Upload a file to the R2 bucket under the given directory path.
      * Returns the full stored key (path) of the uploaded file.
@@ -121,27 +126,28 @@ class R2StorageService implements StorageServiceInterface
     }
 
     /**
-     * Create a directory placeholder in R2.
+     * Create a directory on local disks.
      *
-     * R2 (like S3) has no real directory concept, but uploading a zero-byte
-     * object whose key ends with "/" is the conventional way to represent a
-     * folder so that it appears in bucket browsers and other S3-compatible tools.
+     * For R2/S3 we intentionally skip placeholder objects to avoid generating
+     * 0 B `application/octet-stream` keys like "folder_name".
      */
     public function createDirectory(string $path): void
     {
-        $dirKey = rtrim($path, "/") . "/";
+        // R2/S3 prefixes are virtual and created automatically on first upload.
+        if ($this->diskDriver() === 's3') {
+            return;
+        }
 
-        // Only create if it does not already exist
-        if (!$this->disk()->exists($dirKey)) {
-            $result = $this->disk()->put($dirKey, "");
+        $directory = rtrim($path, "/");
+
+        if (!$this->disk()->exists($directory)) {
+            $result = $this->disk()->makeDirectory($directory);
 
             if ($result === false) {
-                Log::warning(
-                    "R2StorageService: could not create directory placeholder.",
-                    [
-                        "path" => $dirKey,
-                    ],
-                );
+                Log::warning("R2StorageService: could not create directory.", [
+                    "path" => $directory,
+                    "disk" => $this->disk,
+                ]);
             }
         }
     }

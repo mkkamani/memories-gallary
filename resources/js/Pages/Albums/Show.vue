@@ -332,7 +332,11 @@ const handleAction = (action, type, item) => {
         confirmDelete(item, type);
     } else if (action === 'Download') {
         if (type === 'media') {
-            downloadFile(item.url, item.file_name);
+            const downloadUrl = item?.id
+                ? `${route('media.raw', item.id)}?download=1`
+                : item.url;
+
+            downloadFile(downloadUrl, item.file_name);
         }
     }
 };

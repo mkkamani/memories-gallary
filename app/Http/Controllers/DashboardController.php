@@ -6,7 +6,10 @@ use Illuminate\Http\Request;
 use App\Models\Media;
 use App\Models\User;
 use App\Models\Album;
+use Illuminate\Support\Facades\Cache;
+use Illuminate\Support\Facades\Storage;
 use Inertia\Inertia;
+use League\Flysystem\FileAttributes;
 
 class DashboardController extends Controller
 {
@@ -19,11 +22,49 @@ class DashboardController extends Controller
             return '0 B';
         }
 
+        // Cloudflare R2 bucket size is displayed with decimal (SI) units.
+        $base  = 1000;
         $units = ['B', 'KB', 'MB', 'GB', 'TB', 'PB'];
-        $i     = (int) floor(log($bytes, 1024));
+        $i     = (int) floor(log($bytes, $base));
         $i     = min($i, count($units) - 1); // guard against huge values
 
-        return round($bytes / pow(1024, $i), 2) . ' ' . $units[$i];
+        return number_format($bytes / pow($base, $i), 2, '.', '') . ' ' . $units[$i];
+    }
+
+    /**
+     * Read actual object usage from the configured media disk (R2/S3).
+     *
+     * The result is cached briefly to avoid scanning the entire bucket on every
+     * dashboard request while still staying near real-time.
+     *
+     * @return array{bytes:int, objects:int}
+     */
+    private function getBucketUsageStats(): array
+    {
+        $disk = (string) config('filesystems.media_disk', 'public');
+
+        return Cache::remember("dashboard:r2-usage:{$disk}", now()->addMinutes(2), function () use ($disk) {
+            $bytes = 0;
+            $objects = 0;
+
+            $listing = Storage::disk($disk)
+                ->getDriver()
+                ->listContents('', true);
+
+            foreach ($listing as $item) {
+                if (! ($item instanceof FileAttributes)) {
+                    continue;
+                }
+
+                $objects++;
+                $bytes += (int) ($item->fileSize() ?? 0);
+            }
+
+            return [
+                'bytes' => $bytes,
+                'objects' => $objects,
+            ];
+        });
     }
 
     public function index(Request $request)
@@ -38,12 +79,17 @@ class DashboardController extends Controller
         }
 
         $totalAlbums = (clone $albumQuery)->count();
-        $mediaAssets = Media::count();
+        // Live bucket usage (actual R2 bytes/object count).
+        // Fallback to DB-derived values if remote listing fails.
+        try {
+            $bucketStats = $this->getBucketUsageStats();
+            $storageTotalBytes = $bucketStats['bytes'];
+            $mediaAssets = $bucketStats['objects'];
+        } catch (\Throwable $e) {
+            $storageTotalBytes = (int) Media::sum('file_size');
+            $mediaAssets = Media::count();
+        }
 
-        // ── Storage: sum file_size (bytes) stored at upload time ─────────────
-        // We only count non-trashed files so soft-deleted items don't inflate
-        // the figure shown to users.
-        $storageTotalBytes = (int) Media::sum('file_size');
         $storageUsed       = $this->formatBytes($storageTotalBytes);
 
         // Per-user storage (used on the Member dashboard card)

@@ -13,6 +13,11 @@ import { computed, onBeforeUnmount, ref, watch } from 'vue';
 import { downloadFile } from '@/utils/media';
 import MediaRenderer from '@/Components/MediaRenderer.vue';
 
+const MAX_ZOOM = 6;
+const MIN_ZOOM = 0.6;
+const VOLUME_STEP = 0.05;
+const SEEK_STEP_SECONDS = 5;
+
 const props = defineProps({
     show: {
         type: Boolean,
@@ -68,17 +73,134 @@ const uploaderName = computed(() =>
 const mediaLabel = computed(() => props.media?.file_name || props.media?.title || 'Preview');
 const isVideo = computed(() => props.media?.file_type === 'video');
 const zoomLevel = ref(1);
+const panX = ref(0);
+const panY = ref(0);
+const isPanning = ref(false);
+const panStartX = ref(0);
+const panStartY = ref(0);
+const panOriginX = ref(0);
+const panOriginY = ref(0);
+const previewStageRef = ref(null);
+
+const imageTransformStyle = computed(() => {
+    if (isVideo.value) {
+        return undefined;
+    }
+
+    return {
+        transform: `translate(${panX.value}px, ${panY.value}px) scale(${zoomLevel.value})`,
+    };
+});
+
+const canPanImage = computed(() => !isVideo.value && zoomLevel.value > 1);
+
+const resetView = () => {
+    zoomLevel.value = 1;
+    panX.value = 0;
+    panY.value = 0;
+    isPanning.value = false;
+};
 
 const resetZoom = () => {
-    zoomLevel.value = 1;
+    resetView();
 };
 
 const zoomIn = () => {
-    zoomLevel.value = Math.min(zoomLevel.value + 0.2, 3);
+    zoomLevel.value = Math.min(zoomLevel.value + 0.2, MAX_ZOOM);
 };
 
 const zoomOut = () => {
-    zoomLevel.value = Math.max(zoomLevel.value - 0.2, 0.6);
+    zoomLevel.value = Math.max(zoomLevel.value - 0.2, MIN_ZOOM);
+
+    if (zoomLevel.value <= 1) {
+        panX.value = 0;
+        panY.value = 0;
+        isPanning.value = false;
+    }
+};
+
+const getVideoElement = () => {
+    if (!previewStageRef.value) {
+        return null;
+    }
+
+    return previewStageRef.value.querySelector('video');
+};
+
+const toggleVideoPlayPause = () => {
+    const video = getVideoElement();
+    if (!video) {
+        return;
+    }
+
+    if (video.paused) {
+        void video.play();
+    } else {
+        video.pause();
+    }
+};
+
+const adjustVideoVolume = (delta) => {
+    const video = getVideoElement();
+    if (!video) {
+        return;
+    }
+
+    video.muted = false;
+    video.volume = Math.min(1, Math.max(0, video.volume + delta));
+};
+
+const seekVideo = (deltaSeconds) => {
+    const video = getVideoElement();
+    if (!video) {
+        return;
+    }
+
+    const duration = Number.isFinite(video.duration) ? video.duration : null;
+    const nextTime = video.currentTime + deltaSeconds;
+
+    if (duration === null) {
+        video.currentTime = Math.max(0, nextTime);
+        return;
+    }
+
+    video.currentTime = Math.min(duration, Math.max(0, nextTime));
+};
+
+const stopPanning = () => {
+    isPanning.value = false;
+};
+
+const onImageMouseDown = (event) => {
+    if (!canPanImage.value) {
+        return;
+    }
+
+    if (event.button !== 2) {
+        return;
+    }
+
+    event.preventDefault();
+    isPanning.value = true;
+    panStartX.value = event.clientX;
+    panStartY.value = event.clientY;
+    panOriginX.value = panX.value;
+    panOriginY.value = panY.value;
+};
+
+const onMouseMove = (event) => {
+    if (!isPanning.value) {
+        return;
+    }
+
+    panX.value = panOriginX.value + (event.clientX - panStartX.value);
+    panY.value = panOriginY.value + (event.clientY - panStartY.value);
+};
+
+const onImageContextMenu = (event) => {
+    if (canPanImage.value) {
+        event.preventDefault();
+    }
 };
 
 const downloadCurrent = () => {
@@ -86,7 +208,11 @@ const downloadCurrent = () => {
         return;
     }
 
-    downloadFile(props.media.url, props.media.file_name || 'media');
+    const downloadUrl = props.media?.id
+        ? `${route('media.raw', props.media.id)}?download=1`
+        : props.media.url;
+
+    downloadFile(downloadUrl, props.media.file_name || 'media');
 };
 
 const shareCurrent = async () => {
@@ -121,6 +247,44 @@ const onKeydown = (event) => {
 
     if (event.key === 'Escape') {
         emit('close');
+    }
+
+    if (event.key === '0') {
+        event.preventDefault();
+        resetView();
+        return;
+    }
+
+    if (isVideo.value) {
+        if (event.key === ' ') {
+            event.preventDefault();
+            toggleVideoPlayPause();
+            return;
+        }
+
+        if (event.key === 'ArrowUp') {
+            event.preventDefault();
+            adjustVideoVolume(VOLUME_STEP);
+            return;
+        }
+
+        if (event.key === 'ArrowDown') {
+            event.preventDefault();
+            adjustVideoVolume(-VOLUME_STEP);
+            return;
+        }
+
+        if (event.key === 'ArrowLeft') {
+            event.preventDefault();
+            seekVideo(-SEEK_STEP_SECONDS);
+            return;
+        }
+
+        if (event.key === 'ArrowRight') {
+            event.preventDefault();
+            seekVideo(SEEK_STEP_SECONDS);
+            return;
+        }
     }
 
     if (event.key === 'ArrowLeft' && canGoPrevious.value) {
@@ -162,13 +326,18 @@ watch(
     () => props.show,
     (isOpen) => {
         if (isOpen) {
-            resetZoom();
+            resetView();
             window.addEventListener('keydown', onKeydown);
+            window.addEventListener('mousemove', onMouseMove);
+            window.addEventListener('mouseup', stopPanning);
             document.body.style.overflow = 'hidden';
             return;
         }
 
         window.removeEventListener('keydown', onKeydown);
+        window.removeEventListener('mousemove', onMouseMove);
+        window.removeEventListener('mouseup', stopPanning);
+        stopPanning();
         document.body.style.overflow = '';
     },
     { immediate: true },
@@ -176,11 +345,13 @@ watch(
 
 watch(
     () => props.media?.id,
-    () => resetZoom(),
+    () => resetView(),
 );
 
 onBeforeUnmount(() => {
     window.removeEventListener('keydown', onKeydown);
+    window.removeEventListener('mousemove', onMouseMove);
+    window.removeEventListener('mouseup', stopPanning);
     document.body.style.overflow = '';
 });
 </script>
@@ -251,7 +422,14 @@ onBeforeUnmount(() => {
                 <ChevronRight class="h-6 w-6" />
             </button>
 
-            <div class="absolute inset-0 flex items-center justify-center px-14 pt-20 pb-20 sm:px-20 sm:pt-24 sm:pb-24 lg:px-24" @wheel="onWheelZoom">
+            <div
+                ref="previewStageRef"
+                class="absolute inset-0 flex items-center justify-center px-14 pt-20 pb-20 sm:px-20 sm:pt-24 sm:pb-24 lg:px-24"
+                :class="{ 'cursor-grab': canPanImage && !isPanning, 'cursor-grabbing': canPanImage && isPanning }"
+                @wheel="onWheelZoom"
+                @mousedown="onImageMouseDown"
+                @contextmenu="onImageContextMenu"
+            >
                 <div class="flex h-full w-full items-center justify-center">
                         <MediaRenderer
                             :media="media"
@@ -259,7 +437,7 @@ onBeforeUnmount(() => {
                             image-class="max-h-full max-w-full object-contain transition-transform duration-200"
                             video-class="max-h-full max-w-full rounded-lg bg-black object-contain"
                             fallback-class="flex min-h-[18rem] min-w-[18rem] items-center justify-center rounded-2xl border border-white/10 bg-black/35 px-8 text-base font-bold uppercase tracking-[0.3em] text-white/70"
-                            :style="!isVideo ? { transform: `scale(${zoomLevel})` } : undefined"
+                            :style="imageTransformStyle"
                             :video-controls="isVideo"
                             :video-autoplay="isVideo"
                             :video-playsinline="isVideo"
