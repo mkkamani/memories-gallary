@@ -13,7 +13,7 @@ return [
     |
     */
 
-    'name' => env('APP_NAME', 'CX Memories'),
+    'name' => env('APP_NAME', 'Cypherox Memories'),
 
     /*
     |--------------------------------------------------------------------------

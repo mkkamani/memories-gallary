@@ -68,6 +68,23 @@ function recalcAllSpans() {
     Object.keys(naturalDims.value).forEach(id => calcSpan(Number(id)));
 }
 
+// Pre-populate naturalDims from DB-stored width/height so the masonry grid
+// can assign correct row spans immediately — no need to wait for images to load.
+function seedDimsFromDb(fileList) {
+    let changed = false;
+    for (const file of fileList) {
+        const w = Number(file.width);
+        const h = Number(file.height);
+        if (w > 0 && h > 0 && !naturalDims.value[file.id]) {
+            naturalDims.value[file.id] = { w, h };
+            changed = true;
+        }
+    }
+    if (changed) {
+        nextTick(() => recalcAllSpans());
+    }
+}
+
 function removeDeletedMediaFromList(mediaId) {
     files.value = files.value.filter(file => file.id !== mediaId);
 
@@ -119,7 +136,9 @@ const loadMore = async () => {
             }
         });
         if (response.data.data && Array.isArray(response.data.data)) {
-            files.value.push(...response.data.data);
+            const newFiles = response.data.data;
+            files.value.push(...newFiles);
+            seedDimsFromDb(newFiles);
         }
         nextPageUrl.value = response.data.next_page_url || null;
         nextTick(() => recalcAllSpans());
@@ -196,6 +215,7 @@ const emptyStateText = computed(() => {
 
 onMounted(() => {
     window.addEventListener('resize', recalcAllSpans);
+    seedDimsFromDb(files.value);
     nextTick(() => recalcAllSpans());
 });
 
@@ -489,7 +509,7 @@ const {
                     v-if="viewMode === 'grid'"
                     ref="masonryRef"
                     class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 items-start"
-                    style="grid-auto-rows: 10px; row-gap: 0; column-gap: 1rem;"
+                    style="grid-auto-rows: 10px; row-gap: 0; column-gap: 1rem; grid-auto-flow: dense;"
                 >
                     <div
                         v-for="file in filteredFiles"
@@ -497,7 +517,7 @@ const {
                         :data-file-id="file.id"
                         :style="{ gridRowEnd: 'span ' + (spanMap[file.id] || 22) }"
                         @click="openPreview(file)"
-                        class="group relative w-full rounded-2xl overflow-visible border border-border bg-bg-elevated cursor-pointer hover:border-primary/50 transition-all shadow-sm hover:shadow-xl animate-fade-in-up"
+                        class="group relative w-full rounded-2xl overflow-hidden border border-border bg-bg-elevated cursor-pointer hover:border-primary/50 transition-all shadow-sm hover:shadow-xl animate-fade-in-up"
                     >
                         <div class="relative overflow-hidden rounded-2xl">
                             <MediaRenderer

@@ -43,6 +43,13 @@ const props = defineProps({
         type: Boolean,
         default: true,
     },
+    // When true the component renders a plain <img> with no wrapper div so that
+    // the preview overlay's zoom/pan (applied via v-bind="$attrs" → transform)
+    // is not clipped by an overflow:hidden container.
+    preview: {
+        type: Boolean,
+        default: false,
+    },
 });
 
 const emit = defineEmits(['load']);
@@ -63,6 +70,22 @@ const extension = computed(() => {
 
 const mimeType = computed(() => String(props.media?.mime_type || '').toLowerCase());
 const isVideo = computed(() => props.media?.file_type === 'video');
+const intrinsicWidth = computed(() => {
+    const value = Number(props.media?.width);
+    return Number.isFinite(value) && value > 0 ? value : null;
+});
+const intrinsicHeight = computed(() => {
+    const value = Number(props.media?.height);
+    return Number.isFinite(value) && value > 0 ? value : null;
+});
+const containerStyle = computed(() => {
+    if (intrinsicWidth.value && intrinsicHeight.value) {
+        // Use CSS aspect-ratio only — paddingBottom conflicts and causes double height.
+        return { aspectRatio: `${intrinsicWidth.value} / ${intrinsicHeight.value}` };
+    }
+    // No DB dimensions yet: reserve a minimum height so the grid cell isn't zero-height.
+    return { minHeight: '160px' };
+});
 const isHeic = computed(() => {
     if (isVideo.value) {
         return false;
@@ -175,6 +198,7 @@ onBeforeUnmount(() => {
 </script>
 
 <template>
+    <!-- ─── VIDEO ─────────────────────────────────────────────────────────── -->
     <video
         v-if="isVideo"
         v-bind="$attrs"
@@ -187,48 +211,146 @@ onBeforeUnmount(() => {
         @loadedmetadata="onVideoMeta"
     ></video>
 
+    <!-- ─── HEIC conversion in-progress ──────────────────────────────────── -->
     <div v-else-if="isLoading" :class="fallbackClass" class="flex flex-col items-center justify-center gap-3">
         <div class="orange-loader"></div>
     </div>
 
-    <div v-else-if="!conversionFailed" class="relative flex items-center justify-center w-full h-full overflow-hidden">
-        <div v-if="!hasImageLoaded" class="media-blur-placeholder" aria-hidden="true"></div>
+    <!-- ─── PREVIEW MODE: bare <img>, no wrapper so pan/zoom is not clipped ─ -->
+    <img
+        v-else-if="!conversionFailed && preview"
+        v-bind="$attrs"
+        :src="resolvedUrl"
+        :alt="alt || media?.file_name || 'Media'"
+        :width="intrinsicWidth || undefined"
+        :height="intrinsicHeight || undefined"
+        :class="[imageClass, hasImageLoaded ? 'preview-img-ready' : 'preview-img-loading']"
+        decoding="async"
+        @load="onImgLoad"
+        @error="onImageError"
+    />
+
+    <!-- ─── GRID MODE: wrapper with aspect-ratio + blurred actual-image bg ── -->
+    <div v-else-if="!conversionFailed" class="media-container" :style="containerStyle">
+        <!--
+            Blurred version of the ACTUAL image shown while the img element is
+            still downloading.  Both point to the same URL so the browser
+            satisfies both from one HTTP request / cache entry.
+            inset: -12% overflows the container boundaries to hide blur edges.
+        -->
+        <div
+            v-if="!hasImageLoaded && resolvedUrl"
+            class="media-blur-bg"
+            :style="{ backgroundImage: `url('${resolvedUrl}')` }"
+        />
+
+        <!-- Left-to-right wave shimmer overlay — always visible while loading -->
+        <div v-if="!hasImageLoaded" class="media-wave" />
+
         <img
             v-bind="$attrs"
             :src="resolvedUrl"
             :alt="alt || media?.file_name || 'Media'"
+            :width="intrinsicWidth || undefined"
+            :height="intrinsicHeight || undefined"
             :class="[imageClass, hasImageLoaded ? 'media-image-ready' : 'media-image-loading']"
+            decoding="async"
             loading="lazy"
             @load="onImgLoad"
             @error="onImageError"
         />
     </div>
 
+    <!-- ─── FALLBACK (e.g. HEIC conversion failed) ────────────────────────── -->
     <div v-else :class="fallbackClass">
         {{ fallbackLabel }}
     </div>
 </template>
 
 <style scoped>
-.media-blur-placeholder {
+/* ── Grid container ─────────────────────────────────────────────────────── */
+.media-container {
+    position: relative;
+    width: 100%;
+    overflow: hidden;
+    display: block;
+}
+
+/* ── Gray base color when no URL yet ─────────────────────────────────── */
+.media-container {
+    background-color: var(--color-bg-elevated, #ebebeb);
+}
+
+/* ── Blurred actual-image backdrop (grid only) ──────────────────────────── */
+.media-blur-bg {
     position: absolute;
-    inset: 0;
-    background: linear-gradient(135deg, rgba(243, 244, 246, 0.95), rgba(229, 231, 235, 0.95));
-    filter: blur(14px);
-    transform: scale(1.02);
+    inset: -12%;           /* overshoot so blur edge artifacts are hidden */
+    background-size: cover;
+    background-position: center;
+    filter: blur(22px);
+    z-index: 0;
 }
 
+/* ── Left-to-right wave shimmer overlay ─────────────────────────────────── */
+/*    Rendered on top of both the gray base AND the blurred-bg while loading. */
+.media-wave {
+    position: absolute;
+    inset: -30%;
+    z-index: 2;
+    background: linear-gradient(
+        120deg,
+        rgba(255, 255, 255, 0)    0%,
+        rgba(255, 255, 255, 0)    40%,
+        rgba(255, 255, 255, 0.34) 50%,
+        rgba(255, 255, 255, 0)    60%,
+        rgba(255, 255, 255, 0)    100%
+    );
+    background-repeat: no-repeat;
+    background-size: 100% 100%;
+    transform: translate3d(-35%, -35%, 0);
+    animation: wave-ltr 3.2s ease-in-out infinite;
+    pointer-events: none;
+}
+
+@keyframes wave-ltr {
+    0% {
+        transform: translate3d(-35%, -35%, 0);
+    }
+    100% {
+        transform: translate3d(35%, 35%, 0);
+    }
+}
+
+/* ── Grid image states ──────────────────────────────────────────────────── */
+/* While loading: invisible but above wave so it covers when loaded */
 .media-image-loading {
-    opacity: 0.7;
-    filter: blur(14px);
-    transform: scale(1.03);
-    transition: opacity 280ms ease, filter 320ms ease, transform 320ms ease;
+    position: relative;
+    z-index: 3;
+    width: 100%;
+    height: auto;
+    display: block;
+    opacity: 0;
 }
 
+/* Once loaded: fade in over the wave + blur bg */
 .media-image-ready {
+    position: relative;
+    z-index: 3;
+    width: 100%;
+    height: auto;
+    display: block;
     opacity: 1;
-    filter: blur(0);
-    transform: scale(1);
-    transition: opacity 280ms ease, filter 320ms ease, transform 320ms ease;
+    transition: opacity 380ms ease;
+}
+
+/* ── Preview image states (no container, just the <img>) ────────────────── */
+.preview-img-loading {
+    opacity: 0;
+    transition: none;
+}
+
+.preview-img-ready {
+    opacity: 1;
+    transition: opacity 250ms ease;
 }
 </style>
