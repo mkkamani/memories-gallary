@@ -10,7 +10,7 @@ const initialAppNameFromDocument = document.title
     .split(' - ')
     .pop()
     ?.trim();
-const appName = import.meta.env.VITE_APP_NAME || initialAppNameFromDocument || 'Laravel';
+const appName = import.meta.env.VITE_APP_NAME || 'CX Memories';
 
 createInertiaApp({
     title: (title) => `${title} - ${appName}`,

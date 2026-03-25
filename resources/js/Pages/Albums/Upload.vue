@@ -300,7 +300,8 @@ const removeSelectedFile = (index) => {
                                 <span class="truncate pr-3 text-foreground">{{ file.name }}</span>
                                 <div class="flex items-center gap-2">
                                     <span class="rounded-pill bg-bg-elevated px-3 py-1 text-xs font-bold text-muted-foreground">{{ fileTypeMeta(file).label }}</span>
-                                    <button
+                                            <button
+                                        v-if="!processing"
                                         type="button"
                                         class="inline-flex h-7 w-7 items-center justify-center rounded-full text-muted-foreground transition hover:bg-error/10 hover:text-error"
                                         aria-label="Remove file"
