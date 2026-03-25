@@ -450,7 +450,7 @@ const isActive = (item) => {
 
         <!-- Footer -->
         <footer class="mt-auto p-3 lg:px-6 border-t border-border text-center text-xs text-muted-foreground transition-all duration-300" :class="collapsed ? 'md:ml-16' : 'md:ml-56'">
-            <p>&copy; 2026 <b>Cypherox Technologies</b>. All Rights Reserved.</p>
+            <p>&copy; 2026 <b style="color:#303030;">Cypherox Technologies</b>. All Rights Reserved.</p>
         </footer>
     </div>
 </template>

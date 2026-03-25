@@ -8,6 +8,7 @@ use App\Models\User;
 use Illuminate\Console\Command;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
+use League\Flysystem\DirectoryAttributes;
 use League\Flysystem\FileAttributes;
 
 class SyncFromR2 extends Command
@@ -67,7 +68,24 @@ class SyncFromR2 extends Command
                 ->listContents($prefix, true);   // true = recursive
 
             foreach ($listing as $item) {
-                // We only care about actual files (not Flysystem DirectoryAttributes)
+                if ($item instanceof DirectoryAttributes) {
+                    $dirPath = trim($item->path(), '/');
+
+                    if ($dirPath === '' || $dirPath === $prefix) {
+                        continue;
+                    }
+
+                    if ($prefix === 'albums' && ! $this->isUnderKnownLocationPath($dirPath)) {
+                        continue;
+                    }
+
+                    if (! $this->isLocationContainerDir($dirPath, $prefix)) {
+                        $dirPaths[$dirPath] = true;
+                    }
+
+                    continue;
+                }
+
                 if (! ($item instanceof FileAttributes)) {
                     continue;
                 }
@@ -337,9 +355,12 @@ class SyncFromR2 extends Command
             'png'         => 'image/png',
             'gif'         => 'image/gif',
             'webp'        => 'image/webp',
+            'avif'        => 'image/avif',
+            'jfif'        => 'image/jpeg',
             'heic'        => 'image/heic',
             'heif'        => 'image/heif',
             'bmp'         => 'image/bmp',
+            'svg'         => 'image/svg+xml',
             'tiff', 'tif' => 'image/tiff',
             'mp4'         => 'video/mp4',
             'mov'         => 'video/quicktime',
