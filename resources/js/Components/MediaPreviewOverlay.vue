@@ -399,7 +399,8 @@ onBeforeUnmount(() => {
                         <MediaRenderer
                             :media="media"
                             :alt="mediaLabel"
-                            image-class="max-h-full max-w-full object-contain transition-transform duration-200"
+                            :preview="true"
+                            image-class="max-h-full max-w-full w-auto h-auto object-contain select-none"
                             video-class="max-h-full max-w-full rounded-lg bg-black object-contain"
                             fallback-class="flex min-h-[18rem] min-w-[18rem] items-center justify-center rounded-2xl border border-white/10 bg-black/35 px-8 text-base font-bold uppercase tracking-[0.3em] text-white/70"
                             :style="imageTransformStyle"
