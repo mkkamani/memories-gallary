@@ -3,6 +3,7 @@
 namespace App\Services;
 
 use RuntimeException;
+use Illuminate\Filesystem\FilesystemAdapter;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Storage;
 use App\Interfaces\StorageServiceInterface;
@@ -75,6 +76,34 @@ class R2StorageService implements StorageServiceInterface
     }
 
     /**
+     * Upload a file using the provided filename under the given directory.
+     */
+    public function uploadFileAs($file, string $path, string $filename): string
+    {
+        $safeFilename = preg_replace('/[^a-zA-Z0-9._-]/', '_', (string) $filename);
+        $directory = rtrim($path, '/');
+        $fullPath = $directory . '/' . $safeFilename;
+
+        $result = $this->disk()->putFileAs(
+            $directory,
+            $file,
+            $safeFilename,
+        );
+
+        if ($result === false) {
+            Log::error('R2StorageService: failed to upload file with explicit name.', [
+                'directory' => $directory,
+                'filename' => $safeFilename,
+            ]);
+            throw new \RuntimeException(
+                "Failed to upload file \"{$safeFilename}\" to R2 storage path \"{$directory}\".",
+            );
+        }
+
+        return $fullPath;
+    }
+
+    /**
      * Delete a file from the R2 bucket.
      */
     public function deleteFile(string $path): bool
@@ -93,6 +122,25 @@ class R2StorageService implements StorageServiceInterface
     {
         if ($this->disk === 'public') {
             return asset('storage/' . ltrim($path, '/'));
+        }
+
+        $storage = $this->disk();
+
+        // Prefer presigned URLs for private/object storage disks (R2/S3).
+        // This keeps cover image loading behavior consistent with Media model URLs.
+        if ($storage instanceof FilesystemAdapter && method_exists($storage, 'temporaryUrl')) {
+            try {
+                return $storage->temporaryUrl(
+                    $path,
+                    now()->addHours(6),
+                );
+            } catch (\Throwable $e) {
+                Log::warning('R2StorageService: failed to generate temporary URL, falling back to base URL.', [
+                    'path' => $path,
+                    'disk' => $this->disk,
+                    'error' => $e->getMessage(),
+                ]);
+            }
         }
 
         $baseUrl = (string) config("filesystems.disks.{$this->disk}.url", '');

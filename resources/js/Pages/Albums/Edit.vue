@@ -2,10 +2,17 @@
 import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout.vue';
 import InputError from '@/Components/InputError.vue';
 import { Head, useForm, Link } from '@inertiajs/vue3';
+import { computed, onBeforeUnmount, ref } from 'vue';
 
 const props = defineProps({
     album: Object,
 });
+
+const initialValues = {
+    title: String(props.album?.title || '').trim(),
+    description: String(props.album?.description || ''),
+    location: String(props.album?.location || 'Rajkot'),
+};
 
 // Initialize form with proper defaults
 const form = useForm({
@@ -15,16 +22,57 @@ const form = useForm({
     cover_image: null,
 });
 
+const coverPreviewUrl = ref(null);
+
+const previewImageUrl = computed(() => coverPreviewUrl.value || props.album?.cover_image || null);
+
+const clearPreviewUrl = () => {
+    if (coverPreviewUrl.value) {
+        URL.revokeObjectURL(coverPreviewUrl.value);
+        coverPreviewUrl.value = null;
+    }
+};
+
+const handleCoverImageChange = (event) => {
+    const file = event.target.files?.[0] ?? null;
+    form.cover_image = file;
+
+    clearPreviewUrl();
+
+    if (file) {
+        coverPreviewUrl.value = URL.createObjectURL(file);
+    }
+};
+
+onBeforeUnmount(() => {
+    clearPreviewUrl();
+});
+
 const submit = () => {
-    // Trim title and avoid empty payload
+    // Trim title before submit.
     form.title = String(form.title || '').trim();
 
-    if (!form.title) {
-        form.setError('title', 'The title field is required.');
+    const currentTitle = String(form.title || '').trim();
+    const currentDescription = String(form.description || '');
+    const currentLocation = String(form.location || 'Rajkot');
+    const hasCoverChange = !!form.cover_image;
+
+    const isUnchanged =
+        currentTitle === initialValues.title
+        && currentDescription === initialValues.description
+        && currentLocation === initialValues.location
+        && !hasCoverChange;
+
+    if (isUnchanged) {
         return;
     }
 
-    form.patch(route('albums.update', props.album.slug || props.album.id), {
+    form
+        .transform((data) => ({
+            ...data,
+            _method: 'patch',
+        }))
+        .post(route('albums.update', props.album.slug || props.album.id), {
         forceFormData: true,
         preserveScroll: true,
         onBefore: () => {
@@ -47,7 +95,7 @@ const submit = () => {
         <div class="mx-auto w-full max-w-4xl space-y-6 animate-fade-in text-foreground">
             <div class="flex items-center justify-between gap-3">
                 <div class="flex items-center gap-3">
-                    <Link :href="route('albums.show', album.path || album.slug || album.id)" class="inline-flex h-10 w-10 items-center justify-center rounded-full border border-border bg-bg-card text-muted-foreground transition hover:text-foreground hover:border-primary/30">
+                    <Link :href="route('albums.index')" class="inline-flex h-10 w-10 items-center justify-center rounded-full border border-border bg-bg-card text-muted-foreground transition hover:text-foreground hover:border-primary/30">
                         <svg class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7"/></svg>
                     </Link>
                     <h1 class="text-4xl font-heading font-bold text-foreground">Edit Album</h1>
@@ -56,10 +104,20 @@ const submit = () => {
 
             <section class="overflow-hidden rounded-2xl border border-border bg-bg-card shadow-sm">
                 <div class="relative h-36 w-full overflow-hidden bg-bg-elevated">
+                    <img
+                        v-if="previewImageUrl"
+                        :src="previewImageUrl"
+                        :alt="form.title || album.title || 'Album cover preview'"
+                        class="absolute inset-0 h-full w-full object-cover"
+                    />
+                    <div v-if="previewImageUrl" class="absolute inset-0 bg-black/35"></div>
                     <div class="absolute inset-0 bg-gradient-to-br from-primary/25 via-primary/5 to-transparent"></div>
                     <div class="absolute inset-x-6 bottom-5">
-                        <h2 class="text-3xl font-heading font-bold text-foreground">Update Album Details</h2>
-                        <p class="mt-1 text-sm text-muted-foreground">Editing "{{ form.title }}"</p>
+                        <span v-if="previewImageUrl" class="mb-3 inline-flex rounded-full border border-white/20 bg-white/10 px-3 py-1 text-[11px] font-bold uppercase tracking-[0.24em] text-white backdrop-blur-md">
+                            Cover Preview
+                        </span>
+                        <h2 :class="previewImageUrl ? 'text-3xl font-heading font-bold text-white' : 'text-3xl font-heading font-bold text-foreground'">Update Album Details</h2>
+                        <p :class="previewImageUrl ? 'mt-1 text-sm text-white/80' : 'mt-1 text-sm text-muted-foreground'">Editing "{{ form.title }}"</p>
                     </div>
                 </div>
 
@@ -122,15 +180,11 @@ const submit = () => {
 
                     <div class="space-y-2">
                         <label for="cover_image" class="text-xs font-bold uppercase tracking-wider text-muted-foreground">Cover Image (optional)</label>
-                        <div v-if="album.cover_image" class="mb-4">
-                            <p class="text-sm text-muted-foreground mb-2">Current cover image:</p>
-                            <img :src="album.cover_image" :alt="album.title" class="w-32 h-32 object-cover rounded-lg border border-border" />
-                        </div>
                         <input
                             id="cover_image"
                             type="file"
                             accept="image/*"
-                            @change="form.cover_image = $event.target.files[0]"
+                            @change="handleCoverImageChange"
                             class="block w-full text-sm text-muted-foreground file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-primary/10 file:text-primary hover:file:bg-primary/20 transition-colors"
                         />
                         <p class="text-[11px] text-muted-foreground">Accepted: <span class="font-semibold">JPEG, PNG, GIF</span> — Max size: <span class="font-semibold">10 MB</span> — Leave empty to keep current image</p>
@@ -142,7 +196,7 @@ const submit = () => {
                     </div>
 
                     <div class="flex justify-end gap-3 border-t border-border pt-4">
-                        <Link :href="route('albums.show', album.path || album.slug || album.id)" class="inline-flex h-11 items-center rounded-pill px-6 text-sm font-bold text-foreground transition hover:bg-bg-hover">Cancel</Link>
+                        <Link :href="route('albums.index')" class="inline-flex h-11 items-center rounded-pill px-6 text-sm font-bold text-foreground transition hover:bg-bg-hover">Cancel</Link>
                         <button
                             type="submit"
                             class="inline-flex h-11 items-center rounded-pill bg-primary px-8 text-sm font-bold text-primary-foreground shadow-md transition hover:bg-accent-hover disabled:cursor-not-allowed disabled:opacity-60"

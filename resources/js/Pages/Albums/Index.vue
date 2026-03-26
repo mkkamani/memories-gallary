@@ -26,6 +26,7 @@ const pinnedAlbums = ref([...(props.pinnedAlbumIds || [])]);
 const pinLoadingAlbums = ref([]);
 const showNewMenu = ref(false);
 const showImportModal = ref(false);
+const coverImageStatus = ref({});
 const importForm = useForm({
     zip_file: null,
     location: props.filters.location && props.filters.location !== 'all' ? props.filters.location : '',
@@ -110,6 +111,72 @@ const togglePin = (e, album) => {
 
 const systemAlbums = computed(() => props.albums.filter(a => a.is_system));
 const userAlbums = computed(() => props.albums.filter(a => !a.is_system));
+
+const getPreviewCandidates = (album) => {
+    const candidates = album?.preview_media || album?.preview_items || album?.media_preview || [];
+    return Array.isArray(candidates) ? candidates.filter(Boolean) : [];
+};
+
+const mediaIdentity = (media) => media?.id || media?.url || media?.path || media?.file_name || null;
+
+const getFilteredPreviewItems = (album) => {
+    const previewItems = getPreviewCandidates(album);
+    if (previewItems.length === 0) {
+        return [];
+    }
+
+    const thumbnailId = mediaIdentity(album?.thumbnail_media);
+    if (!thumbnailId) {
+        return previewItems;
+    }
+
+    return previewItems.filter((item) => mediaIdentity(item) !== thumbnailId);
+};
+
+const getBottomPreviewItems = (album) => getFilteredPreviewItems(album).slice(0, 3);
+
+const getHiddenPreviewCount = (album) => {
+    const filteredCount = getFilteredPreviewItems(album).length;
+    return Math.max(filteredCount - 3, 0);
+};
+
+const isOverflowPreviewTile = (album, idx) => {
+    const visibleCount = getBottomPreviewItems(album).length;
+    return getHiddenPreviewCount(album) > 0 && idx === visibleCount - 1;
+};
+
+const coverStateKey = (album) => `${album?.id || 'unknown'}::${album?.thumbnail || ''}`;
+
+const getCoverImageStatus = (album) => {
+    const key = coverStateKey(album);
+    return coverImageStatus.value[key] || 'loading';
+};
+
+const isCoverImageLoaded = (album) => {
+    return getCoverImageStatus(album) === 'loaded';
+};
+
+const isCoverImageErrored = (album) => {
+    return getCoverImageStatus(album) === 'error';
+};
+
+const setCoverImageStatus = (album, status) => {
+    const key = coverStateKey(album);
+    coverImageStatus.value[key] = status;
+};
+
+const markCoverImageLoaded = (album) => {
+    setCoverImageStatus(album, 'loaded');
+};
+
+const markCoverImageError = (album) => {
+    setCoverImageStatus(album, 'error');
+};
+
+const getCoverFallbackMedia = (album) => {
+    const candidates = getPreviewCandidates(album);
+    return candidates.length > 0 ? candidates[0] : null;
+};
 
 const handleAction = (action, album) => {
     showActionMenu.value = null;
@@ -222,14 +289,14 @@ const submitImport = () => {
                 </h3>
                 <div class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-6">
                     <template v-for="album in systemAlbums" :key="album.id">
-                        <Link :href="route('albums.all', album.id)" class="group relative flex flex-col gap-2 cursor-pointer transition-all active:scale-95">
+                        <Link :href="route('albums.all', album.id)" class="group relative flex flex-col gap-2 cursor-pointer transition-all duration-300 active:scale-95">
                             <div class="aspect-[4/3] rounded-2xl bg-bg-elevated border border-border overflow-hidden relative group-hover:border-purple-500/50 transition-all shadow-sm group-hover:shadow-md">
                                 <MediaRenderer
                                     v-if="album.thumbnail_media"
                                     :media="album.thumbnail_media"
                                     :alt="album.title"
-                                    image-class="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
-                                    video-class="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
+                                    image-class="w-full h-full object-cover will-change-transform group-hover:scale-[1.035] transition-transform duration-700 ease-out"
+                                    video-class="w-full h-full object-cover will-change-transform group-hover:scale-[1.035] transition-transform duration-700 ease-out"
                                     fallback-class="flex h-full w-full items-center justify-center bg-purple-500/5 text-xs font-bold uppercase tracking-[0.24em] text-purple-500"
                                 />
                                 <div v-else class="w-full h-full flex items-center justify-center bg-purple-500/5 text-purple-500">
@@ -255,7 +322,7 @@ const submitImport = () => {
             <div v-if="viewMode === 'grid'" class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
                 <template v-for="album in userAlbums" :key="album.id">
                     <div
-                        class="group relative flex flex-col gap-2 cursor-pointer transition-all active:scale-95"
+                        class="group relative flex flex-col gap-2 cursor-pointer transition-all duration-300 active:scale-95"
                         :class="showActionMenu === album.id ? 'z-50' : 'z-0'"
                         @click="router.visit(route('albums.show', album.path || album.slug || album.id))"
                     >
@@ -266,11 +333,42 @@ const submitImport = () => {
                                 v-if="album.thumbnail_media"
                                 :media="album.thumbnail_media"
                                 :alt="album.title"
-                                image-class="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
-                                video-class="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
+                                    image-class="w-full h-full object-cover will-change-transform group-hover:scale-[1.035] transition-transform duration-700 ease-out"
+                                    video-class="w-full h-full object-cover will-change-transform group-hover:scale-[1.035] transition-transform duration-700 ease-out"
                                 fallback-class="flex h-full w-full items-center justify-center bg-primary/5 text-xs font-bold uppercase tracking-[0.24em] text-primary/60"
                             />
-                            <div v-else-if="album.thumbnail" class="w-full h-full bg-cover bg-center group-hover:scale-105 transition-transform duration-500 rounded-2xl" :style="{ backgroundImage: `url(${album.thumbnail})` }"></div>
+                            <div v-else-if="album.thumbnail" class="relative w-full h-full rounded-2xl overflow-hidden">
+                                <div
+                                    v-if="!isCoverImageLoaded(album) && !isCoverImageErrored(album)"
+                                    class="absolute inset-0 scale-110 blur-xl bg-cover bg-center"
+                                    :style="{ backgroundImage: `url('${album.thumbnail}')` }"
+                                ></div>
+                                <div
+                                    v-if="!isCoverImageLoaded(album) && !isCoverImageErrored(album)"
+                                    class="absolute inset-0 rounded-2xl cover-wave-placeholder"
+                                ></div>
+                                <img
+                                    v-if="!isCoverImageErrored(album)"
+                                    :src="album.thumbnail"
+                                    :alt="album.title"
+                                    class="w-full h-full rounded-2xl object-cover will-change-transform transition-all duration-700 ease-out group-hover:scale-[1.035]"
+                                    :class="isCoverImageLoaded(album) ? 'opacity-100 scale-100' : 'opacity-0 scale-[1.02]'"
+                                    loading="eager"
+                                    @load="markCoverImageLoaded(album)"
+                                    @error="markCoverImageError(album)"
+                                />
+                                <MediaRenderer
+                                    v-else-if="getCoverFallbackMedia(album)"
+                                    :media="getCoverFallbackMedia(album)"
+                                    :alt="album.title"
+                                    image-class="w-full h-full object-cover will-change-transform group-hover:scale-[1.035] transition-transform duration-700 ease-out"
+                                    video-class="w-full h-full object-cover will-change-transform group-hover:scale-[1.035] transition-transform duration-700 ease-out"
+                                    fallback-class="flex h-full w-full items-center justify-center bg-primary/5 text-xs font-bold uppercase tracking-[0.24em] text-primary/60"
+                                />
+                                <div v-else class="w-full h-full flex items-center justify-center text-primary/40 bg-primary/5 rounded-2xl">
+                                    <svg class="w-12 h-12" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 7v10a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-6l-2-2H5a2 2 0 00-2 2z"/></svg>
+                                </div>
+                            </div>
                             <div v-else class="w-full h-full flex items-center justify-center text-primary/40 bg-primary/5 rounded-2xl">
                                 <svg class="w-12 h-12" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 7v10a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-6l-2-2H5a2 2 0 00-2 2z"/></svg>
                             </div>
@@ -302,7 +400,7 @@ const submitImport = () => {
                                     <svg class="w-4 h-4 text-muted-foreground" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"/></svg> Download
                                 </button>
                                 <Link v-if="canManage" :href="route('albums.edit', album.slug || album.id)" class="flex w-full items-center gap-3 rounded-xl px-3.5 py-2.5 text-sm font-medium text-foreground transition-colors hover:bg-bg-hover">
-                                    <svg class="w-4 h-4 text-muted-foreground" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"/></svg> Rename
+                                    <svg class="w-4 h-4 text-muted-foreground" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"/></svg> Edit
                                 </Link>
                                 <button v-if="canManage" @click="handleAction('Delete', album)" class="flex w-full items-center gap-3 rounded-xl px-3.5 py-2.5 text-sm font-medium text-error transition-colors hover:bg-error/10">
                                     <svg class="w-4 h-4 text-error" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/></svg> Remove
@@ -380,7 +478,7 @@ const submitImport = () => {
                                         <svg class="w-4 h-4 text-muted-foreground" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"/></svg> Download
                                     </button>
                                     <Link v-if="canManage" :href="route('albums.edit', album.slug || album.id)" class="flex w-full items-center gap-3 rounded-xl px-3.5 py-2.5 text-sm font-medium text-foreground transition-colors hover:bg-bg-hover">
-                                        <svg class="w-4 h-4 text-muted-foreground" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"/></svg> Rename
+                                        <svg class="w-4 h-4 text-muted-foreground" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"/></svg> Edit
                                     </Link>
                                     <button v-if="canManage" @click="handleAction('Delete', album)" class="flex w-full items-center gap-3 rounded-xl px-3.5 py-2.5 text-sm font-medium text-error transition-colors hover:bg-error/10">
                                         <svg class="w-4 h-4 text-error" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/></svg> Remove

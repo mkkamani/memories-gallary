@@ -2,12 +2,39 @@
 import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout.vue';
 import InputError from '@/Components/InputError.vue';
 import { Head, useForm, Link } from '@inertiajs/vue3';
+import { computed, onBeforeUnmount, ref } from 'vue';
 
 const form = useForm({
     title: '',
     description: '',
     location: '',
     cover_image: null,
+});
+
+const coverPreviewUrl = ref(null);
+
+const previewImageUrl = computed(() => coverPreviewUrl.value);
+
+const clearPreviewUrl = () => {
+    if (coverPreviewUrl.value) {
+        URL.revokeObjectURL(coverPreviewUrl.value);
+        coverPreviewUrl.value = null;
+    }
+};
+
+const handleCoverImageChange = (event) => {
+    const file = event.target.files?.[0] ?? null;
+    form.cover_image = file;
+
+    clearPreviewUrl();
+
+    if (file) {
+        coverPreviewUrl.value = URL.createObjectURL(file);
+    }
+};
+
+onBeforeUnmount(() => {
+    clearPreviewUrl();
 });
 
 const submit = () => {
@@ -33,10 +60,20 @@ const submit = () => {
 
             <section class="overflow-hidden rounded-2xl border border-border bg-bg-card shadow-sm">
                 <div class="relative h-36 w-full overflow-hidden bg-bg-elevated">
+                    <img
+                        v-if="previewImageUrl"
+                        :src="previewImageUrl"
+                        alt="Selected album cover preview"
+                        class="absolute inset-0 h-full w-full object-cover"
+                    />
+                    <div v-if="previewImageUrl" class="absolute inset-0 bg-black/35"></div>
                     <div class="absolute inset-0 bg-gradient-to-br from-primary/25 via-primary/5 to-transparent"></div>
                     <div class="absolute inset-x-6 bottom-5">
-                        <h2 class="text-3xl font-heading font-bold text-foreground">New Album Details</h2>
-                        <p class="mt-1 text-sm text-muted-foreground">Add a new collection to your gallery</p>
+                        <span v-if="previewImageUrl" class="mb-3 inline-flex rounded-full border border-white/20 bg-white/10 px-3 py-1 text-[11px] font-bold uppercase tracking-[0.24em] text-white backdrop-blur-md">
+                            Cover Preview
+                        </span>
+                        <h2 :class="previewImageUrl ? 'text-3xl font-heading font-bold text-white' : 'text-3xl font-heading font-bold text-foreground'">New Album Details</h2>
+                        <p :class="previewImageUrl ? 'mt-1 text-sm text-white/80' : 'mt-1 text-sm text-muted-foreground'">Add a new collection to your gallery</p>
                     </div>
                 </div>
 
@@ -103,7 +140,7 @@ const submit = () => {
                             id="cover_image"
                             type="file"
                             accept="image/*"
-                            @change="form.cover_image = $event.target.files[0]"
+                            @change="handleCoverImageChange"
                             class="block w-full text-sm text-muted-foreground file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-primary/10 file:text-primary hover:file:bg-primary/20 transition-colors"
                         />
                         <p class="text-[11px] text-muted-foreground">Accepted: <span class="font-semibold">JPEG, PNG, GIF</span> — Max size: <span class="font-semibold">10 MB</span></p>

@@ -32,6 +32,8 @@ class SyncFromR2 extends Command
     private int $albumsRelocated = 0;
     private int $mediaCreated  = 0;
     private int $mediaSkipped  = 0;
+    private int $coversUpdated = 0;
+    private int $coversSkipped = 0;
 
     public function handle(): int
     {
@@ -183,7 +185,17 @@ class SyncFromR2 extends Command
         $this->newLine(2);
 
         // ------------------------------------------------------------------
-        // 4. Summary
+        // 4. Sync album cover images from cover-images/*
+        // ------------------------------------------------------------------
+        if ($prefix === 'albums') {
+            $this->newLine();
+            $this->info('--- Syncing cover images ---');
+            $this->syncCoverImages();
+            $this->newLine();
+        }
+
+        // ------------------------------------------------------------------
+        // 5. Summary
         // ------------------------------------------------------------------
         $this->info('Sync complete.');
         $this->table(
@@ -191,6 +203,7 @@ class SyncFromR2 extends Command
             [
                 ['Albums', $this->albumsCreated, $this->albumsSkipped],
                 ['Media',  $this->mediaCreated,  $this->mediaSkipped],
+                ['Cover images', $this->coversUpdated, $this->coversSkipped],
             ],
         );
 
@@ -318,6 +331,109 @@ class SyncFromR2 extends Command
             'height'    => $height,
             'taken_at'  => $takenAt,
         ]);
+    }
+
+    private function syncCoverImages(): void
+    {
+        $coverFiles = Storage::disk($this->disk)->allFiles('cover-images');
+
+        if (count($coverFiles) === 0) {
+            $this->line('No files found under cover-images/.');
+            return;
+        }
+
+        foreach ($coverFiles as $coverPath) {
+            if (! $this->hasSupportedExtension($coverPath)) {
+                continue;
+            }
+
+            $album = $this->resolveAlbumForCoverPath($coverPath);
+
+            if (! $album) {
+                $this->coversSkipped++;
+                $this->line("  [SKIP] No matching album for {$coverPath}");
+                continue;
+            }
+
+            if ($album->cover_image === $coverPath) {
+                $this->coversSkipped++;
+                continue;
+            }
+
+            $this->coversUpdated++;
+
+            if ($this->dryRun) {
+                $this->line("  [DRY] Cover image → {$album->title} ({$coverPath})");
+                continue;
+            }
+
+            $album->update(['cover_image' => $coverPath]);
+            $this->line("  [SET] {$album->title} cover image set to {$coverPath}");
+        }
+    }
+
+    private function resolveAlbumForCoverPath(string $coverPath): ?Album
+    {
+        $normalized = trim($coverPath, '/');
+        $parts = array_values(array_filter(explode('/', $normalized), fn ($p) => $p !== ''));
+
+        if (count($parts) >= 3 && strtolower($parts[0]) === 'cover-images') {
+            $folderKey = $parts[1];
+
+            if (ctype_digit($folderKey)) {
+                $album = Album::find((int) $folderKey);
+                if ($album) {
+                    return $album;
+                }
+            }
+
+            if (preg_match('/_(\d+)$/', $folderKey, $m)) {
+                $album = Album::find((int) $m[1]);
+                if ($album) {
+                    return $album;
+                }
+            }
+
+            $folderSlug = Str::slug(str_replace('_', ' ', $folderKey));
+            if ($folderSlug !== '') {
+                $album = Album::where('slug', $folderSlug)->first();
+                if ($album) {
+                    return $album;
+                }
+            }
+        }
+
+        // Preferred structure: cover-images/{album_id}/filename.ext
+        if (preg_match('#^cover-images/(\d+)/#', $normalized, $m)) {
+            return Album::find((int) $m[1]);
+        }
+
+        $filename = pathinfo($normalized, PATHINFO_FILENAME);
+
+        if ($filename === '') {
+            return null;
+        }
+
+        // Fallback: numeric filename means album id.
+        if (ctype_digit($filename)) {
+            return Album::find((int) $filename);
+        }
+
+        // Fallback: try suffix pattern like safe_title_123.
+        if (preg_match('/_(\d+)$/', $filename, $m)) {
+            $album = Album::find((int) $m[1]);
+            if ($album) {
+                return $album;
+            }
+        }
+
+        // Fallback: try filename as slug.
+        $slug = Str::slug(str_replace('_', ' ', $filename));
+        if ($slug !== '') {
+            return Album::where('slug', $slug)->first();
+        }
+
+        return null;
     }
 
     // -----------------------------------------------------------------------

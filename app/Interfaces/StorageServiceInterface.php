@@ -14,6 +14,16 @@ interface StorageServiceInterface
     public function uploadFile($file, string $path): string;
 
     /**
+     * Upload a file with an explicit filename to the storage.
+     *
+     * @param \Illuminate\Http\UploadedFile|string $file
+     * @param string $path      The target directory path (without trailing slash).
+     * @param string $filename  The exact filename to store.
+     * @return string The full key / path of the stored file.
+     */
+    public function uploadFileAs($file, string $path, string $filename): string;
+
+    /**
      * Delete a file from the storage.
      *
      * @param string $path  The full key / path of the file to delete.

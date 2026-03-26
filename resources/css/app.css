@@ -282,6 +282,36 @@
     .hover-dynamic-shadow:hover {
         box-shadow: var(--hover-shadow) !important;
     }
+
+    @keyframes cover-wave {
+        0% {
+            background-position: 200% 0;
+        }
+        100% {
+            background-position: -200% 0;
+        }
+    }
+
+    .cover-wave-placeholder {
+        z-index: 2;
+        background: linear-gradient(
+            110deg,
+            rgba(255, 255, 255, 0) 30%,
+            rgba(255, 255, 255, 0.22) 48%,
+            rgba(255, 255, 255, 0) 66%
+        );
+        background-size: 220% 100%;
+        animation: cover-wave 1.6s linear infinite;
+        will-change: background-position;
+        pointer-events: none;
+    }
+
+    @media (prefers-reduced-motion: reduce) {
+        .cover-wave-placeholder {
+            animation: none;
+            background-position: 50% 0;
+        }
+    }
 }
 
 /* === GLASS CARD === */

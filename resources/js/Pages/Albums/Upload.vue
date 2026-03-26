@@ -118,7 +118,15 @@ const handleInputChange = (event) => {
     setFiles(event.target.files);
 };
 
+const handleDragOver = (event) => {
+    if (!processing.value) dragActive.value = true;
+};
+const handleDragLeave = (event) => {
+    if (!processing.value) dragActive.value = false;
+};
+
 const onDrop = (event) => {
+    if (processing.value) return;
     dragActive.value = false;
     setFiles(event.dataTransfer?.files || []);
 };
@@ -205,19 +213,10 @@ const removeSelectedFile = (index) => {
 
                             <template v-for="(crumb, index) in breadcrumbTrail" :key="crumb.id || crumb.path || crumb.slug">
                                 <svg class="h-4 w-4 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/></svg>
-
-                                <span
-                                    v-if="index === breadcrumbTrail.length - 1"
-                                    class="font-semibold text-foreground"
-                                >
+                                <span v-if="index === breadcrumbTrail.length - 1" class="font-semibold text-foreground">
                                     {{ crumb.title }}
                                 </span>
-
-                                <Link
-                                    v-else
-                                    :href="route('albums.show', crumb.path || crumb.slug || crumb.id)"
-                                    class="hover:text-foreground transition-colors"
-                                >
+                                <Link v-else :href="route('albums.show', crumb.path || crumb.slug || crumb.id)" class="hover:text-foreground transition-colors">
                                     {{ crumb.title }}
                                 </Link>
                             </template>
@@ -262,9 +261,9 @@ const removeSelectedFile = (index) => {
                             'border-border bg-bg-elevated/40 hover:border-primary/40 hover:bg-bg-elevated': !dragActive && !processing,
                             'border-border/50 bg-bg-elevated/20 opacity-50 cursor-not-allowed': processing
                         }"
-                        @dragover.prevent="!processing && (dragActive = true)"
-                        @dragleave.prevent="!processing && (dragActive = false)"
-                        @drop.prevent="!processing && onDrop"
+                        @dragover.prevent="handleDragOver"
+                        @dragleave.prevent="handleDragLeave"
+                        @drop.prevent="onDrop"
                     >
                         <input
                             ref="fileInput"

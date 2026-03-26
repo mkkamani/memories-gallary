@@ -222,8 +222,13 @@ onBeforeUnmount(() => {
     ></video>
 
     <!-- ─── HEIC conversion in-progress ──────────────────────────────────── -->
-    <div v-else-if="isLoading" :class="fallbackClass" class="flex flex-col items-center justify-center gap-3">
-        <div class="orange-loader"></div>
+    <div v-else-if="isLoading" :class="fallbackClass" class="relative overflow-hidden">
+        <div
+            v-if="resolvedUrl"
+            class="absolute inset-0 scale-110 blur-xl bg-cover bg-center"
+            :style="{ backgroundImage: `url('${resolvedUrl}')` }"
+        ></div>
+        <div class="absolute inset-0 cover-wave-placeholder"></div>
     </div>
 
     <!-- ─── PREVIEW MODE: bare <img>, no wrapper so pan/zoom is not clipped ─ -->
@@ -234,8 +239,9 @@ onBeforeUnmount(() => {
         :alt="alt || media?.file_name || 'Media'"
         :width="intrinsicWidth || undefined"
         :height="intrinsicHeight || undefined"
-        :class="[imageClass, hasImageLoaded ? 'preview-img-ready' : 'preview-img-loading']"
+        :class="[imageClass, hasImageLoaded ? 'media-image-ready' : 'media-image-loading']"
         decoding="async"
+        loading="lazy"
         @load="onImgLoad"
         @error="onImageError"
     />
@@ -254,8 +260,8 @@ onBeforeUnmount(() => {
             :style="{ backgroundImage: `url('${resolvedUrl}')` }"
         />
 
-        <!-- Left-to-right wave shimmer overlay — always visible while loading -->
-        <div v-if="!hasImageLoaded" class="media-wave" />
+        <!-- Shared wave shimmer used project-wide while lazy image is loading -->
+        <div v-if="!hasImageLoaded" class="cover-wave-placeholder absolute inset-0" />
 
         <img
             v-bind="$attrs"
@@ -305,36 +311,6 @@ onBeforeUnmount(() => {
     z-index: 0;
 }
 
-/* ── Left-to-right wave shimmer overlay ─────────────────────────────────── */
-/*    Rendered on top of both the gray base AND the blurred-bg while loading. */
-.media-wave {
-    position: absolute;
-    inset: -30%;
-    z-index: 2;
-    background: linear-gradient(
-        120deg,
-        rgba(255, 255, 255, 0)    0%,
-        rgba(255, 255, 255, 0)    40%,
-        rgba(255, 255, 255, 0.34) 50%,
-        rgba(255, 255, 255, 0)    60%,
-        rgba(255, 255, 255, 0)    100%
-    );
-    background-repeat: no-repeat;
-    background-size: 100% 100%;
-    transform: translate3d(-35%, -35%, 0);
-    animation: wave-ltr 3.2s ease-in-out infinite;
-    pointer-events: none;
-}
-
-@keyframes wave-ltr {
-    0% {
-        transform: translate3d(-35%, -35%, 0);
-    }
-    100% {
-        transform: translate3d(35%, 35%, 0);
-    }
-}
-
 /* ── Grid image states ──────────────────────────────────────────────────── */
 /* While loading: invisible but above wave so it covers when loaded */
 .media-image-loading {
@@ -344,6 +320,8 @@ onBeforeUnmount(() => {
     height: auto;
     display: block;
     opacity: 0;
+    transform: scale(1.015);
+    transition: opacity 380ms ease, transform 700ms ease-out;
 }
 
 /* Once loaded: fade in over the wave + blur bg */
@@ -354,7 +332,8 @@ onBeforeUnmount(() => {
     height: auto;
     display: block;
     opacity: 1;
-    transition: opacity 380ms ease;
+    transform: scale(1);
+    transition: opacity 380ms ease, transform 700ms ease-out;
 }
 
 /* ── Fill-mode image (absolutely fills the .media-container) ────────────── */
@@ -366,7 +345,7 @@ onBeforeUnmount(() => {
     height: 100%;
     object-fit: cover;
     display: block;
-    transition: opacity 250ms ease;
+    transition: opacity 320ms ease, transform 700ms ease-out;
 }
 
 .media-img-fill--loading {
@@ -377,14 +356,4 @@ onBeforeUnmount(() => {
     opacity: 1;
 }
 
-/* ── Preview image states (no container, just the <img>) ────────────────── */
-.preview-img-loading {
-    opacity: 0;
-    transition: none;
-}
-
-.preview-img-ready {
-    opacity: 1;
-    transition: opacity 250ms ease;
-}
 </style>

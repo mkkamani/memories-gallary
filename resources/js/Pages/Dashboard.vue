@@ -331,6 +331,11 @@ const memberUsagePercent = computed(() => {
     box-shadow: 0 1px 2px hsl(220 15% 20% / 0.04);
 }
 
+/* Stat label text is too dim on dark card backgrounds — brighten it */
+:global(.dark) .dash-card p {
+    color: hsl(0 0% 72%);
+}
+
 .dash-icon-box {
     width: 3rem;
     height: 3rem;

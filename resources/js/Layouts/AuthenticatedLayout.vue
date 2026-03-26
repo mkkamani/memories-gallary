@@ -155,11 +155,38 @@ const logout = () => {
     router.post(route('logout'));
 };
 
-const submitSearch = () => {
-    if (searchQuery.value) {
-        router.get(route('albums.index', { search: searchQuery.value }));
+const syncSearchQueryFromPage = () => {
+    // Prefer shared page props when available on Albums index.
+    const fromProps = page.props?.filters?.search;
+    if (typeof fromProps === 'string') {
+        searchQuery.value = fromProps;
+        return;
     }
-}
+
+    try {
+        const url = new URL(page.url, window.location.origin);
+        searchQuery.value = url.searchParams.get('search') || '';
+    } catch {
+        searchQuery.value = '';
+    }
+};
+
+const submitSearch = () => {
+    const keyword = searchQuery.value.trim();
+
+    router.get(route('albums.index'), keyword ? { search: keyword } : {}, {
+        preserveState: true,
+        replace: true,
+    });
+};
+
+watch(
+    () => page.url,
+    () => {
+        syncSearchQueryFromPage();
+    },
+    { immediate: true },
+);
 
 onMounted(() => {
     const savedTheme = localStorage.getItem('theme');
@@ -181,6 +208,8 @@ onMounted(() => {
     if (savedSidebar !== null) {
         collapsed.value = savedSidebar === 'true';
     }
+
+    syncSearchQueryFromPage();
 
     window.addEventListener('scroll', () => {
         scrolled.value = window.scrollY > 10;

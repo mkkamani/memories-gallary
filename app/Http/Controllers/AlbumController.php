@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers;
 
+use App\Interfaces\StorageServiceInterface;
 use App\Models\Album;
 use App\Services\ActivityLogService;
 use App\Services\AlbumService;
@@ -24,6 +25,9 @@ class AlbumController extends Controller
 
     public function index(Request $request)
     {
+        $searchTerm = trim((string) $request->input('search', ''));
+        $hasSearch = $searchTerm !== '';
+
         $pinnedAlbumIds = auth()
             ->user()
             ->pinnedAlbums()
@@ -36,15 +40,18 @@ class AlbumController extends Controller
             $q->where("user_id", auth()->id())->orWhere("is_public", true);
         });
 
-        // Nested album navigation
-        if ($request->has("parent_id")) {
-            $query->where("parent_id", $request->parent_id);
-        } else {
-            $query->whereNull("parent_id");
+        // Nested album navigation:
+        // When searching, include all folder levels so nested albums are discoverable.
+        if (! $hasSearch) {
+            if ($request->has("parent_id")) {
+                $query->where("parent_id", $request->parent_id);
+            } else {
+                $query->whereNull("parent_id");
+            }
         }
 
-        if ($request->search) {
-            $query->where("title", "like", "%" . $request->search . "%");
+        if ($hasSearch) {
+            $query->where("title", "like", "%" . $searchTerm . "%");
         }
 
         // Location filter
@@ -104,7 +111,7 @@ class AlbumController extends Controller
         // ---- Smart / system albums (root level only) ----
         $systemAlbums = collect();
 
-        if (!$request->has("parent_id")) {
+        if (!$request->has("parent_id") && ! $hasSearch) {
             // Recent – last 30 days
             $recentMedia = \App\Models\Media::where("user_id", auth()->id())
                 ->where("created_at", ">=", now()->subDays(30))
@@ -200,7 +207,10 @@ class AlbumController extends Controller
             "pinnedAlbumIds" => $pinnedAlbumIds,
             "filters" => array_merge(
                 $request->only(["search", "parent_id", "location"]),
-                ["location" => $locationFilter],
+                [
+                    "search" => $searchTerm,
+                    "location" => $locationFilter,
+                ],
             ),
             "breadcrumbs" => $breadcrumbs,
         ]);
@@ -243,6 +253,7 @@ class AlbumController extends Controller
         Request $request,
         AlbumService $albumService,
         ActivityLogService $logService,
+        StorageServiceInterface $storageService,
     ) {
         $data = $request->validate([
             "title" => "required|string|max:255",
@@ -261,9 +272,20 @@ class AlbumController extends Controller
 
         $album = $albumService->create($data, auth()->user());
 
-        // Handle cover image upload (store in local public disk and save as local path).
+        // Store cover image as cover-images/{album-segment}.{ext}
         if ($request->hasFile("cover_image")) {
-            $filePath = $request->file('cover_image')->store('album-cover-images', 'public');
+            $coverFile = $request->file('cover_image');
+            $extension = strtolower((string) ($coverFile->getClientOriginalExtension() ?: $coverFile->extension()));
+            $coverPath = $albumService->getCoverImagePathForAlbum($album, $extension);
+            $coverStem = $albumService->getCoverImageStemForAlbum($album);
+
+            $albumService->deleteCoverImageVariants($coverStem, $coverPath);
+
+            $filePath = $storageService->uploadFileAs(
+                $coverFile,
+                dirname($coverPath),
+                basename($coverPath),
+            );
             $album->update(['cover_image' => $filePath]);
         }
 
@@ -979,35 +1001,77 @@ class AlbumController extends Controller
         Album $album,
         AlbumService $albumService,
         ActivityLogService $logService,
+        StorageServiceInterface $storageService,
     ) {
-        // Comprehensive logging
-        Log::info('========== ALBUM UPDATE REQUEST START ==========');
-        Log::info('Request method: ' . $request->method());
-        Log::info('Request header Content-Type: ' . $request->header('Content-Type'));
-        Log::info('Full request data:', $request->all());
-        Log::info('Has title field: ' . ($request->has('title') ? 'YES' : 'NO'));
-        Log::info('Title input value: "' . ($request->input('title') ?? 'NULL') . '"');
-        Log::info('Title value type: ' . gettype($request->input('title')));
-        Log::info('========== REQUEST END ==========');
+        // Renaming/moving album paths may touch many R2 objects.
+        set_time_limit(600);
 
         $this->authorize("update", $album);
 
         $data = $request->validate([
-            "title" => "required|string|max:255",
+            // Keep title optional here so cover-image-only updates are accepted.
+            "title" => "nullable|string|max:255",
             "description" => "nullable|string",
             "location" => "nullable|string|in:Rajkot,Ahmedabad",
             "cover_image" => "nullable|file|mimes:jpeg,jpg,png,gif|max:10240",
             "return_to_path" => "nullable|string|max:2048",
         ]);
 
+        if (array_key_exists('title', $data)) {
+            $data['title'] = trim((string) $data['title']);
+
+            if ($data['title'] === '') {
+                unset($data['title']);
+            }
+        }
+
         $returnToPath = isset($data["return_to_path"])
             ? trim((string) $data["return_to_path"], "/")
             : null;
         unset($data["return_to_path"]);
 
-        // Handle cover image upload (store in local public disk and save as local path).
-        if ($request->hasFile("cover_image")) {
-            $filePath = $request->file('cover_image')->store('album-cover-images', 'public');
+        $hasCoverUpload = $request->hasFile("cover_image");
+
+        $requestedTitle = array_key_exists('title', $data)
+            ? trim((string) $data['title'])
+            : (string) $album->title;
+        $requestedDescription = array_key_exists('description', $data)
+            ? (string) ($data['description'] ?? '')
+            : (string) ($album->description ?? '');
+        $requestedLocation = array_key_exists('location', $data)
+            ? (string) ($data['location'] ?? '')
+            : (string) ($album->location ?? '');
+
+        $isNoopUpdate =
+            ! $hasCoverUpload
+            && $requestedTitle === (string) $album->title
+            && $requestedDescription === (string) ($album->description ?? '')
+            && $requestedLocation === (string) ($album->location ?? '');
+
+        if ($isNoopUpdate) {
+            return redirect()
+                ->route("albums.index")
+                ->with("info", "No changes detected.");
+        }
+
+        // Store cover image as cover-images/{album-segment}.{ext}
+        if ($hasCoverUpload) {
+            $coverFile = $request->file('cover_image');
+            $extension = strtolower((string) ($coverFile->getClientOriginalExtension() ?: $coverFile->extension()));
+            $coverPath = $albumService->getPlannedCoverImagePathForAlbum($album, $data, $extension);
+            $coverStem = pathinfo($coverPath, PATHINFO_FILENAME);
+
+            $albumService->deleteCoverImageVariants($coverStem, $coverPath);
+
+            if (!empty($album->cover_image) && trim($album->cover_image, '/') !== trim($coverPath, '/')) {
+                $storageService->deleteFile($album->cover_image);
+            }
+
+            $filePath = $storageService->uploadFileAs(
+                $coverFile,
+                dirname($coverPath),
+                basename($coverPath),
+            );
             $data['cover_image'] = $filePath;
         }
 
@@ -1016,12 +1080,12 @@ class AlbumController extends Controller
 
         if (!empty($returnToPath)) {
             return redirect()
-                ->route("albums.show", $returnToPath)
+                ->route("albums.index")
                 ->with("success", "Album updated successfully.");
         }
 
         return redirect()
-            ->route("albums.show", $album->path)
+            ->route("albums.index")
             ->with("success", "Album updated successfully.");
     }
 
