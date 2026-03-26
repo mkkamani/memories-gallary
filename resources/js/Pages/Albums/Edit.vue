@@ -7,14 +7,36 @@ const props = defineProps({
     album: Object,
 });
 
+// Initialize form with proper defaults
 const form = useForm({
-    title: props.album.title,
-    description: props.album.description ?? '',
-    location: props.album.location ?? '',
+    title: props.album?.title || '',
+    description: props.album?.description || '',
+    location: props.album?.location || 'Rajkot',
+    cover_image: null,
 });
 
 const submit = () => {
-    form.put(route('albums.update', props.album.slug || props.album.id));
+    // Trim title and avoid empty payload
+    form.title = String(form.title || '').trim();
+
+    if (!form.title) {
+        form.setError('title', 'The title field is required.');
+        return;
+    }
+
+    form.patch(route('albums.update', props.album.slug || props.album.id), {
+        forceFormData: true,
+        preserveScroll: true,
+        onBefore: () => {
+            form.clearErrors();
+        },
+        onError: (errors) => {
+            console.error('Album update errors', errors);
+        },
+        onSuccess: () => {
+            console.debug('Album updated successfully');
+        },
+    });
 };
 </script>
 
@@ -96,6 +118,23 @@ const submit = () => {
                             </label>
                         </div>
                         <InputError :message="form.errors.location" />
+                    </div>
+
+                    <div class="space-y-2">
+                        <label for="cover_image" class="text-xs font-bold uppercase tracking-wider text-muted-foreground">Cover Image (optional)</label>
+                        <div v-if="album.cover_image" class="mb-4">
+                            <p class="text-sm text-muted-foreground mb-2">Current cover image:</p>
+                            <img :src="album.cover_image" :alt="album.title" class="w-32 h-32 object-cover rounded-lg border border-border" />
+                        </div>
+                        <input
+                            id="cover_image"
+                            type="file"
+                            accept="image/*"
+                            @change="form.cover_image = $event.target.files[0]"
+                            class="block w-full text-sm text-muted-foreground file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-primary/10 file:text-primary hover:file:bg-primary/20 transition-colors"
+                        />
+                        <p class="text-[11px] text-muted-foreground">Accepted: <span class="font-semibold">JPEG, PNG, GIF</span> — Max size: <span class="font-semibold">10 MB</span> — Leave empty to keep current image</p>
+                        <InputError :message="form.errors.cover_image" />
                     </div>
 
                     <div class="rounded-xl border border-primary/20 bg-primary/5 px-4 py-3 text-sm text-primary">

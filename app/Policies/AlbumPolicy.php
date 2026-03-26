@@ -37,7 +37,7 @@ class AlbumPolicy
      */
     public function update(User $user, Album $album): bool
     {
-        return in_array($user->role, ['admin', 'manager']) || $user->id === $album->user_id;
+        return $user->role === 'admin';
     }
 
     /**
@@ -45,7 +45,7 @@ class AlbumPolicy
      */
     public function delete(User $user, Album $album): bool
     {
-        return in_array($user->role, ['admin', 'manager']);
+        return $user->role === 'admin';
     }
 
     /**

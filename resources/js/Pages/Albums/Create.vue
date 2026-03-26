@@ -7,10 +7,13 @@ const form = useForm({
     title: '',
     description: '',
     location: '',
+    cover_image: null,
 });
 
 const submit = () => {
-    form.post(route('albums.store'));
+    form.post(route('albums.store'), {
+        forceFormData: true,
+    });
 };
 </script>
 
@@ -92,6 +95,19 @@ const submit = () => {
                             </label>
                         </div>
                         <InputError :message="form.errors.location" />
+                    </div>
+
+                    <div class="space-y-2">
+                        <label for="cover_image" class="text-xs font-bold uppercase tracking-wider text-muted-foreground">Cover Image (optional)</label>
+                        <input
+                            id="cover_image"
+                            type="file"
+                            accept="image/*"
+                            @change="form.cover_image = $event.target.files[0]"
+                            class="block w-full text-sm text-muted-foreground file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-primary/10 file:text-primary hover:file:bg-primary/20 transition-colors"
+                        />
+                        <p class="text-[11px] text-muted-foreground">Accepted: <span class="font-semibold">JPEG, PNG, GIF</span> — Max size: <span class="font-semibold">10 MB</span></p>
+                        <InputError :message="form.errors.cover_image" />
                     </div>
 
                     <div class="rounded-xl border border-primary/20 bg-primary/5 px-4 py-3 text-sm text-primary">

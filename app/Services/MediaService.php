@@ -21,27 +21,7 @@ class MediaService
 
     public function upload(UploadedFile $file, User $user, ?Album $album = null)
     {
-        // Use the album's pre-computed R2 path when available,
-        // otherwise fall back to a generic uploads prefix.
-        if ($album && $album->r2_path) {
-            $albumPath = $album->r2_path;
-        } elseif ($album) {
-            // Fallback for albums that were created before r2_path was introduced.
-            $locationSlug = Str::slug((string) ($album->location ?: 'Rajkot'));
-            if ($locationSlug === '') {
-                $locationSlug = 'rajkot';
-            }
-
-            $albumPath =
-                "albums/" .
-                $locationSlug .
-                "/" .
-                str_replace(" ", "_", strtolower($album->title)) .
-                "_" .
-                $album->id;
-        } else {
-            $albumPath = "uploads";
-        }
+        $albumPath = $this->getAlbumUploadPath($album);
 
         $path = $this->storageService->uploadFile($file, $albumPath);
 
@@ -57,6 +37,31 @@ class MediaService
             "mime_type" => $file->getMimeType(),
             "taken_at"  => now(),
         ]);
+    }
+
+    public function getAlbumUploadPath(?Album $album): string
+    {
+        if ($album && $album->r2_path) {
+            return $album->r2_path;
+        }
+
+        if ($album) {
+            // Fallback for albums that were created before r2_path was introduced.
+            $locationSlug = Str::slug((string) ($album->location ?: 'Rajkot'));
+            if ($locationSlug === '') {
+                $locationSlug = 'rajkot';
+            }
+
+            return "albums/{$locationSlug}/" . str_replace(" ", "_", strtolower($album->title)) . "_" . $album->id;
+        }
+
+        return "uploads";
+    }
+
+    public function uploadFileOnly(UploadedFile $file, ?Album $album = null): string
+    {
+        $albumPath = $this->getAlbumUploadPath($album);
+        return $this->storageService->uploadFile($file, $albumPath);
     }
 
     /**

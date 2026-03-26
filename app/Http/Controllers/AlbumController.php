@@ -10,6 +10,7 @@ use Illuminate\Foundation\Auth\Access\AuthorizesRequests;
 use Illuminate\Http\Request;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\Storage;
 use Illuminate\Validation\ValidationException;
 use Inertia\Inertia;
 
@@ -67,13 +68,9 @@ class AlbumController extends Controller
                 $nestedMedia = $nestedMediaQuery->limit(5)->get();
                 $nestedMediaCount = \App\Models\Media::whereIn("album_id", $nestedAlbumIds)->count();
 
-                $thumbnailMedia = $nestedMedia->first();
-                $previewMedia = $nestedMedia->map(fn ($m) => [
-                    "url" => $m->url,
-                    "file_type" => $m->file_type,
-                    "file_name" => $m->file_name,
-                    "mime_type" => $m->mime_type,
-                ])->values()->all();
+                // Use cover_image if available, otherwise first media
+                $thumbnailUrl = $this->resolveCoverImageUrl($album->cover_image) ?: ($nestedMedia->first()?->url);
+                $thumbnailMedia = $album->cover_image ? null : $nestedMedia->first();
 
                 return [
                     "id" => $album->id,
@@ -88,7 +85,7 @@ class AlbumController extends Controller
                     "parent_id" => $album->parent_id,
                     "media_count" => $nestedMediaCount,
                     "children_count" => $album->children_count,
-                    "thumbnail" => $thumbnailMedia?->url,
+                    "thumbnail" => $thumbnailUrl,
                     "thumbnail_media" => $thumbnailMedia
                         ? [
                             "url" => $thumbnailMedia->url,
@@ -97,7 +94,6 @@ class AlbumController extends Controller
                             "mime_type" => $thumbnailMedia->mime_type,
                         ]
                         : null,
-                    "preview_media" => $previewMedia,
                     "is_pinned" => in_array($album->id, $pinnedAlbumIds, true),
                     "is_system" => false,
                     "location" => $album->location,
@@ -210,6 +206,26 @@ class AlbumController extends Controller
         ]);
     }
 
+    private function resolveCoverImageUrl(?string $coverImage): ?string
+    {
+        if (empty($coverImage)) {
+            return null;
+        }
+
+        if (str_starts_with($coverImage, 'http://') || str_starts_with($coverImage, 'https://')) {
+            return $coverImage;
+        }
+
+        // Local public storage path.
+        if (Storage::disk('public')->exists($coverImage)) {
+            return Storage::disk('public')->url($coverImage);
+        }
+
+        // Fallback to interface-based behavior for other disks.
+        $storageService = app(\App\Interfaces\StorageServiceInterface::class);
+        return $storageService->getFileUrl($coverImage);
+    }
+
     // -------------------------------------------------------------------------
     // Create
     // -------------------------------------------------------------------------
@@ -232,6 +248,7 @@ class AlbumController extends Controller
             "title" => "required|string|max:255",
             "description" => "nullable|string",
             "location" => "nullable|string|in:Rajkot,Ahmedabad",
+            "cover_image" => "nullable|file|mimes:jpeg,jpg,png,gif|max:10240",
             // parent_id is sent programmatically when creating a sub-folder
             // from the album Show page – it is NOT shown in the Create form.
             "parent_id" => "nullable|exists:albums,id",
@@ -243,6 +260,12 @@ class AlbumController extends Controller
         $data["is_public"] = true;
 
         $album = $albumService->create($data, auth()->user());
+
+        // Handle cover image upload (store in local public disk and save as local path).
+        if ($request->hasFile("cover_image")) {
+            $filePath = $request->file('cover_image')->store('album-cover-images', 'public');
+            $album->update(['cover_image' => $filePath]);
+        }
 
         if ($request->hasFile("files")) {
             $mediaService = app(\App\Services\MediaService::class);
@@ -591,7 +614,7 @@ class AlbumController extends Controller
                 "location" => $album->location,
                 "created_at" => $album->created_at,
                 "thumbnail" =>
-                    $album->cover_image ?: $album->media->first()?->url,
+                    $this->resolveCoverImageUrl($album->cover_image) ?: $album->media->first()?->url,
                 "user" => $album->user
                     ? [
                         "id" => $album->user->id,
@@ -864,7 +887,7 @@ class AlbumController extends Controller
             $album->children->transform(function ($child) {
                 $thumbnailMedia = $child->media->first();
                 $child->setAttribute('path', $child->path);
-                $child->thumbnail = $thumbnailMedia?->url;
+                $child->thumbnail = $this->resolveCoverImageUrl($child->cover_image) ?: $thumbnailMedia?->url;
                 $child->thumbnail_media = $thumbnailMedia
                     ? [
                         "url" => $thumbnailMedia->url,
@@ -946,6 +969,7 @@ class AlbumController extends Controller
                 "title" => $album->title,
                 "description" => $album->description,
                 "location" => $album->location,
+                "cover_image" => $this->resolveCoverImageUrl($album->cover_image),
             ],
         ]);
     }
@@ -956,12 +980,23 @@ class AlbumController extends Controller
         AlbumService $albumService,
         ActivityLogService $logService,
     ) {
+        // Comprehensive logging
+        Log::info('========== ALBUM UPDATE REQUEST START ==========');
+        Log::info('Request method: ' . $request->method());
+        Log::info('Request header Content-Type: ' . $request->header('Content-Type'));
+        Log::info('Full request data:', $request->all());
+        Log::info('Has title field: ' . ($request->has('title') ? 'YES' : 'NO'));
+        Log::info('Title input value: "' . ($request->input('title') ?? 'NULL') . '"');
+        Log::info('Title value type: ' . gettype($request->input('title')));
+        Log::info('========== REQUEST END ==========');
+
         $this->authorize("update", $album);
 
         $data = $request->validate([
             "title" => "required|string|max:255",
             "description" => "nullable|string",
             "location" => "nullable|string|in:Rajkot,Ahmedabad",
+            "cover_image" => "nullable|file|mimes:jpeg,jpg,png,gif|max:10240",
             "return_to_path" => "nullable|string|max:2048",
         ]);
 
@@ -969,6 +1004,12 @@ class AlbumController extends Controller
             ? trim((string) $data["return_to_path"], "/")
             : null;
         unset($data["return_to_path"]);
+
+        // Handle cover image upload (store in local public disk and save as local path).
+        if ($request->hasFile("cover_image")) {
+            $filePath = $request->file('cover_image')->store('album-cover-images', 'public');
+            $data['cover_image'] = $filePath;
+        }
 
         $album = $albumService->update($album, $data);
         $logService->logAlbumUpdated($album);
