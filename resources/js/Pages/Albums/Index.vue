@@ -289,7 +289,7 @@ const submitImport = () => {
                 </h3>
                 <div class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-6">
                     <template v-for="album in systemAlbums" :key="album.id">
-                        <Link :href="route('albums.all', album.id)" class="group relative flex flex-col gap-2 cursor-pointer transition-all duration-300 active:scale-95">
+                        <Link :href="route('albums.all', { location: locationFilter === 'all' ? 'all' : locationFilter.toLowerCase(), type: album.id })" class="group relative flex flex-col gap-2 cursor-pointer transition-all duration-300 active:scale-95">
                             <div class="aspect-[4/3] rounded-2xl bg-bg-elevated border border-border overflow-hidden relative group-hover:border-purple-500/50 transition-all shadow-sm group-hover:shadow-md">
                                 <MediaRenderer
                                     v-if="album.thumbnail_media"

@@ -113,10 +113,14 @@ class AlbumController extends Controller
 
         if (!$request->has("parent_id") && ! $hasSearch) {
             // Recent – last 30 days
-            $recentMedia = \App\Models\Media::where("user_id", auth()->id())
+            $recentMediaQuery = \App\Models\Media::where("user_id", auth()->id())
                 ->where("created_at", ">=", now()->subDays(30))
-                ->orderBy("created_at", "desc")
-                ->get();
+                ->when($locationFilter !== 'all', function ($q) use ($locationFilter) {
+                    $q->whereHas('album', fn($query) => $query->where('location', $locationFilter));
+                })
+                ->orderBy("created_at", "desc");
+
+            $recentMedia = $recentMediaQuery->get();
 
             if ($recentMedia->count() > 0) {
                 $thumbnailMedia = $recentMedia->first();
@@ -142,12 +146,16 @@ class AlbumController extends Controller
             }
 
             // Today's Memories – same day in previous years
-            $todayMemories = \App\Models\Media::where("user_id", auth()->id())
+            $todayMemoriesQuery = \App\Models\Media::where("user_id", auth()->id())
                 ->whereMonth('created_at', now()->month)
                 ->whereDay('created_at', now()->day)
                 ->whereYear('created_at', '<', now()->year)
-                ->orderBy("created_at", "desc")
-                ->get();
+                ->when($locationFilter !== 'all', function ($q) use ($locationFilter) {
+                    $q->whereHas('album', fn($query) => $query->where('location', $locationFilter));
+                })
+                ->orderBy("created_at", "desc");
+
+            $todayMemories = $todayMemoriesQuery->get();
 
             if ($todayMemories->count() > 0) {
                 $thumbnailMedia = $todayMemories->first();
@@ -1073,6 +1081,11 @@ class AlbumController extends Controller
                 basename($coverPath),
             );
             $data['cover_image'] = $filePath;
+        } else {
+            // The frontend says "Leave empty to keep current image".
+            // To ensure we don't overwrite the DB field with null, we must unset it.
+            // This also allows AlbumService to migrate the existing cover image name.
+            unset($data['cover_image']);
         }
 
         $album = $albumService->update($album, $data);
@@ -1284,14 +1297,24 @@ class AlbumController extends Controller
     // System Albums (smart albums)
     // -------------------------------------------------------------------------
 
-    public function showSystemAlbum(string $type, Request $request)
+    public function showSystemAlbum(string $location, string $type, Request $request)
     {
         $album = null;
         $paginatedMedia = null;
 
+        $locationFilter = null;
+        if (strtolower($location) === 'ahmedabad') {
+            $locationFilter = 'Ahmedabad';
+        } elseif (strtolower($location) === 'rajkot') {
+            $locationFilter = 'Rajkot';
+        }
+
         if ($type === "recent") {
             $paginatedMedia = \App\Models\Media::with("user:id,name,role")
                 ->where("user_id", auth()->id())
+                ->when($locationFilter !== null, function ($q) use ($locationFilter) {
+                    $q->whereHas('album', fn($query) => $query->where('location', $locationFilter));
+                })
                 ->where("created_at", ">=", now()->subDays(30))
                 ->orderBy("created_at", "desc")
                 ->paginate(20)
@@ -1303,11 +1326,15 @@ class AlbumController extends Controller
                 "description" => "Photos and videos from the last 30 days",
                 "type" => "system",
                 "is_system" => true,
+                "location" => $locationFilter ?: 'All Locations',
                 "children" => [],
             ];
         } elseif ($type === "todays-memories") {
             $paginatedMedia = \App\Models\Media::with("user:id,name,role")
                 ->where("user_id", auth()->id())
+                ->when($locationFilter !== null, function ($q) use ($locationFilter) {
+                    $q->whereHas('album', fn($query) => $query->where('location', $locationFilter));
+                })
                 ->whereRaw("MONTH(created_at) = ?", [now()->month])
                 ->whereRaw("DAY(created_at) = ?", [now()->day])
                 ->whereRaw("YEAR(created_at) < ?", [now()->year])
@@ -1321,6 +1348,7 @@ class AlbumController extends Controller
                 "description" => "Photos from this day in previous years",
                 "type" => "system",
                 "is_system" => true,
+                "location" => $locationFilter ?: 'All Locations',
                 "children" => [],
             ];
         }

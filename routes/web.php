@@ -29,8 +29,8 @@ Route::middleware(["auth"])->group(function () {
     // Static / extra album routes MUST be declared before Route::resource() so
     // Laravel matches them before the parameterised {album} show/edit routes.
 
-    // System (smart) album viewer — e.g. /albums/all/recent
-    Route::get("/albums/all/{type}", [
+    // System (smart) album viewer — e.g. /albums/rajkot/all/recent
+    Route::get("/albums/{location}/all/{type}", [
         AlbumController::class,
         "showSystemAlbum",
     ])->name("albums.all");
