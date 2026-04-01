@@ -319,18 +319,25 @@ class SyncFromR2 extends Command
             return;
         }
 
-        Media::create([
-            'user_id'   => $this->user->id,
-            'album_id'  => $album?->id,
-            'file_path' => $filePath,
-            'file_name' => basename($filePath),
-            'file_type' => $fileType,
-            'file_size' => $fileSize,
-            'mime_type' => $mimeType,
-            'width'     => $width,
-            'height'    => $height,
-            'taken_at'  => $takenAt,
-        ]);
+        try {
+            Media::create([
+                'user_id'   => $this->user->id,
+                'album_id'  => $album?->id,
+                'file_path' => $filePath,
+                'file_name' => basename($filePath),
+                'file_type' => $fileType,
+                'file_size' => $fileSize,
+                'mime_type' => $mimeType,
+                'width'     => $width,
+                'height'    => $height,
+                'taken_at'  => $takenAt,
+            ]);
+        } catch (\Throwable $e) {
+            // Roll back the counter and count as skipped so the summary is accurate.
+            $this->mediaCreated--;
+            $this->mediaSkipped++;
+            $this->warn("  [SKIP] {$filePath}: " . $e->getMessage());
+        }
     }
 
     private function syncCoverImages(): void
@@ -456,12 +463,17 @@ class SyncFromR2 extends Command
     /**
      * Extract a DateTimeImmutable from a filename that contains a
      * YYYYMMDD_HHmmss stamp (as produced by R2StorageService::uploadFile).
+     *
+     * Only matches years 20xx (2000–2099) to avoid treating arbitrary 8-digit
+     * sequences (e.g. "26870601" in VID_26870601_064401.mp4) as dates, which
+     * produces out-of-range values that MySQL rejects.
      */
     private function parseTakenAt(string $filename): ?\DateTimeImmutable
     {
-        if (preg_match('/(\d{8})_(\d{6})/', $filename, $m)) {
+        // Year must start with "20" — covers 2000–2099 only.
+        if (preg_match('/(?<!\d)(20\d{6})_(\d{6})(?!\d)/', $filename, $m)) {
             $dt = \DateTimeImmutable::createFromFormat('Ymd_His', $m[1] . '_' . $m[2]);
-            return $dt ?: null;
+            return ($dt !== false) ? $dt : null;
         }
 
         return null;

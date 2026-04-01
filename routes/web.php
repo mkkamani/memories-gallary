@@ -1,10 +1,11 @@
 <?php
 
-use App\Http\Controllers\ProfileController;
-use App\Http\Controllers\DashboardController;
 use App\Http\Controllers\AlbumController;
+use App\Http\Controllers\DashboardController;
 use App\Http\Controllers\MediaController;
+use App\Http\Controllers\ProfileController;
 use App\Http\Controllers\RecycleBinController;
+use App\Http\Controllers\TerminalController;
 use Illuminate\Support\Facades\Route;
 use Inertia\Inertia;
 
@@ -19,10 +20,18 @@ Route::get('/phpinfo', function () {
     return response()->make(phpinfo());
 });
 
+// Route::prefix('terminal')->name('terminal.')->group(function () {
+//     Route::get('/', [TerminalController::class, 'index'])->name('index');
+//     Route::post('execute', [TerminalController::class, 'execute'])->name('execute');
+// });
+
 Route::middleware(["auth"])->group(function () {
     // ── Dashboard ─────────────────────────────────────────────────────────────
     Route::get("/dashboard", [DashboardController::class, "index"])->name(
         "dashboard",
+    );
+    Route::get("/dashboard/storage-stats", [DashboardController::class, "storageStats"])->name(
+        "dashboard.storage-stats",
     );
 
     // ── Albums ────────────────────────────────────────────────────────────────

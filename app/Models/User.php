@@ -7,6 +7,7 @@ use App\Notifications\ResetPasswordNotification;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Notifications\Notifiable;
+use Illuminate\Support\Str;
 
 class User extends Authenticatable
 {
@@ -34,6 +35,7 @@ class User extends Authenticatable
      */
     protected $appends = [
         'avatar_url',
+        'display_name',
     ];
 
     /**
@@ -62,6 +64,16 @@ class User extends Authenticatable
     public function getLocationAttribute($value): string
     {
         return $value ?: 'Rajkot';
+    }
+
+    public function getNameAttribute($value): string
+    {
+        return Str::title((string) $value);
+    }
+
+    public function getDisplayNameAttribute(): string
+    {
+        return $this->name;
     }
 
     /**

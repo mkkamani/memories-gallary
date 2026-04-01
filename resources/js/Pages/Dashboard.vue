@@ -1,7 +1,7 @@
 <script setup>
 import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout.vue';
 import { Head, Link } from '@inertiajs/vue3';
-import { ref, computed } from 'vue';
+import { ref, computed, onMounted } from 'vue';
 import MediaPreviewOverlay from '@/Components/MediaPreviewOverlay.vue';
 import MediaRenderer from '@/Components/MediaRenderer.vue';
 import { getInitials } from '@/utils/initials';
@@ -15,6 +15,45 @@ const props = defineProps({
     myRecentUploads: Array,
     userRole: String,
 });
+
+// ── Dynamic storage stats (fetched via Ajax from DB) ─────────────────────────
+const storageLoading    = ref(true);
+const dynamicStorage    = ref(null);  // { storageUsed, storageTotalBytes, mediaAssets, myStorageUsed, myStorageBytes }
+
+onMounted(async () => {
+    try {
+        const res  = await fetch('/dashboard/storage-stats', {
+            headers: { 'Accept': 'application/json', 'X-Requested-With': 'XMLHttpRequest' },
+            credentials: 'same-origin',
+        });
+        if (res.ok) {
+            dynamicStorage.value = await res.json();
+        }
+    } catch (e) {
+        // silently fall back to the server-rendered props
+    } finally {
+        storageLoading.value = false;
+    }
+});
+
+// Resolved stats — use Ajax result when ready, fall back to SSR props.
+const resolvedStorageUsed = computed(() => {
+    if (storageLoading.value) return null; // null → show spinner
+    if (dynamicStorage.value) {
+        return props.userRole === 'member'
+            ? dynamicStorage.value.myStorageUsed
+            : dynamicStorage.value.storageUsed;
+    }
+    return props.userRole === 'member'
+        ? props.stats?.myStorageUsed
+        : props.stats?.storageUsed;
+});
+
+const resolvedMediaAssets = computed(() => {
+    if (dynamicStorage.value) return dynamicStorage.value.mediaAssets;
+    return props.stats?.mediaAssets;
+});
+// ─────────────────────────────────────────────────────────────────────────────
 
 const formatSize = (bytes) => {
     if (!bytes) return '0.00 B';
@@ -74,13 +113,14 @@ const formatStorageLabel = (value) => {
 };
 
 const storageUsedLabel = computed(() => {
-    if (props.userRole === 'member') return formatStorageLabel(props.stats?.myStorageUsed);
-    return formatStorageLabel(props.stats?.storageUsed);
+    if (resolvedStorageUsed.value === null) return null; // loading
+    return formatStorageLabel(resolvedStorageUsed.value);
 });
 
 const storageUsagePercent = computed(() => {
+    if (!storageUsedLabel.value) return 0;
     const usedTb = parseStorageToTB(storageUsedLabel.value);
-    const maxTb = props.userRole === 'member' ? 2 : 5;
+    const maxTb = props.userRole === 'member' ? 2 : 1;
     return Math.min(100, Math.max(0, (usedTb / maxTb) * 100));
 });
 
@@ -133,14 +173,21 @@ const memberUsagePercent = computed(() => {
                         <div class="dash-icon-box"><svg class="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 7v10a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-6l-2-2H5a2 2 0 00-2 2z"/></svg></div>
                     </div>
                     <div class="dash-card flex items-center justify-between">
-                        <div><p class="text-xs font-bold text-muted-foreground uppercase tracking-widest">Media Assets</p><h3 class="text-3xl font-bold font-mono text-foreground mt-1">{{ stats.mediaAssets }}</h3></div>
+                        <div><p class="text-xs font-bold text-muted-foreground uppercase tracking-widest">Media Assets</p><h3 class="text-3xl font-bold font-mono text-foreground mt-1">{{ resolvedMediaAssets }}</h3></div>
                         <div class="dash-icon-box"><svg class="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z"/></svg></div>
                     </div>
                     <div class="dash-card flex items-center justify-between">
                         <div>
                             <p class="text-xs font-bold text-muted-foreground uppercase tracking-widest">Storage Used</p>
-                            <h3 class="text-3xl font-bold font-mono text-foreground mt-1">{{ stats.storageUsed }}</h3>
-                            <p class="text-[10px] text-muted-foreground mt-1">{{ stats.mediaAssets }} files in R2</p>
+                            <h3 v-if="!storageLoading" class="text-3xl font-bold font-mono text-foreground mt-1">{{ storageUsedLabel }}</h3>
+                            <div v-else class="flex items-center gap-2 mt-1">
+                                <svg class="w-4 h-4 animate-spin text-primary" fill="none" viewBox="0 0 24 24">
+                                    <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"/>
+                                    <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8z"/>
+                                </svg>
+                                <span class="text-sm font-semibold text-muted-foreground tracking-wide">Calculating...</span>
+                            </div>
+                            <p class="text-[10px] text-muted-foreground mt-1">{{ resolvedMediaAssets }} files in library</p>
                         </div>
                         <div class="dash-icon-box"><svg class="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7v8a2 2 0 002 2h6M8 7V5a2 2 0 012-2h4.586a1 1 0 01.707.293l4.414 4.414a1 1 0 01.293.707V15a2 2 0 01-2 2h-2M8 7H6a2 2 0 00-2 2v10a2 2 0 002 2h8a2 2 0 002-2v-2"/></svg></div>
                     </div>
@@ -268,7 +315,10 @@ const memberUsagePercent = computed(() => {
                             </div>
                             <div class="space-y-3 mt-4">
                                 <div v-for="u in recentUsers" :key="u.id" class="flex items-center gap-3 p-2.5 rounded-xl hover:bg-bg-hover transition-colors">
-                                    <div class="w-8 h-8 rounded-full bg-primary/10 flex items-center justify-center text-xs font-bold text-primary">{{ getInitials(u.name) }}</div>
+                                    <div class="w-8 h-8 rounded-full bg-primary/10 flex items-center justify-center text-xs font-bold text-primary overflow-hidden">
+                                        <img v-if="u.avatar_url" :src="u.avatar_url" :alt="u.name" class="h-full w-full object-cover" />
+                                        <span v-else>{{ getInitials(u.name) }}</span>
+                                    </div>
                                     <div class="min-w-0 flex-1">
                                         <p class="text-xs font-bold text-foreground truncate">{{ u.name }}</p>
                                         <p class="text-[10px] text-muted-foreground uppercase">{{ u.role }}</p>
@@ -285,10 +335,19 @@ const memberUsagePercent = computed(() => {
                             <div>
                                 <div class="flex items-center justify-between text-[11px] text-muted-foreground mb-1.5">
                                     <span>Storage Used</span>
-                                    <span class="font-bold text-foreground">{{ storageUsedLabel }} / {{ userRole === 'member' ? '2 TB' : '5 TB' }}</span>
+                                    <span class="font-bold text-foreground">
+                                        <template v-if="storageLoading">
+                                            <span class="inline-flex items-center gap-1">
+                                                <svg class="w-3 h-3 animate-spin text-primary" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"/><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8z"/></svg>
+                                                Calculating...
+                                            </span>
+                                        </template>
+                                        <template v-else>{{ storageUsedLabel }} / {{ userRole === 'member' ? '2 TB' : '1 TB' }}</template>
+                                    </span>
                                 </div>
                                 <div class="h-1.5 rounded-full bg-muted overflow-hidden">
-                                    <div class="orange-progress h-full rounded-full transition-all" :style="{ width: `${storageUsagePercent}%` }" />
+                                    <div v-if="storageLoading" class="progress-shimmer h-full rounded-full" />
+                                    <div v-else class="orange-progress h-full rounded-full transition-all duration-700" :style="{ width: `${storageUsagePercent}%` }" />
                                 </div>
                             </div>
 
@@ -350,5 +409,22 @@ const memberUsagePercent = computed(() => {
 
 .orange-progress {
     background: linear-gradient(90deg, hsl(var(--primary)), hsl(var(--accent-hover)));
+}
+
+.progress-shimmer {
+    width: 100%;
+    background: linear-gradient(
+        90deg,
+        hsl(var(--muted)) 25%,
+        hsl(var(--primary) / 0.45) 50%,
+        hsl(var(--muted)) 75%
+    );
+    background-size: 200% 100%;
+    animation: shimmer 1.4s ease-in-out infinite;
+}
+
+@keyframes shimmer {
+    0%   { background-position: 200% center; }
+    100% { background-position: -200% center; }
 }
 </style>
