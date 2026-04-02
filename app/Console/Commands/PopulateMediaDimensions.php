@@ -4,7 +4,7 @@ namespace App\Console\Commands;
 
 use App\Models\Media;
 use Illuminate\Console\Command;
-use Illuminate\Support\Facades\Storage;
+use App\Support\MediaDimensionExtractor;
 
 class PopulateMediaDimensions extends Command
 {
@@ -62,7 +62,18 @@ class PopulateMediaDimensions extends Command
             $mediaItems = Media::whereIn('id', $idChunk)->get();
 
             foreach ($mediaItems as $media) {
-                $dimensions = $this->extractImageDimensions($media->file_path, $media->mime_type, $disk);
+                if (empty($media->file_path)) {
+                    $failed++;
+                    $processed++;
+                    $bar->advance();
+                    continue;
+                }
+
+                $dimensions = MediaDimensionExtractor::fromStorage(
+                    $disk,
+                    $media->file_path,
+                    (string) ($media->mime_type ?: 'application/octet-stream'),
+                );
 
                 if ($dimensions[0] !== null && $dimensions[1] !== null) {
                     $media->update([
@@ -97,49 +108,9 @@ class PopulateMediaDimensions extends Command
         }
 
         if ($failed > 0) {
-            $this->warn(sprintf('⚠ %d file(s) could not be processed (non-image or read error).', $failed));
+            $this->warn(sprintf('⚠ %d file(s) could not be processed (unsupported type or read/probe error).', $failed));
         }
 
         return 0;
-    }
-
-    /**
-     * Extract image dimensions from storage.
-     *
-     * @return array{0:int|null,1:int|null}
-     */
-    private function extractImageDimensions(string $path, string $mimeType, string $disk): array
-    {
-        // Skip non-image types and SVG (raster dimensions optional)
-        if (!str_starts_with($mimeType, 'image/') || $mimeType === 'image/svg+xml') {
-            return [null, null];
-        }
-
-        try {
-            $stream = Storage::disk($disk)->readStream($path);
-            if (!$stream) {
-                return [null, null];
-            }
-
-            $contents = stream_get_contents($stream);
-            if ($contents === false) {
-                return [null, null];
-            }
-
-            $metadata = @getimagesizefromstring($contents);
-
-            if (is_array($metadata) && !empty($metadata[0]) && !empty($metadata[1])) {
-                return [(int) $metadata[0], (int) $metadata[1]];
-            }
-        } catch (\Throwable $e) {
-            // Log but continue processing
-            \Illuminate\Support\Facades\Log::debug('Failed to extract dimensions for media', [
-                'file_path' => $path,
-                'mime_type' => $mimeType,
-                'error' => $e->getMessage(),
-            ]);
-        }
-
-        return [null, null];
     }
 }

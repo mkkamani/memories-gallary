@@ -107,6 +107,38 @@ class DashboardController extends Controller
         ]);
     }
 
+    /**
+     * Resolve a cover media item for a dashboard album card.
+     * Priority: cover_image field → latest media in album or any descendant.
+     */
+    private function resolveAlbumCoverMedia(Album $album): ?Media
+    {
+        // 1. Explicit cover_image stored on the album
+        if (!empty($album->cover_image)) {
+            $media = Media::where('file_path', $album->cover_image)->first();
+            if ($media) {
+                return $media;
+            }
+        }
+
+        // 2. Latest media from the album itself or any nested descendant
+        $albumIds = $album->descendants()->pluck('id')->prepend($album->id)->all();
+        return Media::whereIn('album_id', $albumIds)->latest()->first();
+    }
+
+    private function formatAlbumCoverMediaArray(?Media $media): ?array
+    {
+        if (!$media) {
+            return null;
+        }
+        return [
+            'url'       => $media->url,
+            'file_type' => $media->file_type,
+            'file_name' => $media->file_name,
+            'mime_type' => $media->mime_type,
+        ];
+    }
+
     public function index(Request $request)
     {
         $user = $request->user();
@@ -130,25 +162,17 @@ class DashboardController extends Controller
         $myStorageUsed  = $this->formatBytes($myStorageBytes);
 
         // Recent Media
-        $recentMedia = Media::with('user', 'album')->latest()->take(10)->get();
-
-        // Team Updates (recent users)
-        $recentUsers = User::latest()->take(5)->get();
+        $recentMedia = Media::with(['user', 'album'])->inRandomOrder()->take(20)->get();
 
         // Pinned Albums (scoped to current user)
         $recentAlbums = $user
             ->pinnedAlbums()
-            ->with([
-                'media' => function ($q) {
-                    $q->latest()->take(1);
-                },
-            ])
             ->withCount('media')
             ->orderByDesc('pinned_albums.created_at')
-            ->take(8)
+            ->take(10)
             ->get()
             ->map(function ($album) {
-                $coverMedia = $album->media->first();
+                $coverMedia = $this->resolveAlbumCoverMedia($album);
 
                 return [
                     'id'         => $album->id,
@@ -157,15 +181,29 @@ class DashboardController extends Controller
                     'name'       => $album->title,
                     'date'       => optional($album->updated_at)->format('Y-m-d'),
                     'photoCount' => $album->media_count,
-                    'coverUrl'   => $coverMedia ? $coverMedia->url : null,
-                    'coverMedia' => $coverMedia
-                        ? [
-                            'url'       => $coverMedia->url,
-                            'file_type' => $coverMedia->file_type,
-                            'file_name' => $coverMedia->file_name,
-                            'mime_type' => $coverMedia->mime_type,
-                        ]
-                        : null,
+                    'coverUrl'   => $coverMedia?->url,
+                    'coverMedia' => $this->formatAlbumCoverMediaArray($coverMedia),
+                ];
+            });
+
+        // All Recent Albums (for member dashboard — not pinned, just latest)
+        $allRecentAlbums = (clone $albumQuery)
+            ->withCount('media')
+            ->latest()
+            ->take(10)
+            ->get()
+            ->map(function ($album) {
+                $coverMedia = $this->resolveAlbumCoverMedia($album);
+
+                return [
+                    'id'         => $album->id,
+                    'slug'       => $album->slug,
+                    'path'       => $album->path,
+                    'name'       => $album->title,
+                    'date'       => optional($album->updated_at)->format('Y-m-d'),
+                    'photoCount' => $album->media_count,
+                    'coverUrl'   => $coverMedia?->url,
+                    'coverMedia' => $this->formatAlbumCoverMediaArray($coverMedia),
                 ];
             });
 
@@ -194,10 +232,10 @@ class DashboardController extends Controller
                 'newUploads'        => $newUploads,
                 'myUploadsCount'    => $myUploadsCount,
             ],
-            'recentMedia'     => $recentMedia,
-            'recentUsers'     => $recentUsers,
-            'recentAlbums'    => $recentAlbums,
-            'myRecentUploads' => $myRecentUploads,
+            'recentMedia'      => $recentMedia,
+            'recentAlbums'     => $recentAlbums,
+            'allRecentAlbums'  => $allRecentAlbums,
+            'myRecentUploads'  => $myRecentUploads,
             'userRole'        => $user->role,
         ]);
     }

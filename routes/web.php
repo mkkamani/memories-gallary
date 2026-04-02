@@ -14,7 +14,7 @@ Route::get("/", function () {
         "canLogin" => Route::has("login"),
         "canRegister" => Route::has("register"),
     ]);
-});
+})->name("home");
 
 Route::get('/phpinfo', function () {
     return response()->make(phpinfo());

@@ -8,6 +8,7 @@ use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
 use App\Models\Media;
 use App\Models\Album;
+use App\Support\MediaDimensionExtractor;
 use GuzzleHttp\Client as GuzzleClient;
 
 class GoogleDriveImportService
@@ -177,6 +178,7 @@ class GoogleDriveImportService
                 // Download file content (allow files in Shared Drives)
                 $resp = $this->drive->files->get($id, ['alt' => 'media', 'supportsAllDrives' => $supportsAllDrives]);
                 $content = $resp->getBody()->getContents();
+                [$width, $height] = MediaDimensionExtractor::fromBinary($content, $mime, $name);
 
                 $storagePath = 'media/drive/'.date('Y/m/d');
                 $fileName = $name;
@@ -190,6 +192,8 @@ class GoogleDriveImportService
                     'file_type' => $isImage ? 'image' : 'video',
                     'file_size' => $file->getSize() ?? null,
                     'mime_type' => $mime,
+                    'width' => $width,
+                    'height' => $height,
                 ];
 
                 Media::create($mediaData);
@@ -294,6 +298,7 @@ class GoogleDriveImportService
 
                 $resp = $this->drive->files->get($id, ['alt' => 'media', 'supportsAllDrives' => $supportsAllDrives]);
                 $content = $resp->getBody()->getContents();
+                [$width, $height] = MediaDimensionExtractor::fromBinary($content, $mime, $name);
 
                 $storagePath = 'media/drive/'.date('Y/m/d');
                 $fileName = $name;
@@ -307,6 +312,8 @@ class GoogleDriveImportService
                     'file_type' => $isImage ? 'image' : 'video',
                     'file_size' => $file->getSize() ?? null,
                     'mime_type' => $mime,
+                    'width' => $width,
+                    'height' => $height,
                 ];
 
                 Media::create($mediaData);
@@ -366,6 +373,7 @@ class GoogleDriveImportService
 
                 $resp = $this->drive->files->get($id, ['alt' => 'media', 'supportsAllDrives' => $supportsAllDrives]);
                 $content = $resp->getBody()->getContents();
+                [$width, $height] = MediaDimensionExtractor::fromBinary($content, $mime, $name);
 
                 $storagePath = 'media/drive/'.date('Y/m/d');
                 $fileName = $name;
@@ -379,6 +387,8 @@ class GoogleDriveImportService
                     'file_type' => $isImage ? 'image' : 'video',
                     'file_size' => $file->getSize() ?? null,
                     'mime_type' => $mime,
+                    'width' => $width,
+                    'height' => $height,
                 ];
 
                 Media::create($mediaData);

@@ -51,9 +51,17 @@ const spanMap    = ref({}); // { [fileId]: row span count }
 function calcSpan(fileId) {
     const dims = naturalDims.value[fileId];
     if (!dims || !masonryRef.value) return;
-    const item = masonryRef.value.querySelector(`[data-file-id="${fileId}"]`);
-    // clientWidth excludes the 2 px border so the aspect-ratio math is exact.
-    const colWidth = item ? (item.clientWidth || item.offsetWidth) : 220;
+    // Derive column width from the container so spans are correct even on first
+    // render before individual cells have a reliable clientWidth.
+    const grid = masonryRef.value;
+    const containerW = grid.clientWidth || grid.offsetWidth;
+    let colWidth = 220;
+    if (containerW > 0) {
+        const styles = window.getComputedStyle(grid);
+        const colCount = (styles.gridTemplateColumns.match(/\S+/g) || []).length || 1;
+        const colGap = parseFloat(styles.columnGap) || 16;
+        colWidth = (containerW - colGap * (colCount - 1)) / colCount;
+    }
     const imageH = dims.h / dims.w * colWidth;
     const span = Math.ceil((imageH + MASONRY_GAP) / MASONRY_ROW_UNIT);
     spanMap.value = { ...spanMap.value, [fileId]: span };
@@ -81,7 +89,7 @@ function seedDimsFromDb(fileList) {
         }
     }
     if (changed) {
-        nextTick(() => recalcAllSpans());
+        nextTick(() => requestAnimationFrame(() => recalcAllSpans()));
     }
 }
 
@@ -141,7 +149,7 @@ const loadMore = async () => {
             seedDimsFromDb(newFiles);
         }
         nextPageUrl.value = response.data.next_page_url || null;
-        nextTick(() => recalcAllSpans());
+        nextTick(() => requestAnimationFrame(() => recalcAllSpans()));
     } catch (e) {
         console.error('[Load More] Error:', e);
     } finally {
@@ -216,7 +224,7 @@ const emptyStateText = computed(() => {
 onMounted(() => {
     window.addEventListener('resize', recalcAllSpans);
     seedDimsFromDb(files.value);
-    nextTick(() => recalcAllSpans());
+    nextTick(() => requestAnimationFrame(() => recalcAllSpans()));
 });
 
 onBeforeUnmount(() => {

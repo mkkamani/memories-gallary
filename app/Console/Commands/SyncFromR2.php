@@ -8,6 +8,7 @@ use App\Models\User;
 use Illuminate\Console\Command;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
+use App\Support\MediaDimensionExtractor;
 use League\Flysystem\DirectoryAttributes;
 use League\Flysystem\FileAttributes;
 
@@ -65,8 +66,11 @@ class SyncFromR2 extends Command
         $dirPaths = [];
 
         try {
-            $listing = Storage::disk($this->disk)
-                ->getDriver()
+            /** @var \Illuminate\Filesystem\FilesystemAdapter $filesystem */
+            $filesystem = Storage::disk($this->disk);
+
+            $listing = $filesystem
+                ->getAdapter()
                 ->listContents($prefix, true);   // true = recursive
 
             foreach ($listing as $item) {
@@ -303,7 +307,7 @@ class SyncFromR2 extends Command
         $ext      = strtolower(pathinfo($filePath, PATHINFO_EXTENSION));
         $mimeType = $this->mimeFromExt($ext);
         $fileType = str_starts_with($mimeType, 'video') ? 'video' : 'image';
-        [$width, $height] = $this->extractImageDimensionsFromStorage($filePath, $mimeType);
+        [$width, $height] = MediaDimensionExtractor::fromStorage($this->disk, $filePath, $mimeType);
 
         // fileSize() is populated by the listing call — no extra R2 request needed
         $fileSize = $fileItem->fileSize() ?? 0;
@@ -512,42 +516,6 @@ class SyncFromR2 extends Command
         }
 
         return $this->mimeFromExt($ext) !== 'application/octet-stream';
-    }
-
-    /**
-     * Read intrinsic image dimensions from storage when possible.
-     *
-     * @return array{0:int|null,1:int|null}
-     */
-    private function extractImageDimensionsFromStorage(string $path, string $mimeType): array
-    {
-        if (!str_starts_with($mimeType, 'image/') || $mimeType === 'image/svg+xml') {
-            return [null, null];
-        }
-
-        $stream = Storage::disk($this->disk)->readStream($path);
-        if ($stream === false) {
-            return [null, null];
-        }
-
-        try {
-            $contents = stream_get_contents($stream);
-        } finally {
-            if (is_resource($stream)) {
-                fclose($stream);
-            }
-        }
-
-        if ($contents === false) {
-            return [null, null];
-        }
-
-        $size = @getimagesizefromstring($contents);
-        if (!is_array($size) || empty($size[0]) || empty($size[1])) {
-            return [null, null];
-        }
-
-        return [(int) $size[0], (int) $size[1]];
     }
 
     private function isLocationContainerDir(string $dirPath, string $prefix): bool

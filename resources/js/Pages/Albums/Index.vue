@@ -46,6 +46,13 @@ const page = usePage();
 const canManage = computed(() => page.props.auth.user.role === 'admin');
 const canCreateActions = computed(() => ['admin', 'manager', 'member'].includes(page.props.auth.user.role));
 
+const locationBadgeClass = (location) => {
+    if (location === 'Ahmedabad') return 'bg-primary/10 text-primary';
+    if (location === 'Rajkot') return 'bg-info/10 text-info';
+
+    return 'bg-bg-elevated text-muted-foreground';
+};
+
 const confirmDelete = (album) => {
     albumToDelete.value = album;
     showActionMenu.value = null;
@@ -466,7 +473,11 @@ const submitImport = () => {
                                 <span class="text-sm font-bold text-foreground">{{ album.title }}</span>
                             </div>
                             <span class="text-sm text-muted-foreground text-center">{{ album.media_count }}</span>
-                            <span class="text-[11px] font-medium text-blue-500">{{ album.location || '-' }}</span>
+                            <div>
+                                <span class="inline-flex rounded-full px-3 py-1 text-xs font-semibold" :class="locationBadgeClass(album.location)">
+                                    {{ album.location || '-' }}
+                                </span>
+                            </div>
                             <span class="text-sm text-muted-foreground">{{ new Date(album.created_at || Date.now()).toLocaleDateString() }}</span>
                             <div class="relative">
                                 <button @click="toggleActionMenu($event, album.id)" class="p-2 rounded-full border border-border/80 bg-bg-card/90 text-foreground shadow-sm transition-all hover:bg-bg-elevated hover:border-primary/30 hover:text-foreground">

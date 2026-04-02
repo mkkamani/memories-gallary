@@ -40,7 +40,7 @@ class NewUserAccountCreatedNotification extends Notification
                 'email' => $notifiable->email,
                 'password' => $this->plainPassword,
                 'logoUrl' => asset('images/cx-logo-dark.svg'),
-                'loginUrl' => route('login'),
+                'loginUrl' => route('home'),
             ]);
     }
 

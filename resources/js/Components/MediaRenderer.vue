@@ -112,6 +112,13 @@ const heicProxyUrl = computed(() => {
     return null;
 });
 
+const mediaProxyUrl = computed(() => {
+    if (props.media?.id) {
+        return `/media/${props.media.id}/raw`;
+    }
+    return props.media?.url || '';
+});
+
 const cleanupObjectUrl = () => {
     if (objectUrl) {
         URL.revokeObjectURL(objectUrl);
@@ -127,16 +134,24 @@ const syncUrl = async () => {
     conversionFailed.value = false;
     isLoading.value = false;
     hasImageLoaded.value = false;
-    resolvedUrl.value = props.media?.url || '';
+    resolvedUrl.value = '';
 
-    if (!props.media?.url || isVideo.value || !isHeic.value) {
+    if (!mediaProxyUrl.value) {
+        // No URL at all — show fallback immediately so no blank tile is rendered
+        conversionFailed.value = true;
+        return;
+    }
+
+    resolvedUrl.value = mediaProxyUrl.value;
+
+    if (isVideo.value || !isHeic.value) {
         return;
     }
 
     isLoading.value = true;
 
     try {
-        const fetchUrl = heicProxyUrl.value || props.media.url;
+        const fetchUrl = heicProxyUrl.value || mediaProxyUrl.value;
         const response = await fetch(fetchUrl);
         if (!response.ok) {
             throw new Error(`Proxy fetch failed: ${response.status}`);
@@ -186,11 +201,15 @@ const onVideoMeta = (e) => {
     emit('load', { naturalWidth: v.videoWidth || 16, naturalHeight: v.videoHeight || 9 });
 };
 
+const onVideoError = () => {
+    conversionFailed.value = true;
+    hasImageLoaded.value = true;
+};
+
 const onImageError = () => {
     hasImageLoaded.value = true;
-    if (isHeic.value) {
-        conversionFailed.value = true;
-    }
+    // Any broken / 404 src → show fallback instead of a blank tile
+    conversionFailed.value = true;
 };
 
 watch(
@@ -219,6 +238,7 @@ onBeforeUnmount(() => {
         :playsinline="videoPlaysinline"
         preload="metadata"
         @loadedmetadata="onVideoMeta"
+        @error="onVideoError"
     ></video>
 
     <!-- ─── HEIC conversion in-progress ──────────────────────────────────── -->
@@ -247,7 +267,7 @@ onBeforeUnmount(() => {
     />
 
     <!-- ─── GRID MODE: wrapper with aspect-ratio + blurred actual-image bg ── -->
-    <div v-else-if="!conversionFailed" class="media-container" :style="containerStyle">
+    <div v-else-if="!conversionFailed" class="media-container">
         <!--
             Blurred version of the ACTUAL image shown while the img element is
             still downloading.  Both point to the same URL so the browser
@@ -279,9 +299,12 @@ onBeforeUnmount(() => {
         />
     </div>
 
-    <!-- ─── FALLBACK (e.g. HEIC conversion failed) ────────────────────────── -->
+    <!-- ─── FALLBACK (broken URL / load error / HEIC conversion failed) ───── -->
     <div v-else :class="fallbackClass">
-        {{ fallbackLabel }}
+        <template v-if="isHeic">{{ fallbackLabel }}</template>
+        <svg v-else class="w-8 h-8 opacity-25" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z"/>
+        </svg>
     </div>
 </template>
 
@@ -296,9 +319,9 @@ onBeforeUnmount(() => {
     display: block;
 }
 
-/* ── Gray base color when no URL yet ─────────────────────────────────── */
 .media-container {
-    background-color: var(--color-bg-elevated, #ebebeb);
+    /* Use the project's bg-elevated HSL token; fallback to a neutral gray */
+    background-color: hsl(var(--bg-elevated, 220 14% 94%));
 }
 
 /* ── Blurred actual-image backdrop (grid only) ──────────────────────────── */

@@ -9,6 +9,7 @@ use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Str;
 use Illuminate\Support\Facades\Log;
 use App\Interfaces\StorageServiceInterface;
+use App\Support\MediaDimensionExtractor;
 
 class MediaService
 {
@@ -26,7 +27,7 @@ class MediaService
         $path = $this->storageService->uploadFile($file, $albumPath);
         $mimeType = (string) ($file->getMimeType() ?: 'application/octet-stream');
         $fileType = str_starts_with($mimeType, 'video') ? 'video' : 'image';
-        [$width, $height] = $this->extractImageDimensions($file, $mimeType);
+        [$width, $height] = MediaDimensionExtractor::fromUploadedFile($file, $mimeType);
 
         return Media::create([
             "user_id"   => $user->id,
@@ -65,33 +66,6 @@ class MediaService
     {
         $albumPath = $this->getAlbumUploadPath($album);
         return $this->storageService->uploadFile($file, $albumPath);
-    }
-
-    /**
-     * Read intrinsic dimensions for uploaded image files.
-     *
-     * Returns [null, null] when dimensions cannot be determined.
-     * SVG is intentionally skipped because raster pixel dimensions are optional.
-     *
-     * @return array{0:int|null,1:int|null}
-     */
-    private function extractImageDimensions(UploadedFile $file, string $mimeType): array
-    {
-        if (!str_starts_with($mimeType, 'image/') || $mimeType === 'image/svg+xml') {
-            return [null, null];
-        }
-
-        $realPath = $file->getRealPath();
-        if (!$realPath) {
-            return [null, null];
-        }
-
-        $size = @getimagesize($realPath);
-        if (!is_array($size) || empty($size[0]) || empty($size[1])) {
-            return [null, null];
-        }
-
-        return [(int) $size[0], (int) $size[1]];
     }
 
     /**

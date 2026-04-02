@@ -1,17 +1,16 @@
 <script setup>
 import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout.vue';
 import { Head, Link } from '@inertiajs/vue3';
-import { ref, computed, onMounted } from 'vue';
+import { ref, computed, nextTick, onMounted, onBeforeUnmount } from 'vue';
 import MediaPreviewOverlay from '@/Components/MediaPreviewOverlay.vue';
 import MediaRenderer from '@/Components/MediaRenderer.vue';
-import { getInitials } from '@/utils/initials';
 import { useMediaPreview } from '@/composables/useMediaPreview';
 
 const props = defineProps({
     stats: Object,
     recentMedia: Array,
-    recentUsers: Array,
     recentAlbums: Array,
+    allRecentAlbums: Array,
     myRecentUploads: Array,
     userRole: String,
 });
@@ -53,7 +52,32 @@ const resolvedMediaAssets = computed(() => {
     if (dynamicStorage.value) return dynamicStorage.value.mediaAssets;
     return props.stats?.mediaAssets;
 });
+
+const isAdmin = computed(() => props.userRole === 'admin');
+const isManager = computed(() => props.userRole === 'manager');
+const isMember = computed(() => props.userRole === 'member');
+
+const recentVisualMedia = computed(() => {
+    const media = props.recentMedia || [];
+    return media.filter((item) => {
+        const type = String(item?.file_type || '').toLowerCase();
+        return type === 'image' || type === 'video';
+    });
+});
+
+const statsGridClass = computed(() => (
+    isMember.value
+        ? 'grid grid-cols-1 sm:grid-cols-3 lg:grid-cols-3 gap-6'
+        : 'grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6'
+));
 // ─────────────────────────────────────────────────────────────────────────────
+
+const MASONRY_ROW_UNIT = 10;
+const MASONRY_GAP = 16;
+
+const recentMediaMasonryRef = ref(null);
+const recentMediaNaturalDims = ref({});
+const recentMediaSpanMap = ref({});
 
 const formatSize = (bytes) => {
     if (!bytes) return '0.00 B';
@@ -129,6 +153,78 @@ const membersMax = computed(() => (props.userRole === 'admin' ? 200 : 100));
 const memberUsagePercent = computed(() => {
     return Math.min(100, Math.max(0, (membersUsed.value / membersMax.value) * 100));
 });
+
+const calcRecentMediaSpan = (mediaId) => {
+    const dims = recentMediaNaturalDims.value[mediaId];
+    if (!dims || !recentMediaMasonryRef.value) {
+        return;
+    }
+
+    const grid = recentMediaMasonryRef.value;
+    const containerW = grid.clientWidth || grid.offsetWidth;
+    let colWidth = 220;
+    if (containerW > 0) {
+        const styles = window.getComputedStyle(grid);
+        const colCount = (styles.gridTemplateColumns.match(/\S+/g) || []).length || 1;
+        const colGap = parseFloat(styles.columnGap) || 16;
+        colWidth = (containerW - colGap * (colCount - 1)) / colCount;
+    }
+    const imageHeight = (dims.h / dims.w) * colWidth;
+    const span = Math.ceil((imageHeight + MASONRY_GAP) / MASONRY_ROW_UNIT);
+
+    recentMediaSpanMap.value = {
+        ...recentMediaSpanMap.value,
+        [mediaId]: span,
+    };
+};
+
+const recalcRecentMediaSpans = () => {
+    Object.keys(recentMediaNaturalDims.value).forEach((id) => calcRecentMediaSpan(Number(id)));
+};
+
+const seedRecentMediaDims = (items) => {
+    let hasChanges = false;
+
+    for (const item of items || []) {
+        const width = Number(item?.width);
+        const height = Number(item?.height);
+
+        if (width > 0 && height > 0 && !recentMediaNaturalDims.value[item.id]) {
+            recentMediaNaturalDims.value[item.id] = { w: width, h: height };
+            hasChanges = true;
+        }
+    }
+
+    if (hasChanges) {
+        nextTick(() => requestAnimationFrame(() => recalcRecentMediaSpans()));
+    }
+};
+
+const rememberRecentMediaDims = (mediaId, { naturalWidth, naturalHeight }) => {
+    if (!naturalWidth || !naturalHeight) {
+        return;
+    }
+
+    recentMediaNaturalDims.value = {
+        ...recentMediaNaturalDims.value,
+        [mediaId]: {
+            w: naturalWidth,
+            h: naturalHeight,
+        },
+    };
+
+    nextTick(() => calcRecentMediaSpan(mediaId));
+};
+
+onMounted(() => {
+    window.addEventListener('resize', recalcRecentMediaSpans);
+    seedRecentMediaDims(recentVisualMedia.value);
+    nextTick(() => requestAnimationFrame(() => recalcRecentMediaSpans()));
+});
+
+onBeforeUnmount(() => {
+    window.removeEventListener('resize', recalcRecentMediaSpans);
+});
 </script>
 
 <template>
@@ -161,7 +257,7 @@ const memberUsagePercent = computed(() => {
             </div>
 
             <!-- Stat Cards common -->
-            <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
+            <div :class="statsGridClass">
                 <!-- Admin Stats -->
                 <template v-if="userRole === 'admin'">
                     <div class="dash-card flex items-center justify-between">
@@ -215,20 +311,24 @@ const memberUsagePercent = computed(() => {
 
                 <!-- Member Stats -->
                 <template v-if="userRole === 'member'">
-                    <div class="dash-card flex items-center justify-between lg:col-span-1">
+                    <div class="dash-card flex items-center justify-between">
                         <div><p class="text-xs font-bold text-muted-foreground uppercase tracking-widest">Total Uploads</p><h3 class="text-3xl font-bold font-mono text-foreground mt-1">{{ stats.myUploadsCount }}</h3></div>
                         <div class="dash-icon-box"><svg class="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z"/></svg></div>
                     </div>
-                    <div class="dash-card flex items-center justify-between lg:col-span-1">
+                    <div class="dash-card flex items-center justify-between">
                         <div><p class="text-xs font-bold text-muted-foreground uppercase tracking-widest">Total Album</p><h3 class="text-3xl font-bold font-mono text-foreground mt-1">{{ stats.totalAlbums }}</h3></div>
                         <div class="dash-icon-box"><svg class="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 7v10a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-6l-2-2H5a2 2 0 00-2 2z"/></svg></div>
+                    </div>
+                    <div class="dash-card flex items-center justify-between">
+                        <div><p class="text-xs font-bold text-muted-foreground uppercase tracking-widest">Media Assets</p><h3 class="text-3xl font-bold font-mono text-foreground mt-1">{{ resolvedMediaAssets }}</h3></div>
+                        <div class="dash-icon-box"><svg class="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z"/></svg></div>
                     </div>
                 </template>
             </div>
 
-            <div class="grid grid-cols-1 lg:grid-cols-3 gap-8">
+            <div class="grid grid-cols-1 gap-8">
                 <!-- Main Activity View -->
-                <div class="lg:col-span-2 space-y-6">
+                <div class="space-y-6">
                     <div class="flex items-center justify-between">
                         <h3 class="font-heading font-bold text-lg text-foreground flex items-center gap-2">
                             <span>Pinned Albums</span>
@@ -236,30 +336,35 @@ const memberUsagePercent = computed(() => {
                         <Link href="/albums" class="text-xs font-bold text-primary hover:underline uppercase tracking-widest">View All</Link>
                     </div>
 
-                    <div v-if="recentAlbums.length" class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div v-if="recentAlbums.length" class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-5">
                         <Link
-                            v-for="album in recentAlbums.slice(0, 4)"
+                            v-for="album in recentAlbums.slice(0, 10)"
                             :key="album.id"
                             :href="route('albums.show', album.path || album.slug || album.id)"
-                            class="dash-card flex items-center gap-3 p-3 group"
+                            class="group relative flex flex-col gap-2 cursor-pointer transition-all duration-300"
                         >
-                            <div class="w-12 h-12 rounded-xl overflow-hidden bg-bg-elevated shrink-0 border border-border">
-                                <MediaRenderer
-                                    v-if="album.coverMedia"
-                                    :media="album.coverMedia"
-                                    :alt="album.name"
-                                    image-class="w-full h-full object-cover group-hover:scale-110 transition-transform duration-300"
-                                    video-class="w-full h-full object-cover group-hover:scale-110 transition-transform duration-300"
-                                    fallback-class="flex h-full w-full items-center justify-center bg-bg-elevated text-[10px] font-bold uppercase tracking-[0.22em] text-muted-foreground"
-                                />
-                                <div v-else class="w-full h-full flex items-center justify-center text-muted-foreground bg-bg-elevated">
-                                    <svg class="w-5 h-5 opacity-40" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 7v10a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-6l-2-2H5a2 2 0 00-2 2z"/></svg>
+                            <div class="relative rounded-2xl bg-bg-elevated border border-border overflow-hidden transition-all shadow-sm group-hover:border-primary/50 group-hover:shadow-md">
+                                <div class="aspect-video relative overflow-hidden bg-bg-elevated rounded-2xl">
+                                    <MediaRenderer
+                                        v-if="album.coverMedia"
+                                        :media="album.coverMedia"
+                                        :alt="album.name"
+                                        image-class="w-full h-full object-cover will-change-transform group-hover:scale-[1.035] transition-transform duration-700 ease-out"
+                                        video-class="w-full h-full object-cover will-change-transform group-hover:scale-[1.035] transition-transform duration-700 ease-out"
+                                        fallback-class="flex h-full w-full items-center justify-center bg-primary/5 text-xs font-bold uppercase tracking-[0.24em] text-primary/60"
+                                    />
+                                    <div v-else class="w-full h-full flex items-center justify-center text-primary/40 bg-primary/5 rounded-2xl">
+                                        <svg class="w-12 h-12" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 7v10a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-6l-2-2H5a2 2 0 00-2 2z"/></svg>
+                                    </div>
+                                    <div class="absolute inset-0 bg-black/20 opacity-0 group-hover:opacity-100 transition-opacity"></div>
                                 </div>
                             </div>
-                            <div class="min-w-0 flex-1">
-                                <p class="text-sm font-bold text-foreground truncate">{{ album.name }}</p>
-                                <p class="text-[11px] text-muted-foreground mt-0.5">{{ album.date || 'Recently updated' }}</p>
-                                <span class="inline-flex mt-1 text-[10px] font-bold px-2 py-0.5 rounded bg-primary/10 text-primary uppercase tracking-wide">{{ album.photoCount }} assets</span>
+                            <div class="px-1">
+                                <div class="flex items-center gap-2">
+                                    <svg class="w-4 h-4 text-orange-500 fill-orange-500/20" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 7v10a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-6l-2-2H5a2 2 0 00-2 2z"/></svg>
+                                    <p class="text-sm font-bold text-foreground truncate">{{ album.name }}</p>
+                                </div>
+                                <p class="text-[11px] text-muted-foreground mt-0.5">{{ album.photoCount }} items</p>
                             </div>
                         </Link>
                     </div>
@@ -267,31 +372,77 @@ const memberUsagePercent = computed(() => {
                         No pinned albums yet. Pin an album from the Albums or Album details page.
                     </div>
 
+                    <!-- Recent Albums + Recent Photos/Videos -->
                     <div class="space-y-4 pt-4">
-                        <h3 class="font-heading font-bold text-lg text-foreground flex items-center gap-2">
-                            <span v-if="userRole === 'member'">My Recent Uploads</span>
-                            <span v-else>Recent Media Uploads</span>
-                        </h3>
+                        <div class="flex items-center justify-between">
+                            <h3 class="font-heading font-bold text-lg text-foreground">Recent Albums</h3>
+                            <Link href="/albums" class="text-xs font-bold text-primary hover:underline uppercase tracking-widest">View All</Link>
+                        </div>
+                        <div v-if="allRecentAlbums?.length" class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-5">
+                            <Link
+                                v-for="album in allRecentAlbums.slice(0, 10)"
+                                :key="album.id"
+                                :href="route('albums.show', album.path || album.slug || album.id)"
+                                class="group relative flex flex-col gap-2 cursor-pointer transition-all duration-300"
+                            >
+                                <div class="relative rounded-2xl bg-bg-elevated border border-border overflow-hidden transition-all shadow-sm group-hover:border-primary/50 group-hover:shadow-md">
+                                    <div class="aspect-video relative overflow-hidden bg-bg-elevated rounded-2xl">
+                                        <MediaRenderer
+                                            v-if="album.coverMedia"
+                                            :media="album.coverMedia"
+                                            :alt="album.name"
+                                            image-class="w-full h-full object-cover will-change-transform group-hover:scale-[1.035] transition-transform duration-700 ease-out"
+                                            video-class="w-full h-full object-cover will-change-transform group-hover:scale-[1.035] transition-transform duration-700 ease-out"
+                                            fallback-class="flex h-full w-full items-center justify-center bg-primary/5 text-xs font-bold uppercase tracking-[0.24em] text-primary/60"
+                                        />
+                                        <div v-else class="w-full h-full flex items-center justify-center text-primary/40 bg-primary/5 rounded-2xl">
+                                            <svg class="w-12 h-12" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 7v10a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-6l-2-2H5a2 2 0 00-2 2z"/></svg>
+                                        </div>
+                                        <div class="absolute inset-0 bg-black/20 opacity-0 group-hover:opacity-100 transition-opacity"></div>
+                                    </div>
+                                </div>
+                                <div class="px-1">
+                                    <div class="flex items-center gap-2">
+                                        <svg class="w-4 h-4 text-orange-500 fill-orange-500/20" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 7v10a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-6l-2-2H5a2 2 0 00-2 2z"/></svg>
+                                        <p class="text-sm font-bold text-foreground truncate">{{ album.name }}</p>
+                                    </div>
+                                    <p class="text-[11px] text-muted-foreground mt-0.5">{{ album.photoCount }} items</p>
+                                </div>
+                            </Link>
+                        </div>
+                        <div v-else class="dash-card !p-6 text-sm text-muted-foreground">No albums yet.</div>
+                    </div>
 
-                        <div class="columns-2 sm:columns-3 gap-4">
-                            <template v-for="(item, i) in (userRole === 'member' ? myRecentUploads : recentMedia)" :key="item.id">
-                                <div @click="openPreview(item, userRole === 'member' ? myRecentUploads : recentMedia)" class="group relative inline-block w-full mb-4 break-inside-avoid rounded-xl overflow-hidden border border-border bg-bg-elevated cursor-pointer hover:border-primary/50 transition-all shadow-sm hover:shadow-lg animate-fade-in-up">
-                                    <div class="relative">
+                    <div class="space-y-4 pt-4">
+                        <h3 class="font-heading font-bold text-lg text-foreground">Recent Photos &amp; Videos</h3>
+                        <div
+                            v-if="recentVisualMedia.length"
+                            ref="recentMediaMasonryRef"
+                            class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 items-start"
+                            style="grid-auto-rows: 10px; row-gap: 0; column-gap: 1rem; grid-auto-flow: dense;"
+                        >
+                            <template v-for="item in recentVisualMedia" :key="item.id">
+                                <div
+                                    :data-media-id="item.id"
+                                    :style="{ gridRowEnd: 'span ' + (recentMediaSpanMap[item.id] || 22) }"
+                                    @click="openPreview(item, recentVisualMedia)"
+                                    class="group relative w-full rounded-2xl overflow-hidden border border-border bg-bg-elevated cursor-pointer hover:border-primary/50 transition-all shadow-sm hover:shadow-lg animate-fade-in-up"
+                                >
+                                    <div class="relative overflow-hidden rounded-2xl">
                                         <MediaRenderer
                                             :media="item"
                                             :alt="item.file_name"
                                             :use-thumbnail="true"
-                                            image-class="w-full h-auto object-cover transition-transform duration-700 group-hover:scale-105 rounded-xl"
-                                            video-class="w-full h-auto rounded-xl"
-                                            fallback-class="flex min-h-[10rem] w-full items-center justify-center rounded-xl bg-bg-hover text-xs font-bold uppercase tracking-[0.24em] text-muted-foreground"
+                                            image-class="w-full h-auto block object-cover transition-transform duration-700 group-hover:scale-105"
+                                            video-class="w-full h-auto block object-cover transition-transform duration-700 group-hover:scale-105"
+                                            fallback-class="flex h-[180px] w-full items-center justify-center bg-bg-hover text-sm font-bold uppercase tracking-[0.24em] text-muted-foreground"
+                                            @load="rememberRecentMediaDims(item.id, $event)"
                                         />
-
                                         <div v-if="item.file_type === 'video'" class="absolute inset-0 flex items-center justify-center">
                                             <div class="w-10 h-10 rounded-full bg-black/60 flex items-center justify-center">
                                                 <svg class="w-5 h-5 text-white" fill="currentColor" viewBox="0 0 20 20"><path d="M6.3 2.841A1.5 1.5 0 004 4.11V15.89a1.5 1.5 0 002.3 1.269l9.344-5.89a1.5 1.5 0 000-2.538L6.3 2.84z"></path></svg>
                                             </div>
                                         </div>
-
                                         <div class="absolute inset-0 bg-gradient-to-t from-black/60 via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-opacity flex items-end p-3 rounded-xl">
                                             <div class="flex items-center justify-between w-full">
                                                 <span class="text-white text-[10px] font-bold truncate tracking-wide">By {{ item.user?.name || 'Unknown' }}</span>
@@ -301,68 +452,16 @@ const memberUsagePercent = computed(() => {
                                 </div>
                             </template>
                         </div>
-                    </div>
-                </div>
-
-                <!-- Sidewidget view -->
-                <div class="space-y-6">
-                    <!-- Admin & Manager Sidebar widgets -->
-                    <template v-if="userRole !== 'member'">
-                        <div class="dash-card !p-6 space-y-4">
-                            <div class="flex items-center justify-between">
-                                <h3 class="font-heading font-bold text-sm text-foreground flex items-center gap-2">Team Updates</h3>
-                                <Link v-if="userRole === 'admin'" href="/users" class="text-[10px] font-bold text-primary hover:underline uppercase tracking-widest">Manage</Link>
-                            </div>
-                            <div class="space-y-3 mt-4">
-                                <div v-for="u in recentUsers" :key="u.id" class="flex items-center gap-3 p-2.5 rounded-xl hover:bg-bg-hover transition-colors">
-                                    <div class="w-8 h-8 rounded-full bg-primary/10 flex items-center justify-center text-xs font-bold text-primary overflow-hidden">
-                                        <img v-if="u.avatar_url" :src="u.avatar_url" :alt="u.name" class="h-full w-full object-cover" />
-                                        <span v-else>{{ getInitials(u.name) }}</span>
-                                    </div>
-                                    <div class="min-w-0 flex-1">
-                                        <p class="text-xs font-bold text-foreground truncate">{{ u.name }}</p>
-                                        <p class="text-[10px] text-muted-foreground uppercase">{{ u.role }}</p>
-                                    </div>
-                                    <span class="text-[9px] px-1.5 py-0.5 rounded capitalize" :class="u.role === 'admin' ? 'bg-primary/20 text-primary' : (u.role === 'manager' ? 'bg-info/20 text-info' : 'bg-success/20 text-success')">{{ u.role }}</span>
-                                </div>
-                            </div>
-                        </div>
-                    </template>
-
-                    <div v-if="userRole === 'admin'" class="dash-card !p-6 space-y-4">
-                        <h3 class="font-heading font-bold text-sm uppercase tracking-widest text-foreground">Usage Summary</h3>
-                        <div class="space-y-4">
-                            <div>
-                                <div class="flex items-center justify-between text-[11px] text-muted-foreground mb-1.5">
-                                    <span>Storage Used</span>
-                                    <span class="font-bold text-foreground">
-                                        <template v-if="storageLoading">
-                                            <span class="inline-flex items-center gap-1">
-                                                <svg class="w-3 h-3 animate-spin text-primary" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"/><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8z"/></svg>
-                                                Calculating...
-                                            </span>
-                                        </template>
-                                        <template v-else>{{ storageUsedLabel }} / {{ userRole === 'member' ? '2 TB' : '1 TB' }}</template>
-                                    </span>
-                                </div>
-                                <div class="h-1.5 rounded-full bg-muted overflow-hidden">
-                                    <div v-if="storageLoading" class="progress-shimmer h-full rounded-full" />
-                                    <div v-else class="orange-progress h-full rounded-full transition-all duration-700" :style="{ width: `${storageUsagePercent}%` }" />
-                                </div>
-                            </div>
-
-                            <div>
-                                <div class="flex items-center justify-between text-[11px] text-muted-foreground mb-1.5">
-                                    <span>Members Active</span>
-                                    <span class="font-bold text-foreground">{{ membersUsed }} / {{ membersMax }}</span>
-                                </div>
-                                <div class="h-1.5 rounded-full bg-muted overflow-hidden">
-                                    <div class="orange-progress h-full rounded-full transition-all" :style="{ width: `${memberUsagePercent}%` }" />
-                                </div>
-                            </div>
+                        <div
+                            v-else
+                            class="dash-card !p-6 text-sm text-muted-foreground"
+                        >
+                            No recent photos or videos available right now.
                         </div>
                     </div>
-                </div>
+
+
+            </div>
             </div>
 
             <MediaPreviewOverlay
