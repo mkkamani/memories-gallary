@@ -101,11 +101,6 @@ class TerminalController extends Controller
     private function resolveShell(): ?array
     {
         $finder = new ExecutableFinder();
-        $bash   = $finder->find('bash');
-
-        if ($bash) {
-            return ['type' => 'bash', 'command' => [$bash, '-lc']];
-        }
 
         if (DIRECTORY_SEPARATOR === '\\') {
             $candidates = [
@@ -115,14 +110,28 @@ class TerminalController extends Controller
 
             foreach ($candidates as $candidate) {
                 if (is_file($candidate)) {
-                    return ['type' => 'bash', 'command' => [$candidate, '-lc']];
+                    return ['type' => 'bash', 'command' => [$candidate, '--noprofile', '--norc', '-c']];
                 }
+            }
+
+            $bash = $finder->find('bash');
+
+            if ($bash) {
+                return ['type' => 'bash', 'command' => [$bash, '--noprofile', '--norc', '-c']];
             }
 
             $wsl = $finder->find('wsl');
             if ($wsl) {
-                return ['type' => 'wsl', 'command' => [$wsl, 'bash', '-lc']];
+                return ['type' => 'wsl', 'command' => [$wsl, 'bash', '--noprofile', '--norc', '-c']];
             }
+
+            return null;
+        }
+
+        $bash = $finder->find('bash');
+
+        if ($bash) {
+            return ['type' => 'bash', 'command' => [$bash, '--noprofile', '--norc', '-c']];
         }
 
         return null;
@@ -149,6 +158,62 @@ class TerminalController extends Controller
         ];
 
         return $finder->find('composer', null, array_filter($searchPaths));
+    }
+
+    private function isCliPhpBinary(string $binary): bool
+    {
+        try {
+            $process = new Process([$binary, '-r', 'echo PHP_SAPI;']);
+            $process->setTimeout(5);
+            $process->run();
+
+            if (!$process->isSuccessful()) {
+                return false;
+            }
+
+            $sapi = strtolower(trim($process->getOutput()));
+
+            return in_array($sapi, ['cli', 'phpdbg'], true);
+        } catch (\Throwable) {
+            return false;
+        }
+    }
+
+    private function resolveCliPhpBinary(): string
+    {
+        $finder = new ExecutableFinder();
+
+        $candidates = [
+            PHP_BINARY,
+        ];
+
+        if (defined('PHP_BINDIR')) {
+            $candidates[] = PHP_BINDIR . DIRECTORY_SEPARATOR . 'php';
+
+            if (DIRECTORY_SEPARATOR === '\\') {
+                $candidates[] = PHP_BINDIR . DIRECTORY_SEPARATOR . 'php.exe';
+            }
+        }
+
+        $foundPhp = $finder->find('php');
+        if ($foundPhp) {
+            $candidates[] = $foundPhp;
+        }
+
+        if (DIRECTORY_SEPARATOR !== '\\') {
+            $candidates[] = '/usr/local/bin/php';
+            $candidates[] = '/usr/bin/php';
+        }
+
+        $uniqueCandidates = array_values(array_unique(array_filter($candidates)));
+
+        foreach ($uniqueCandidates as $candidate) {
+            if ($this->isCliPhpBinary($candidate)) {
+                return $candidate;
+            }
+        }
+
+        return PHP_BINARY;
     }
 
     private function resolveCdTarget(string $argument, string $currentDirectory, string $projectRoot): ?string
@@ -259,8 +324,8 @@ class TerminalController extends Controller
                 }
             }
 
-            // Always use the exact PHP binary running this request.
-            $phpBinary    = PHP_BINARY;
+            // Prefer a real CLI PHP binary for terminal commands.
+            $phpBinary    = $this->resolveCliPhpBinary();
             $phpBinaryDir = dirname($phpBinary);
             $php          = escapeshellarg($this->toShellPath($phpBinary, $shellType));
 
@@ -275,7 +340,14 @@ class TerminalController extends Controller
 
                 if ($systemComposer) {
                     $composerBin = escapeshellarg($this->toShellPath($systemComposer, $shellType));
-                    $command = "{$composerBin} {$composerArgs}";
+
+                    $composerExt = strtolower(pathinfo($systemComposer, PATHINFO_EXTENSION));
+
+                    if (in_array($composerExt, ['bat', 'cmd'], true)) {
+                        $command = "{$composerBin} {$composerArgs}";
+                    } else {
+                        $command = trim("{$php} -d register_argc_argv=0 {$composerBin} {$composerArgs}");
+                    }
                 } else {
                     $composerPath = $projectRoot . DIRECTORY_SEPARATOR . 'composer.phar';
 
@@ -288,7 +360,7 @@ class TerminalController extends Controller
                         ], 400);
                     }
 
-                    $command = "$php composer.phar {$composerArgs}";
+                    $command = trim("{$php} -d register_argc_argv=0 composer.phar {$composerArgs}");
                 }
             } elseif (stripos($userCommand, 'php artisan') === 0) {
                 $artisanArgs = trim(substr($userCommand, strlen('php artisan')));

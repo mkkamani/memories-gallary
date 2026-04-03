@@ -11,6 +11,7 @@ import {
 import { computed, onBeforeUnmount, ref, watch } from 'vue';
 import { downloadFile } from '@/utils/media';
 import MediaRenderer from '@/Components/MediaRenderer.vue';
+import { formatNumber } from '@/utils/number';
 
 const MAX_ZOOM = 6;
 const MIN_ZOOM = 0.6;
@@ -413,7 +414,7 @@ onBeforeUnmount(() => {
 
             <div class="absolute bottom-4 left-1/2 z-20 flex -translate-x-1/2 items-center gap-2 rounded-full border border-white/20 bg-black/55 px-3 py-2 text-white shadow-xl backdrop-blur-md sm:bottom-5">
                 <span class="min-w-12 px-2 text-center text-xs font-semibold text-white/80 sm:text-sm">
-                    {{ currentNumber }} / {{ totalItems }}
+                    {{ formatNumber(currentNumber) }} / {{ formatNumber(totalItems) }}
                 </span>
 
                 <button

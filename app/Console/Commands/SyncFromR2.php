@@ -5,6 +5,7 @@ namespace App\Console\Commands;
 use App\Models\Album;
 use App\Models\Media;
 use App\Models\User;
+use App\Services\ThumbnailService;
 use Illuminate\Console\Command;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
@@ -33,10 +34,13 @@ class SyncFromR2 extends Command
     private int $albumsRelocated = 0;
     private int $mediaCreated  = 0;
     private int $mediaSkipped  = 0;
+    private int $thumbGenerated = 0;
+    private int $thumbSkipped = 0;
+    private int $thumbFailed = 0;
     private int $coversUpdated = 0;
     private int $coversSkipped = 0;
 
-    public function handle(): int
+    public function handle(ThumbnailService $thumbnailService): int
     {
         $this->disk   = (string) config('filesystems.media_disk', 'public');
         $this->dryRun = (bool) $this->option('dry-run');
@@ -181,7 +185,7 @@ class SyncFromR2 extends Command
         $bar->start();
 
         foreach ($fileItems as $fileItem) {
-            $this->syncMedia($fileItem, $albumMap);
+            $this->syncMedia($fileItem, $albumMap, $thumbnailService);
             $bar->advance();
         }
 
@@ -207,6 +211,7 @@ class SyncFromR2 extends Command
             [
                 ['Albums', $this->albumsCreated, $this->albumsSkipped],
                 ['Media',  $this->mediaCreated,  $this->mediaSkipped],
+                ['Thumbnails', $this->thumbGenerated, ($this->thumbSkipped + $this->thumbFailed)],
                 ['Cover images', $this->coversUpdated, $this->coversSkipped],
             ],
         );
@@ -286,7 +291,7 @@ class SyncFromR2 extends Command
     // -----------------------------------------------------------------------
     // Per-file: find-or-create Media
     // -----------------------------------------------------------------------
-    private function syncMedia(FileAttributes $fileItem, array $albumMap): void
+    private function syncMedia(FileAttributes $fileItem, array $albumMap, ThumbnailService $thumbnailService): void
     {
         $filePath = $fileItem->path();
 
@@ -324,7 +329,7 @@ class SyncFromR2 extends Command
         }
 
         try {
-            Media::create([
+            $media = Media::create([
                 'user_id'   => $this->user->id,
                 'album_id'  => $album?->id,
                 'file_path' => $filePath,
@@ -336,6 +341,18 @@ class SyncFromR2 extends Command
                 'height'    => $height,
                 'taken_at'  => $takenAt,
             ]);
+
+            if ($fileType === 'image') {
+                $thumbStatus = $thumbnailService->generateWithStatus($media);
+
+                if ($thumbStatus === 'generated') {
+                    $this->thumbGenerated++;
+                } elseif ($thumbStatus === 'skipped') {
+                    $this->thumbSkipped++;
+                } else {
+                    $this->thumbFailed++;
+                }
+            }
         } catch (\Throwable $e) {
             // Roll back the counter and count as skipped so the summary is accurate.
             $this->mediaCreated--;

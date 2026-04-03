@@ -56,6 +56,13 @@ const props = defineProps({
         type: Boolean,
         default: false,
     },
+    // When true and media.thumbnail_url is available the component loads the
+    // fast local thumbnail instead of the presigned R2 URL.  The full-res
+    // URL is only loaded in preview (lightbox) mode.
+    useThumbnail: {
+        type: Boolean,
+        default: false,
+    },
 });
 
 const emit = defineEmits(['load']);
@@ -64,6 +71,7 @@ const resolvedUrl = ref('');
 const conversionFailed = ref(false);
 const isLoading = ref(false);
 const hasImageLoaded = ref(false);
+const attemptedHeicConversion = ref(false);
 
 let objectUrl = null;
 let runId = 0;
@@ -119,6 +127,12 @@ const mediaProxyUrl = computed(() => {
     return props.media?.url || '';
 });
 
+/**
+ * The fast local thumbnail URL stored on the public disk.
+ * Null when the thumbnail has not yet been generated.
+ */
+const localThumbnailUrl = computed(() => props.media?.thumbnail_url || null);
+
 const cleanupObjectUrl = () => {
     if (objectUrl) {
         URL.revokeObjectURL(objectUrl);
@@ -126,14 +140,71 @@ const cleanupObjectUrl = () => {
     }
 };
 
+const getHeicSourceMimeType = () => {
+    if (mimeType.value.includes('heif')) {
+        return 'image/heif';
+    }
+
+    return 'image/heic';
+};
+
+const convertHeicToBrowserImage = async () => {
+    if (!isHeic.value || attemptedHeicConversion.value) {
+        return false;
+    }
+
+    attemptedHeicConversion.value = true;
+    isLoading.value = true;
+    conversionFailed.value = false;
+    hasImageLoaded.value = false;
+
+    try {
+        const fetchUrl = heicProxyUrl.value || mediaProxyUrl.value;
+
+        if (!fetchUrl) {
+            throw new Error('Missing HEIC source URL.');
+        }
+
+        const response = await fetch(fetchUrl, {
+            credentials: 'same-origin',
+        });
+
+        if (!response.ok) {
+            throw new Error(`Proxy fetch failed: ${response.status}`);
+        }
+
+        const rawBlob = await response.blob();
+        const heicBlob = new Blob([await rawBlob.arrayBuffer()], {
+            type: getHeicSourceMimeType(),
+        });
+
+        const converted = await heic2any({
+            blob: heicBlob,
+            toType: 'image/jpeg',
+            quality: 0.9,
+        });
+
+        const outputBlob = Array.isArray(converted) ? converted[0] : converted;
+        objectUrl = URL.createObjectURL(outputBlob);
+        resolvedUrl.value = objectUrl;
+
+        return true;
+    } catch (_error) {
+        conversionFailed.value = true;
+        return false;
+    } finally {
+        isLoading.value = false;
+    }
+};
+
 const syncUrl = async () => {
     runId += 1;
-    const currentRun = runId;
 
     cleanupObjectUrl();
     conversionFailed.value = false;
     isLoading.value = false;
     hasImageLoaded.value = false;
+    attemptedHeicConversion.value = false;
     resolvedUrl.value = '';
 
     if (!mediaProxyUrl.value) {
@@ -142,52 +213,16 @@ const syncUrl = async () => {
         return;
     }
 
-    resolvedUrl.value = mediaProxyUrl.value;
-
-    if (isVideo.value || !isHeic.value) {
+    // Use the fast local thumbnail for listing/thumbnail contexts.
+    // Falls back to the regular presigned/proxy URL when unavailable.
+    if (props.useThumbnail && localThumbnailUrl.value && !isHeic.value) {
+        resolvedUrl.value = localThumbnailUrl.value;
         return;
     }
 
-    isLoading.value = true;
-
-    try {
-        const fetchUrl = heicProxyUrl.value || mediaProxyUrl.value;
-        const response = await fetch(fetchUrl);
-        if (!response.ok) {
-            throw new Error(`Proxy fetch failed: ${response.status}`);
-        }
-
-        const rawBlob = await response.blob();
-
-        if (currentRun !== runId) {
-            return;
-        }
-
-        const heicBlob = new Blob([await rawBlob.arrayBuffer()], { type: 'image/heic' });
-
-        const converted = await heic2any({
-            blob: heicBlob,
-            toType: 'image/jpeg',
-            quality: 0.9,
-        });
-
-        if (currentRun !== runId) {
-            return;
-        }
-
-        const outputBlob = Array.isArray(converted) ? converted[0] : converted;
-        objectUrl = URL.createObjectURL(outputBlob);
-        resolvedUrl.value = objectUrl;
-    } catch (_error) {
-        if (currentRun !== runId) {
-            return;
-        }
-        conversionFailed.value = true;
-    } finally {
-        if (currentRun === runId) {
-            isLoading.value = false;
-        }
-    }
+    resolvedUrl.value = isHeic.value
+        ? (heicProxyUrl.value || mediaProxyUrl.value)
+        : mediaProxyUrl.value;
 };
 
 const onImgLoad = (e) => {
@@ -206,14 +241,21 @@ const onVideoError = () => {
     hasImageLoaded.value = true;
 };
 
-const onImageError = () => {
+const onImageError = async () => {
+    if (isHeic.value && !attemptedHeicConversion.value) {
+        const converted = await convertHeicToBrowserImage();
+
+        if (converted) {
+            return;
+        }
+    }
+
     hasImageLoaded.value = true;
-    // Any broken / 404 src → show fallback instead of a blank tile
     conversionFailed.value = true;
 };
 
 watch(
-    () => [props.media?.id, props.media?.url, props.media?.file_name, props.media?.mime_type, props.media?.file_type],
+    () => [props.media?.id, props.media?.url, props.media?.thumbnail_url, props.media?.file_name, props.media?.mime_type, props.media?.file_type],
     () => {
         syncUrl();
     },

@@ -74,6 +74,12 @@ class AlbumController extends Controller
 
                 $nestedMedia = $nestedMediaQuery->limit(5)->get();
                 $nestedMediaCount = \App\Models\Media::whereIn("album_id", $nestedAlbumIds)->count();
+                $photoCount = \App\Models\Media::whereIn("album_id", $nestedAlbumIds)->where('file_type', 'image')->count();
+                $videoCount = \App\Models\Media::whereIn("album_id", $nestedAlbumIds)->where('file_type', 'video')->count();
+                $fileCount = \App\Models\Media::whereIn("album_id", $nestedAlbumIds)
+                    ->where('file_type', '!=', 'image')
+                    ->where('file_type', '!=', 'video')
+                    ->count();
 
                 // Use cover_image if available, otherwise first media
                 $thumbnailUrl = $this->resolveCoverImageUrl($album->cover_image) ?: ($nestedMedia->first()?->url);
@@ -91,14 +97,19 @@ class AlbumController extends Controller
                     "user_id" => $album->user_id,
                     "parent_id" => $album->parent_id,
                     "media_count" => $nestedMediaCount,
+                    "photo_count" => $photoCount,
+                    "video_count" => $videoCount,
+                    "file_count" => $fileCount,
                     "children_count" => $album->children_count,
                     "thumbnail" => $thumbnailUrl,
                     "thumbnail_media" => $thumbnailMedia
                         ? [
-                            "url" => $thumbnailMedia->url,
-                            "file_type" => $thumbnailMedia->file_type,
-                            "file_name" => $thumbnailMedia->file_name,
-                            "mime_type" => $thumbnailMedia->mime_type,
+                            "id"            => $thumbnailMedia->id,
+                            "url"           => $thumbnailMedia->url,
+                            "thumbnail_url" => $thumbnailMedia->thumbnail_url,
+                            "file_type"     => $thumbnailMedia->file_type,
+                            "file_name"     => $thumbnailMedia->file_name,
+                            "mime_type"     => $thumbnailMedia->mime_type,
                         ]
                         : null,
                     "is_pinned" => in_array($album->id, $pinnedAlbumIds, true),
@@ -124,6 +135,10 @@ class AlbumController extends Controller
 
             if ($recentMedia->count() > 0) {
                 $thumbnailMedia = $recentMedia->first();
+                $recentPhotoCount = $recentMedia->where('file_type', 'image')->count();
+                $recentVideoCount = $recentMedia->where('file_type', 'video')->count();
+                $recentFileCount = $recentMedia->where('file_type', '!=', 'image')->where('file_type', '!=', 'video')->count();
+
                 $systemAlbums->push([
                     "id" => "recent",
                     "title" => "Recent",
@@ -133,13 +148,18 @@ class AlbumController extends Controller
                     "is_public" => true,
                     "user_id" => auth()->id(),
                     "media_count" => $recentMedia->count(),
+                    "photo_count" => $recentPhotoCount,
+                    "video_count" => $recentVideoCount,
+                    "file_count" => $recentFileCount,
                     "children_count" => 0,
                     "thumbnail" => $thumbnailMedia->url,
                     "thumbnail_media" => [
-                        "url" => $thumbnailMedia->url,
-                        "file_type" => $thumbnailMedia->file_type,
-                        "file_name" => $thumbnailMedia->file_name,
-                        "mime_type" => $thumbnailMedia->mime_type,
+                        "id"            => $thumbnailMedia->id,
+                        "url"           => $thumbnailMedia->url,
+                        "thumbnail_url" => $thumbnailMedia->thumbnail_url,
+                        "file_type"     => $thumbnailMedia->file_type,
+                        "file_name"     => $thumbnailMedia->file_name,
+                        "mime_type"     => $thumbnailMedia->mime_type,
                     ],
                     "is_system" => true,
                 ]);
@@ -159,6 +179,10 @@ class AlbumController extends Controller
 
             if ($todayMemories->count() > 0) {
                 $thumbnailMedia = $todayMemories->first();
+                $todayPhotoCount = $todayMemories->where('file_type', 'image')->count();
+                $todayVideoCount = $todayMemories->where('file_type', 'video')->count();
+                $todayFileCount = $todayMemories->where('file_type', '!=', 'image')->where('file_type', '!=', 'video')->count();
+
                 $systemAlbums->push([
                     "id" => "todays-memories",
                     "title" => "Today's Memories",
@@ -168,13 +192,18 @@ class AlbumController extends Controller
                     "is_public" => true,
                     "user_id" => auth()->id(),
                     "media_count" => $todayMemories->count(),
+                    "photo_count" => $todayPhotoCount,
+                    "video_count" => $todayVideoCount,
+                    "file_count" => $todayFileCount,
                     "children_count" => 0,
                     "thumbnail" => $thumbnailMedia->url,
                     "thumbnail_media" => [
-                        "url" => $thumbnailMedia->url,
-                        "file_type" => $thumbnailMedia->file_type,
-                        "file_name" => $thumbnailMedia->file_name,
-                        "mime_type" => $thumbnailMedia->mime_type,
+                        "id"            => $thumbnailMedia->id,
+                        "url"           => $thumbnailMedia->url,
+                        "thumbnail_url" => $thumbnailMedia->thumbnail_url,
+                        "file_type"     => $thumbnailMedia->file_type,
+                        "file_name"     => $thumbnailMedia->file_name,
+                        "mime_type"     => $thumbnailMedia->mime_type,
                     ],
                     "is_system" => true,
                 ]);
@@ -896,6 +925,10 @@ class AlbumController extends Controller
             ->paginate(20)
             ->withQueryString();
 
+        $photoCount = $album->media()->where('file_type', 'image')->count();
+        $videoCount = $album->media()->where('file_type', 'video')->count();
+        $folderCount = $album->children()->count();
+
         if ($request->wantsJson() && !$request->header('X-Inertia')) {
             return response()->json($paginatedMedia);
         }
@@ -917,13 +950,28 @@ class AlbumController extends Controller
             $album->children->transform(function ($child) {
                 $thumbnailMedia = $child->media->first();
                 $child->setAttribute('path', $child->path);
-                $child->thumbnail = $this->resolveCoverImageUrl($child->cover_image) ?: $thumbnailMedia?->url;
+                    // Calculate photo, video, and file counts for child album
+                    $childMediaIds = $child->descendants()->pluck("id")->prepend($child->id)->all();
+                    $photoCount = \App\Models\Media::whereIn("album_id", $childMediaIds)->where('file_type', 'image')->count();
+                    $videoCount = \App\Models\Media::whereIn("album_id", $childMediaIds)->where('file_type', 'video')->count();
+                    $fileCount = \App\Models\Media::whereIn("album_id", $childMediaIds)
+                        ->where('file_type', '!=', 'image')
+                        ->where('file_type', '!=', 'video')
+                        ->count();
+
+                    $child->setAttribute('photo_count', $photoCount);
+                    $child->setAttribute('video_count', $videoCount);
+                    $child->setAttribute('file_count', $fileCount);
+
+                    $child->thumbnail = $this->resolveCoverImageUrl($child->cover_image) ?: $thumbnailMedia?->url;
                 $child->thumbnail_media = $thumbnailMedia
                     ? [
-                        "url" => $thumbnailMedia->url,
-                        "file_type" => $thumbnailMedia->file_type,
-                        "file_name" => $thumbnailMedia->file_name,
-                        "mime_type" => $thumbnailMedia->mime_type,
+                        "id"            => $thumbnailMedia->id,
+                        "url"           => $thumbnailMedia->url,
+                        "thumbnail_url" => $thumbnailMedia->thumbnail_url,
+                        "file_type"     => $thumbnailMedia->file_type,
+                        "file_name"     => $thumbnailMedia->file_name,
+                        "mime_type"     => $thumbnailMedia->mime_type,
                     ]
                     : null;
                 return $child;
@@ -948,6 +996,12 @@ class AlbumController extends Controller
         return Inertia::render("Albums/Show", [
             "album" => $album,
             "mediaData" => $paginatedMedia,
+            "mediaCounts" => [
+                "all" => (int) $paginatedMedia->total(),
+                "photos" => (int) $photoCount,
+                "videos" => (int) $videoCount,
+                "folders" => (int) $folderCount,
+            ],
             "breadcrumbs" => $breadcrumbs,
         ]);
     }

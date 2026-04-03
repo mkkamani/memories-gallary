@@ -8,6 +8,7 @@ import { downloadFile } from '@/utils/media';
 import DangerButton from '@/Components/DangerButton.vue';
 import SecondaryButton from '@/Components/SecondaryButton.vue';
 import debounce from 'lodash/debounce';
+import { formatNumber } from '@/utils/number';
 
 const props = defineProps({
     albums: Array,
@@ -317,7 +318,20 @@ const submitImport = () => {
                                     <svg class="w-4 h-4 text-purple-500 fill-purple-500/20" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 7v10a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-6l-2-2H5a2 2 0 00-2 2z"/></svg>
                                     <h3 class="text-sm font-bold text-foreground truncate">{{ album.title }}</h3>
                                 </div>
-                                <p class="text-[11px] text-muted-foreground mt-0.5">{{ album.media_count }} items</p>
+                                <p class="text-[11px] text-muted-foreground mt-0.5 flex items-center gap-2.5">
+                                    <template v-if="album.photo_count > 0">
+                                        <svg class="w-3.5 h-3.5 text-blue-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect><circle cx="8.5" cy="8.5" r="1.5"></circle><path d="M21 15l-5-5L5 21"></path></svg>
+                                        <span class="font-medium">{{ formatNumber(album.photo_count) }}</span>
+                                    </template>
+                                    <template v-if="album.video_count > 0">
+                                        <svg class="w-3.5 h-3.5 text-purple-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="23 7 16 12 23 17 23 7"></polygon><rect x="1" y="5" width="15" height="14" rx="2" ry="2"></rect></svg>
+                                        <span class="font-medium">{{ formatNumber(album.video_count) }}</span>
+                                    </template>
+                                    <template v-if="album.file_count > 0">
+                                        <svg class="w-3.5 h-3.5 text-amber-600" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M13 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9z"></path><polyline points="13 2 13 9 20 9"></polyline></svg>
+                                        <span class="font-medium">{{ formatNumber(album.file_count) }}</span>
+                                    </template>
+                                </p>
                             </div>
                         </Link>
                     </template>
@@ -434,7 +448,7 @@ const submitImport = () => {
                                     v-if="isOverflowPreviewTile(album, idx)"
                                     class="absolute inset-0 z-10 bg-black/55 backdrop-blur-[1px] flex items-center justify-center"
                                 >
-                                    <span class="text-white text-sm font-bold tracking-wide">+{{ getHiddenPreviewCount(album) }}</span>
+                                    <span class="text-white text-sm font-bold tracking-wide">+{{ formatNumber(getHiddenPreviewCount(album)) }}</span>
                                 </div>
                             </div>
                         </div>
@@ -445,7 +459,24 @@ const submitImport = () => {
                                 <svg class="w-4 h-4 text-orange-500 fill-orange-500/20" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 7v10a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-6l-2-2H5a2 2 0 00-2 2z"/></svg>
                                 <h3 class="text-sm font-bold text-foreground truncate">{{ album.title }}</h3>
                             </div>
-                            <p class="text-[11px] text-muted-foreground mt-0.5">{{ album.media_count }} items<template v-if="album.children_count">, {{ album.children_count }} folders</template></p>
+                            <p class="text-[11px] text-muted-foreground mt-0.5 flex items-center gap-2.5">
+                                <template v-if="album.photo_count > 0">
+                                    <svg class="w-3.5 h-3.5 text-blue-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect><circle cx="8.5" cy="8.5" r="1.5"></circle><path d="M21 15l-5-5L5 21"></path></svg>
+                                    <span class="font-medium">{{ formatNumber(album.photo_count) }}</span>
+                                </template>
+                                <template v-if="album.video_count > 0">
+                                    <svg class="w-3.5 h-3.5 text-purple-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="23 7 16 12 23 17 23 7"></polygon><rect x="1" y="5" width="15" height="14" rx="2" ry="2"></rect></svg>
+                                    <span class="font-medium">{{ formatNumber(album.video_count) }}</span>
+                                </template>
+                                <template v-if="album.file_count > 0">
+                                    <svg class="w-3.5 h-3.5 text-amber-600" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M13 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9z"></path><polyline points="13 2 13 9 20 9"></polyline></svg>
+                                    <span class="font-medium">{{ formatNumber(album.file_count) }}</span>
+                                </template>
+                                <template v-if="album.children_count > 0">
+                                    <svg class="w-3.5 h-3.5 text-orange-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"></path></svg>
+                                    <span class="font-medium">{{ formatNumber(album.children_count) }}</span>
+                                </template>
+                            </p>
 
                         </div>
                     </div>
@@ -472,7 +503,20 @@ const submitImport = () => {
                                 </div>
                                 <span class="text-sm font-bold text-foreground">{{ album.title }}</span>
                             </div>
-                            <span class="text-sm text-muted-foreground text-center">{{ album.media_count }}</span>
+                            <span class="text-sm text-muted-foreground text-center flex items-center justify-center gap-2.5">
+                                <template v-if="album.photo_count || (!album.photo_count && !album.video_count && !album.file_count)">
+                                    <svg class="w-4 h-4 text-blue-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect><circle cx="8.5" cy="8.5" r="1.5"></circle><path d="M21 15l-5-5L5 21"></path></svg>
+                                    <span class="font-medium">{{ formatNumber(album.photo_count || 0) }}</span>
+                                </template>
+                                <template v-if="album.video_count">
+                                    <svg class="w-4 h-4 text-purple-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="23 7 16 12 23 17 23 7"></polygon><rect x="1" y="5" width="15" height="14" rx="2" ry="2"></rect></svg>
+                                    <span class="font-medium">{{ formatNumber(album.video_count) }}</span>
+                                </template>
+                                <template v-if="album.file_count">
+                                    <svg class="w-4 h-4 text-amber-600" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M13 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9z"></path><polyline points="13 2 13 9 20 9"></polyline></svg>
+                                    <span class="font-medium">{{ formatNumber(album.file_count) }}</span>
+                                </template>
+                            </span>
                             <div>
                                 <span class="inline-flex rounded-full px-3 py-1 text-xs font-semibold" :class="locationBadgeClass(album.location)">
                                     {{ album.location || '-' }}
@@ -519,7 +563,7 @@ const submitImport = () => {
 
                 <p class="mt-2 text-sm text-muted-foreground">
                     Are you sure you want to delete <span class="font-bold text-foreground">"{{ albumToDelete?.title }}"</span>?
-                    <span v-if="albumToDelete?.children_count > 0" class="text-error font-medium"> This will also delete {{ albumToDelete.children_count }} nested album(s) inside it.</span>
+                    <span v-if="albumToDelete?.children_count > 0" class="text-error font-medium"> This will also delete {{ formatNumber(albumToDelete.children_count) }} nested album(s) inside it.</span>
                 </p>
 
                 <div class="mt-6 flex justify-end gap-3">

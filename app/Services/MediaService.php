@@ -14,10 +14,12 @@ use App\Support\MediaDimensionExtractor;
 class MediaService
 {
     protected $storageService;
+    protected ThumbnailService $thumbnailService;
 
-    public function __construct(StorageServiceInterface $storageService)
+    public function __construct(StorageServiceInterface $storageService, ThumbnailService $thumbnailService)
     {
-        $this->storageService = $storageService;
+        $this->storageService   = $storageService;
+        $this->thumbnailService = $thumbnailService;
     }
 
     public function upload(UploadedFile $file, User $user, ?Album $album = null)
@@ -29,7 +31,7 @@ class MediaService
         $fileType = str_starts_with($mimeType, 'video') ? 'video' : 'image';
         [$width, $height] = MediaDimensionExtractor::fromUploadedFile($file, $mimeType);
 
-        return Media::create([
+        $media = Media::create([
             "user_id"   => $user->id,
             "album_id"  => $album?->id,
             "file_path" => $path,
@@ -41,6 +43,18 @@ class MediaService
             "height"    => $height,
             "taken_at"  => now(),
         ]);
+
+        // Generate thumbnail; errors are logged but never bubble up.
+        try {
+            $this->thumbnailService->generate($media);
+        } catch (\Throwable $e) {
+            Log::warning('MediaService: thumbnail generation failed after upload.', [
+                'media_id' => $media->id,
+                'error'    => $e->getMessage(),
+            ]);
+        }
+
+        return $media;
     }
 
     public function getAlbumUploadPath(?Album $album): string
@@ -101,6 +115,16 @@ class MediaService
      */
     public function purge(Media $media): bool
     {
+        try {
+            $this->thumbnailService->delete($media);
+        } catch (\Throwable $e) {
+            Log::warning('MediaService::purge – could not delete thumbnail; proceeding with media purge.', [
+                'media_id' => $media->id,
+                'thumbnail_path' => $media->thumbnail_path,
+                'error' => $e->getMessage(),
+            ]);
+        }
+
         try {
             $this->storageService->deleteFile($media->file_path);
         } catch (\Throwable $e) {

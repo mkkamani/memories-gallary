@@ -132,10 +132,35 @@ class DashboardController extends Controller
             return null;
         }
         return [
-            'url'       => $media->url,
-            'file_type' => $media->file_type,
-            'file_name' => $media->file_name,
-            'mime_type' => $media->mime_type,
+            'id'            => $media->id,
+            'url'           => $media->url,
+            'thumbnail_url' => $media->thumbnail_url,
+            'file_type'     => $media->file_type,
+            'file_name'     => $media->file_name,
+            'mime_type'     => $media->mime_type,
+        ];
+    }
+
+    /**
+     * Build a normalized album card payload for dashboard lists.
+     * Counts include all descendant folders and their media.
+     */
+    private function formatDashboardAlbumCard(Album $album): array
+    {
+        $coverMedia = $this->resolveAlbumCoverMedia($album);
+        $descendantIds = $album->descendants()->pluck('id');
+        $albumIds = $descendantIds->prepend($album->id);
+
+        return [
+            'id'          => $album->id,
+            'slug'        => $album->slug,
+            'path'        => $album->path,
+            'name'        => $album->title,
+            'date'        => optional($album->updated_at)->format('Y-m-d'),
+            'itemCount'   => Media::whereIn('album_id', $albumIds)->count(),
+            'folderCount' => $descendantIds->count(),
+            'coverUrl'    => $coverMedia?->url,
+            'coverMedia'  => $this->formatAlbumCoverMediaArray($coverMedia),
         ];
     }
 
@@ -172,18 +197,7 @@ class DashboardController extends Controller
             ->take(10)
             ->get()
             ->map(function ($album) {
-                $coverMedia = $this->resolveAlbumCoverMedia($album);
-
-                return [
-                    'id'         => $album->id,
-                    'slug'       => $album->slug,
-                    'path'       => $album->path,
-                    'name'       => $album->title,
-                    'date'       => optional($album->updated_at)->format('Y-m-d'),
-                    'photoCount' => $album->media_count,
-                    'coverUrl'   => $coverMedia?->url,
-                    'coverMedia' => $this->formatAlbumCoverMediaArray($coverMedia),
-                ];
+                return $this->formatDashboardAlbumCard($album);
             });
 
         // All Recent Albums (for member dashboard — not pinned, just latest)
@@ -193,18 +207,7 @@ class DashboardController extends Controller
             ->take(10)
             ->get()
             ->map(function ($album) {
-                $coverMedia = $this->resolveAlbumCoverMedia($album);
-
-                return [
-                    'id'         => $album->id,
-                    'slug'       => $album->slug,
-                    'path'       => $album->path,
-                    'name'       => $album->title,
-                    'date'       => optional($album->updated_at)->format('Y-m-d'),
-                    'photoCount' => $album->media_count,
-                    'coverUrl'   => $coverMedia?->url,
-                    'coverMedia' => $this->formatAlbumCoverMediaArray($coverMedia),
-                ];
+                return $this->formatDashboardAlbumCard($album);
             });
 
         // Specifically for Manager

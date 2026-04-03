@@ -37,6 +37,7 @@ class Media extends Model
         "album_id",
         "user_id",
         "file_path",
+        "thumbnail_path",
         "file_name",
         "file_type",
         "file_size",
@@ -51,7 +52,7 @@ class Media extends Model
         "taken_at" => "datetime",
     ];
 
-    protected $appends = ["url"];
+    protected $appends = ["url", "thumbnail_url"];
 
     public function user()
     {
@@ -109,6 +110,26 @@ class Media extends Model
             // Fall back to the plain (unsigned) URL so the attribute never
             // throws and the rest of the page can still render.
             return $this->plainUrl($disk);
+        }
+    }
+
+    /**
+     * Return the public URL for the locally-stored thumbnail, or null if not
+     * yet generated.  These are served from the local public disk — no
+     * presigned URL overhead — making listing views fast.
+     */
+    public function getThumbnailUrlAttribute(): ?string
+    {
+        if (empty($this->thumbnail_path)) {
+            return null;
+        }
+
+        try {
+            // Always return a same-origin relative path so thumbnails load
+            // correctly regardless of APP_URL host/protocol mismatches.
+            return '/storage/' . ltrim((string) $this->thumbnail_path, '/');
+        } catch (\Throwable $e) {
+            return null;
         }
     }
 }

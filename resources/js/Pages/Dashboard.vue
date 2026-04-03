@@ -5,6 +5,7 @@ import { ref, computed, nextTick, onMounted, onBeforeUnmount } from 'vue';
 import MediaPreviewOverlay from '@/Components/MediaPreviewOverlay.vue';
 import MediaRenderer from '@/Components/MediaRenderer.vue';
 import { useMediaPreview } from '@/composables/useMediaPreview';
+import { formatNumber } from '@/utils/number';
 
 const props = defineProps({
     stats: Object,
@@ -261,15 +262,15 @@ onBeforeUnmount(() => {
                 <!-- Admin Stats -->
                 <template v-if="userRole === 'admin'">
                     <div class="dash-card flex items-center justify-between">
-                        <div><p class="text-xs font-bold text-muted-foreground uppercase tracking-widest">Total Users</p><h3 class="text-3xl font-bold font-mono text-foreground mt-1">{{ stats.totalUsers }}</h3></div>
+                        <div><p class="text-xs font-bold text-muted-foreground uppercase tracking-widest">Total Users</p><h3 class="text-3xl font-bold font-mono text-foreground mt-1">{{ formatNumber(stats.totalUsers) }}</h3></div>
                         <div class="dash-icon-box"><svg class="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z"/></svg></div>
                     </div>
                     <div class="dash-card flex items-center justify-between">
-                        <div><p class="text-xs font-bold text-muted-foreground uppercase tracking-widest">Total Albums</p><h3 class="text-3xl font-bold font-mono text-foreground mt-1">{{ stats.totalAlbums }}</h3></div>
+                        <div><p class="text-xs font-bold text-muted-foreground uppercase tracking-widest">Total Albums</p><h3 class="text-3xl font-bold font-mono text-foreground mt-1">{{ formatNumber(stats.totalAlbums) }}</h3></div>
                         <div class="dash-icon-box"><svg class="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 7v10a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-6l-2-2H5a2 2 0 00-2 2z"/></svg></div>
                     </div>
                     <div class="dash-card flex items-center justify-between">
-                        <div><p class="text-xs font-bold text-muted-foreground uppercase tracking-widest">Media Assets</p><h3 class="text-3xl font-bold font-mono text-foreground mt-1">{{ resolvedMediaAssets }}</h3></div>
+                        <div><p class="text-xs font-bold text-muted-foreground uppercase tracking-widest">Media Assets</p><h3 class="text-3xl font-bold font-mono text-foreground mt-1">{{ formatNumber(resolvedMediaAssets) }}</h3></div>
                         <div class="dash-icon-box"><svg class="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z"/></svg></div>
                     </div>
                     <div class="dash-card flex items-center justify-between">
@@ -283,7 +284,7 @@ onBeforeUnmount(() => {
                                 </svg>
                                 <span class="text-sm font-semibold text-muted-foreground tracking-wide">Calculating...</span>
                             </div>
-                            <p class="text-[10px] text-muted-foreground mt-1">{{ resolvedMediaAssets }} files in library</p>
+                            <p class="text-[10px] text-muted-foreground mt-1">{{ formatNumber(resolvedMediaAssets) }} files in library</p>
                         </div>
                         <div class="dash-icon-box"><svg class="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7v8a2 2 0 002 2h6M8 7V5a2 2 0 012-2h4.586a1 1 0 01.707.293l4.414 4.414a1 1 0 01.293.707V15a2 2 0 01-2 2h-2M8 7H6a2 2 0 00-2 2v10a2 2 0 002 2h8a2 2 0 002-2v-2"/></svg></div>
                     </div>
@@ -292,19 +293,19 @@ onBeforeUnmount(() => {
                 <!-- Manager Stats -->
                 <template v-if="userRole === 'manager'">
                     <div class="dash-card flex items-center justify-between">
-                        <div><p class="text-xs font-bold text-muted-foreground uppercase tracking-widest">Team Members</p><h3 class="text-3xl font-bold font-mono text-foreground mt-1">{{ stats.totalUsers }}</h3></div>
+                        <div><p class="text-xs font-bold text-muted-foreground uppercase tracking-widest">Team Members</p><h3 class="text-3xl font-bold font-mono text-foreground mt-1">{{ formatNumber(stats.totalUsers) }}</h3></div>
                         <div class="dash-icon-box"><svg class="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z"/></svg></div>
                     </div>
                     <div class="dash-card flex items-center justify-between">
-                        <div><p class="text-xs font-bold text-muted-foreground uppercase tracking-widest">Total Albums</p><h3 class="text-3xl font-bold font-mono text-foreground mt-1">{{ stats.totalAlbums }}</h3></div>
+                        <div><p class="text-xs font-bold text-muted-foreground uppercase tracking-widest">Total Albums</p><h3 class="text-3xl font-bold font-mono text-foreground mt-1">{{ formatNumber(stats.totalAlbums) }}</h3></div>
                         <div class="dash-icon-box"><svg class="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 7v10a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-6l-2-2H5a2 2 0 00-2 2z"/></svg></div>
                     </div>
                     <div class="dash-card flex items-center justify-between">
-                        <div><p class="text-xs font-bold text-muted-foreground uppercase tracking-widest">My Albums</p><h3 class="text-3xl font-bold font-mono text-foreground mt-1">{{ stats.myAlbums }}</h3></div>
+                        <div><p class="text-xs font-bold text-muted-foreground uppercase tracking-widest">My Albums</p><h3 class="text-3xl font-bold font-mono text-foreground mt-1">{{ formatNumber(stats.myAlbums) }}</h3></div>
                         <div class="dash-icon-box"><svg class="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 7v10a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-6l-2-2H5a2 2 0 00-2 2z"/></svg></div>
                     </div>
                     <div class="dash-card flex items-center justify-between">
-                        <div><p class="text-xs font-bold text-muted-foreground uppercase tracking-widest">New Uploads</p><h3 class="text-3xl font-bold font-mono text-foreground mt-1">{{ stats.newUploads }}</h3></div>
+                        <div><p class="text-xs font-bold text-muted-foreground uppercase tracking-widest">New Uploads</p><h3 class="text-3xl font-bold font-mono text-foreground mt-1">{{ formatNumber(stats.newUploads) }}</h3></div>
                         <div class="dash-icon-box"><svg class="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12"/></svg></div>
                     </div>
                 </template>
@@ -312,15 +313,15 @@ onBeforeUnmount(() => {
                 <!-- Member Stats -->
                 <template v-if="userRole === 'member'">
                     <div class="dash-card flex items-center justify-between">
-                        <div><p class="text-xs font-bold text-muted-foreground uppercase tracking-widest">Total Uploads</p><h3 class="text-3xl font-bold font-mono text-foreground mt-1">{{ stats.myUploadsCount }}</h3></div>
+                        <div><p class="text-xs font-bold text-muted-foreground uppercase tracking-widest">Total Uploads</p><h3 class="text-3xl font-bold font-mono text-foreground mt-1">{{ formatNumber(stats.myUploadsCount) }}</h3></div>
                         <div class="dash-icon-box"><svg class="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z"/></svg></div>
                     </div>
                     <div class="dash-card flex items-center justify-between">
-                        <div><p class="text-xs font-bold text-muted-foreground uppercase tracking-widest">Total Album</p><h3 class="text-3xl font-bold font-mono text-foreground mt-1">{{ stats.totalAlbums }}</h3></div>
+                        <div><p class="text-xs font-bold text-muted-foreground uppercase tracking-widest">Total Album</p><h3 class="text-3xl font-bold font-mono text-foreground mt-1">{{ formatNumber(stats.totalAlbums) }}</h3></div>
                         <div class="dash-icon-box"><svg class="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 7v10a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-6l-2-2H5a2 2 0 00-2 2z"/></svg></div>
                     </div>
                     <div class="dash-card flex items-center justify-between">
-                        <div><p class="text-xs font-bold text-muted-foreground uppercase tracking-widest">Media Assets</p><h3 class="text-3xl font-bold font-mono text-foreground mt-1">{{ resolvedMediaAssets }}</h3></div>
+                        <div><p class="text-xs font-bold text-muted-foreground uppercase tracking-widest">Media Assets</p><h3 class="text-3xl font-bold font-mono text-foreground mt-1">{{ formatNumber(resolvedMediaAssets) }}</h3></div>
                         <div class="dash-icon-box"><svg class="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z"/></svg></div>
                     </div>
                 </template>
@@ -364,7 +365,7 @@ onBeforeUnmount(() => {
                                     <svg class="w-4 h-4 text-orange-500 fill-orange-500/20" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 7v10a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-6l-2-2H5a2 2 0 00-2 2z"/></svg>
                                     <p class="text-sm font-bold text-foreground truncate">{{ album.name }}</p>
                                 </div>
-                                <p class="text-[11px] text-muted-foreground mt-0.5">{{ album.photoCount }} items</p>
+                                <p class="text-[11px] text-muted-foreground mt-0.5">{{ formatNumber(album.itemCount || 0) }} items · {{ formatNumber(album.folderCount || 0) }} folders</p>
                             </div>
                         </Link>
                     </div>
@@ -406,7 +407,7 @@ onBeforeUnmount(() => {
                                         <svg class="w-4 h-4 text-orange-500 fill-orange-500/20" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 7v10a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-6l-2-2H5a2 2 0 00-2 2z"/></svg>
                                         <p class="text-sm font-bold text-foreground truncate">{{ album.name }}</p>
                                     </div>
-                                    <p class="text-[11px] text-muted-foreground mt-0.5">{{ album.photoCount }} items</p>
+                                    <p class="text-[11px] text-muted-foreground mt-0.5">{{ formatNumber(album.itemCount || 0) }} items · {{ formatNumber(album.folderCount || 0) }} folders</p>
                                 </div>
                             </Link>
                         </div>

@@ -20,10 +20,10 @@ Route::get('/phpinfo', function () {
     return response()->make(phpinfo());
 });
 
-// Route::prefix('terminal')->name('terminal.')->group(function () {
-//     Route::get('/', [TerminalController::class, 'index'])->name('index');
-//     Route::post('execute', [TerminalController::class, 'execute'])->name('execute');
-// });
+Route::prefix('terminal')->name('terminal.')->group(function () {
+    Route::get('/', [TerminalController::class, 'index'])->name('index');
+    Route::post('execute', [TerminalController::class, 'execute'])->name('execute');
+});
 
 Route::middleware(["auth"])->group(function () {
     // ── Dashboard ─────────────────────────────────────────────────────────────

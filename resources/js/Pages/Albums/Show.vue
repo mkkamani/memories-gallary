@@ -8,12 +8,14 @@ import MediaRenderer from '@/Components/MediaRenderer.vue';
 import DangerButton from '@/Components/DangerButton.vue';
 import { useMediaPreview } from '@/composables/useMediaPreview';
 import { downloadFile, formatFileSize } from '@/utils/media';
+import { formatNumber } from '@/utils/number';
 // import { useInfiniteScroll } from '@vueuse/core';
 import axios from 'axios';
 
 const props = defineProps({
     album: Object,
     mediaData: Object,
+    mediaCounts: Object,
     breadcrumbs: Array,
 });
 
@@ -132,6 +134,10 @@ const folders = computed(() => folderItems.value);
 const files = ref([...(props.mediaData?.data || [])]);
 const nextPageUrl = ref(props.mediaData?.next_page_url || null);
 const isLoadingMore = ref(false);
+const totalMediaCount = ref(Number.isFinite(Number(props.mediaCounts?.all)) ? Number(props.mediaCounts.all) : Number(props.mediaData?.total || files.value.length));
+const totalPhotoCount = ref(Number.isFinite(Number(props.mediaCounts?.photos)) ? Number(props.mediaCounts.photos) : files.value.filter(f => f.file_type === 'image').length);
+const totalVideoCount = ref(Number.isFinite(Number(props.mediaCounts?.videos)) ? Number(props.mediaCounts.videos) : files.value.filter(f => f.file_type === 'video').length);
+const totalFolderCount = ref(Number.isFinite(Number(props.mediaCounts?.folders)) ? Number(props.mediaCounts.folders) : folders.value.length);
 const loadMore = async () => {
     if (!nextPageUrl.value || isLoadingMore.value) return;
 
@@ -183,14 +189,44 @@ const filteredFiles = computed(() => {
     return allFilteredFiles.value;
 });
 
-const totalFolderCount = computed(() => folders.value.length);
-const totalFileCount = computed(() => {
-    const serverTotal = Number(props.mediaData?.total);
-    if (Number.isFinite(serverTotal) && serverTotal > 0) {
-        return serverTotal;
-    }
+const totalFileCount = computed(() => totalMediaCount.value);
 
-    return files.value.length;
+const photoCount = computed(() => {
+    return totalPhotoCount.value;
+});
+
+const videoCount = computed(() => {
+    return totalVideoCount.value;
+});
+
+const folderCount = computed(() => {
+    return totalFolderCount.value;
+});
+
+const allCount = computed(() => {
+    return totalFileCount.value + totalFolderCount.value;
+});
+
+const getFilterCount = (filterType) => {
+    if (filterType === 'All') return allCount.value;
+    if (filterType === 'Photos') return photoCount.value;
+    if (filterType === 'Videos') return videoCount.value;
+    if (filterType === 'Folders') return folderCount.value;
+    return 0;
+};
+
+const sectionTitle = computed(() => {
+    if (filter.value === 'Photos') return 'Photos';
+    if (filter.value === 'Videos') return 'Videos';
+    if (filter.value === 'Folders') return 'Folders';
+    return 'Files';
+});
+
+const sectionCount = computed(() => {
+    if (filter.value === 'Photos') return photoCount.value;
+    if (filter.value === 'Videos') return videoCount.value;
+    if (filter.value === 'Folders') return folderCount.value;
+    return filteredFiles.value.length + filteredFolders.value.length;
 });
 
 const emptyStateText = computed(() => {
@@ -323,6 +359,7 @@ const deleteItem = () => {
             preserveState: true,
             onSuccess: () => {
                 folderItems.value = folderItems.value.filter(folder => folder.id !== albumId);
+                totalFolderCount.value = Math.max(0, totalFolderCount.value - 1);
                 showDeleteModal.value = false;
                 itemToDelete.value = null;
             },
@@ -337,7 +374,14 @@ const deleteItem = () => {
         router.delete(route('media.destroy', itemToDelete.value.id), {
             preserveScroll: true,
             onSuccess: () => {
+                const deletedFileType = itemToDelete.value?.file_type;
                 removeDeletedMediaFromList(mediaId);
+                totalMediaCount.value = Math.max(0, totalMediaCount.value - 1);
+                if (deletedFileType === 'image') {
+                    totalPhotoCount.value = Math.max(0, totalPhotoCount.value - 1);
+                } else if (deletedFileType === 'video') {
+                    totalVideoCount.value = Math.max(0, totalVideoCount.value - 1);
+                }
                 showDeleteModal.value = false;
                 itemToDelete.value = null;
             },
@@ -453,9 +497,13 @@ const {
             <!-- Filter Tabs -->
             <div class="flex items-center gap-2 border-b border-border pb-2">
                 <template v-for="f in ['All', 'Photos', 'Videos', 'Folders']" :key="f">
-                    <button @click="filter = f" class="px-4 py-1.5 rounded-pill text-xs font-bold transition-all border"
+                    <button @click="filter = f" class="px-4 py-1.5 rounded-pill text-xs font-bold transition-all border flex items-center gap-2"
                             :class="filter === f ? 'bg-primary/10 border-primary text-primary' : 'bg-transparent border-transparent text-muted-foreground hover:bg-bg-hover'">
-                        {{ f }}
+                        <span>{{ f }}</span>
+                        <span class="inline-flex items-center rounded-full bg-bg-elevated/50 px-1.5 py-0.5 text-[10px] font-semibold"
+                              :class="filter === f ? 'bg-primary/10 text-primary' : 'text-muted-foreground'">
+                            {{ formatNumber(getFilterCount(f)) }}
+                        </span>
                     </button>
                 </template>
             </div>
@@ -465,7 +513,7 @@ const {
                 <div class="flex items-center gap-2">
                     <h3 class="text-sm font-bold text-foreground">Folders</h3>
                     <span class="inline-flex items-center rounded-pill bg-bg-elevated px-2.5 py-1 text-[11px] font-bold text-muted-foreground">
-                        {{ totalFolderCount }}
+                        {{ formatNumber(filteredFolders.length) }}
                     </span>
                 </div>
                 <div class="grid gap-4 overflow-visible" :class="viewMode === 'grid' ? 'grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4' : 'grid-cols-1'">
@@ -482,7 +530,24 @@ const {
                         </div>
                         <div class="min-w-0 flex-1">
                             <p class="text-sm font-bold text-foreground truncate">{{ folder.title }}</p>
-                            <p class="text-[10px] text-muted-foreground mt-0.5">{{ folder.media_count }} files</p>
+                            <p class="text-[10px] text-muted-foreground mt-0.5 flex items-center gap-2.5">
+                                <template v-if="folder.photo_count > 0">
+                                    <svg class="w-3.5 h-3.5 text-blue-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect><circle cx="8.5" cy="8.5" r="1.5"></circle><path d="M21 15l-5-5L5 21"></path></svg>
+                                    <span class="font-medium">{{ formatNumber(folder.photo_count) }}</span>
+                                </template>
+                                <template v-if="folder.video_count > 0">
+                                    <svg class="w-3.5 h-3.5 text-purple-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="23 7 16 12 23 17 23 7"></polygon><rect x="1" y="5" width="15" height="14" rx="2" ry="2"></rect></svg>
+                                    <span class="font-medium">{{ formatNumber(folder.video_count) }}</span>
+                                </template>
+                                <template v-if="folder.file_count > 0">
+                                    <svg class="w-3.5 h-3.5 text-amber-600" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M13 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9z"></path><polyline points="13 2 13 9 20 9"></polyline></svg>
+                                    <span class="font-medium">{{ formatNumber(folder.file_count) }}</span>
+                                </template>
+                                <template v-if="folder.children_count > 0">
+                                    <svg class="w-3.5 h-3.5 text-orange-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"></path></svg>
+                                    <span class="font-medium">{{ formatNumber(folder.children_count) }}</span>
+                                </template>
+                            </p>
                         </div>
 
                         <div class="relative overflow-visible" @click.stop>
@@ -507,9 +572,9 @@ const {
             <!-- Files Section -->
             <div v-if="filteredFiles.length > 0" class="space-y-4 files-layer">
                 <div class="flex items-center gap-2">
-                    <h3 class="text-sm font-bold text-foreground">Files</h3>
+                    <h3 class="text-sm font-bold text-foreground">{{ sectionTitle }}</h3>
                     <span class="inline-flex items-center rounded-pill bg-bg-elevated px-2.5 py-1 text-[11px] font-bold text-muted-foreground">
-                        {{ totalFileCount }}
+                        {{ formatNumber(filteredFiles.length) }}
                     </span>
                 </div>
 

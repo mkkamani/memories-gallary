@@ -406,6 +406,18 @@ class AlbumService
      */
     public function forceDelete(Album $album, MediaService $mediaService): bool
     {
+        if (! empty($album->cover_image)) {
+            try {
+                $this->storageService->deleteFile($album->cover_image);
+            } catch (\Throwable $e) {
+                Log::warning('AlbumService::forceDelete – failed to delete cover image object.', [
+                    'album_id' => $album->id,
+                    'cover_image' => $album->cover_image,
+                    'error' => $e->getMessage(),
+                ]);
+            }
+        }
+
         // Permanently remove every media file in this album from R2 and the DB.
         // purge() is used instead of delete() so that files are always deleted
         // from R2 regardless of whether the individual media record is trashed.
