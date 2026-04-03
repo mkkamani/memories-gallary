@@ -73,13 +73,10 @@ class AlbumController extends Controller
                     ->orderBy("created_at", "desc");
 
                 $nestedMedia = $nestedMediaQuery->limit(5)->get();
-                $nestedMediaCount = \App\Models\Media::whereIn("album_id", $nestedAlbumIds)->count();
-                $photoCount = \App\Models\Media::whereIn("album_id", $nestedAlbumIds)->where('file_type', 'image')->count();
-                $videoCount = \App\Models\Media::whereIn("album_id", $nestedAlbumIds)->where('file_type', 'video')->count();
-                $fileCount = \App\Models\Media::whereIn("album_id", $nestedAlbumIds)
-                    ->where('file_type', '!=', 'image')
-                    ->where('file_type', '!=', 'video')
-                    ->count();
+                $photoCount = $album->media()->where('file_type', 'image')->count();
+                $videoCount = $album->media()->where('file_type', 'video')->count();
+                $fileCount = $album->media()->whereNotIn('file_type', ['image', 'video'])->count();
+                $mediaCount = $photoCount + $videoCount + $fileCount;
 
                 // Use cover_image if available, otherwise first media
                 $thumbnailUrl = $this->resolveCoverImageUrl($album->cover_image) ?: ($nestedMedia->first()?->url);
@@ -96,7 +93,7 @@ class AlbumController extends Controller
                     "is_public" => $album->is_public,
                     "user_id" => $album->user_id,
                     "parent_id" => $album->parent_id,
-                    "media_count" => $nestedMediaCount,
+                    "media_count" => $mediaCount,
                     "photo_count" => $photoCount,
                     "video_count" => $videoCount,
                     "file_count" => $fileCount,

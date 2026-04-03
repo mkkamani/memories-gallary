@@ -18,6 +18,28 @@ class Media extends Model
         return (string) config('filesystems.media_disk', 'public');
     }
 
+    protected static function mediaCdnUrl(): string
+    {
+        return rtrim((string) config('filesystems.cdn_url', ''), '/');
+    }
+
+    protected static function shouldUseMediaCdn(?string $disk = null): bool
+    {
+        $disk ??= self::mediaDisk();
+
+        return $disk !== 'public' && self::mediaCdnUrl() !== '';
+    }
+
+    protected function mediaCdnPathUrl(string $path): string
+    {
+        return self::mediaCdnUrl() . '/' . ltrim($path, '/');
+    }
+
+    protected static function mediaDiskIsObjectStorage(string $disk): bool
+    {
+        return $disk !== 'public';
+    }
+
     protected function plainUrl(string $disk): string
     {
         if ($disk === 'public') {
@@ -87,6 +109,10 @@ class Media extends Model
     {
         $disk = self::mediaDisk();
 
+        if (self::shouldUseMediaCdn($disk)) {
+            return $this->mediaCdnPathUrl($this->file_path);
+        }
+
         try {
             /** @var FilesystemAdapter $storage */
             $storage = Storage::disk($disk);
@@ -114,22 +140,133 @@ class Media extends Model
     }
 
     /**
-     * Return the public URL for the locally-stored thumbnail, or null if not
-     * yet generated.  These are served from the local public disk — no
-     * presigned URL overhead — making listing views fast.
+     * Return the URL used for list/grid thumbnails.
+     *
+     * - When a Worker/CDN URL is configured for object storage, use the CDN
+     *   path for the original object and let edge caching handle speed.
+     * - Otherwise fall back to the locally-generated thumbnail path.
      */
     public function getThumbnailUrlAttribute(): ?string
     {
-        if (empty($this->thumbnail_path)) {
-            return null;
+        $disk = self::mediaDisk();
+
+        if (!empty($this->thumbnail_path)) {
+            if (self::shouldUseMediaCdn($disk) && self::mediaDiskIsObjectStorage($disk)) {
+                return $this->mediaCdnPathUrl((string) $this->thumbnail_path);
+            }
+
+            // For local/public disk, keep same-origin relative URL.
+            return '/storage/' . ltrim((string) $this->thumbnail_path, '/');
         }
 
-        try {
-            // Always return a same-origin relative path so thumbnails load
-            // correctly regardless of APP_URL host/protocol mismatches.
-            return '/storage/' . ltrim((string) $this->thumbnail_path, '/');
-        } catch (\Throwable $e) {
-            return null;
+        // If thumbnail is missing, gracefully fall back to original media URL.
+        return $this->getUrlAttribute();
+    }
+
+    /**
+     * Generate a transformed image URL with optional format conversion and resizing.
+     *
+     * @param array $options {
+     *     @var string $format One of: webp, avif, auto, json
+     *     @var int $width Width in pixels (1-2048)
+     *     @var int $height Height in pixels (1-2048)
+     *     @var int $quality Quality 1-100 (default: 80)
+     * }
+     * @return string Transform URL or original URL if not CDN-backed
+     */
+    public function transformUrl(array $options = []): string
+    {
+        if (!self::shouldUseMediaCdn()) {
+            return $this->url;
         }
+
+        $baseUrl = $this->mediaCdnPathUrl($this->file_path);
+        if (empty($options)) {
+            return $baseUrl;
+        }
+
+        $params = [];
+
+        if (!empty($options['format']) && in_array($options['format'], ['webp', 'avif', 'auto', 'json'], true)) {
+            $params['f'] = $options['format'];
+        }
+
+        if (!empty($options['width'])) {
+            $params['w'] = (int) $options['width'];
+        }
+
+        if (!empty($options['height'])) {
+            $params['h'] = (int) $options['height'];
+        }
+
+        if (!empty($options['quality'])) {
+            $params['q'] = (int) $options['quality'];
+        }
+
+        if (empty($params)) {
+            return $baseUrl;
+        }
+
+        return $baseUrl . '?' . http_build_query($params);
+    }
+
+    /**
+     * Convenience method: Get WebP version of image (auto quality).
+     */
+    public function webpUrl(int $width = null, int $height = null): string
+    {
+        return $this->transformUrl([
+            'format' => 'webp',
+            'width' => $width,
+            'height' => $height,
+            'quality' => 80,
+        ]);
+    }
+
+    /**
+     * Convenience method: Get AVIF version (better compression).
+     */
+    public function avifUrl(int $width = null, int $height = null): string
+    {
+        return $this->transformUrl([
+            'format' => 'auto',
+            'width' => $width,
+            'height' => $height,
+            'quality' => 75,
+        ]);
+    }
+
+    /**
+     * Convenience method: Get thumbnail at fixed size (typically for grid).
+     * Defaults to 400x300 webp for 2x clarity on retina displays.
+     */
+    public function thumbnailUrl(int $width = 400, int $height = 300): string
+    {
+        return $this->transformUrl([
+            'format' => 'webp',
+            'width' => $width,
+            'height' => $height,
+            'quality' => 85,
+        ]);
+    }
+
+    /**
+     * Convenience method: Get responsive thumbnail sizes for srcset.
+     * Returns array of [size => url] pairs.
+     *
+     * @example
+     *     $srcset = $media->responsiveThumbnails();
+     *     Output: ['200w' => 'https://...?f=webp&w=200&q=85', '400w' => '...?f=webp&w=400&q=85', ...]
+     */
+    public function responsiveThumbnails(array $widths = [200, 400, 600, 800, 1200]): array
+    {
+        return collect($widths)->mapWithKeys(function ($width) {
+            return ["{$width}w" => $this->transformUrl([
+                'format' => 'webp',
+                'width' => $width,
+                'quality' => 82,
+            ])];
+        })->toArray();
     }
 }
+

@@ -32,12 +32,6 @@ class ThumbnailService
     private const JPEG_QUALITY = 82;
 
     /**
-     * Disk on which thumbnails are stored.  Must be publicly accessible
-     * so the URL can be served without presigned-URL generation.
-     */
-    private const THUMB_DISK = 'public';
-
-    /**
      * Directory inside the public storage disk where thumbnails live.
      */
     private const THUMB_DIR = 'thumbnails';
@@ -133,7 +127,7 @@ class ThumbnailService
                 ->toString();
 
             $thumbPath = $this->thumbPath($media);
-            Storage::disk(self::THUMB_DISK)->put($thumbPath, $jpeg);
+            Storage::disk($this->thumbDisk())->put($thumbPath, $jpeg);
 
             $media->update(['thumbnail_path' => $thumbPath]);
 
@@ -207,8 +201,13 @@ class ThumbnailService
             return;
         }
 
+        $primaryDisk = $this->thumbDisk();
+        $candidateDisks = array_values(array_unique([$primaryDisk, 'public']));
+
         try {
-            Storage::disk(self::THUMB_DISK)->delete($media->thumbnail_path);
+            foreach ($candidateDisks as $disk) {
+                Storage::disk($disk)->delete($media->thumbnail_path);
+            }
         } catch (\Throwable $e) {
             Log::warning("ThumbnailService: failed to delete thumbnail.", [
                 'media_id' => $media->id,
@@ -217,18 +216,6 @@ class ThumbnailService
         }
 
         $media->update(['thumbnail_path' => null]);
-    }
-
-    /**
-     * Return the public URL for the thumbnail, or null if none has been generated.
-     */
-    public function url(Media $media): ?string
-    {
-        if (empty($media->thumbnail_path)) {
-            return null;
-        }
-
-        return Storage::disk(self::THUMB_DISK)->url($media->thumbnail_path);
     }
 
     // -------------------------------------------------------------------------
@@ -241,6 +228,16 @@ class ThumbnailService
     {
         $albumSegment = $media->album_id ?? 0;
         return self::THUMB_DIR . '/' . $albumSegment . '/' . $media->id . '.jpg';
+    }
+
+    /**
+     * Use the same disk as original media in production (R2),
+     * and local public disk in local/public-only setups.
+     */
+    private function thumbDisk(): string
+    {
+        $mediaDisk = (string) config('filesystems.media_disk', 'public');
+        return $mediaDisk === '' ? 'public' : $mediaDisk;
     }
 
     /**

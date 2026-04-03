@@ -56,9 +56,9 @@ const props = defineProps({
         type: Boolean,
         default: false,
     },
-    // When true and media.thumbnail_url is available the component loads the
-    // fast local thumbnail instead of the presigned R2 URL.  The full-res
-    // URL is only loaded in preview (lightbox) mode.
+    // When true and media.thumbnail_url is available the component prefers
+    // the fast listing URL. That can be either a local thumbnail path or a
+    // Worker/CDN-backed R2 URL depending on backend configuration.
     useThumbnail: {
         type: Boolean,
         default: false,
@@ -72,6 +72,7 @@ const conversionFailed = ref(false);
 const isLoading = ref(false);
 const hasImageLoaded = ref(false);
 const attemptedHeicConversion = ref(false);
+const attemptedThumbnailFallback = ref(false);
 
 let objectUrl = null;
 let runId = 0;
@@ -120,18 +121,58 @@ const heicProxyUrl = computed(() => {
     return null;
 });
 
-const mediaProxyUrl = computed(() => {
+const mediaOriginalUrl = computed(() => {
+    if (props.media?.url) {
+        return props.media.url;
+    }
+
     if (props.media?.id) {
         return `/media/${props.media.id}/raw`;
     }
-    return props.media?.url || '';
+
+    return '';
+});
+
+const mediaProxyUrl = computed(() => {
+    if (props.useThumbnail && localThumbnailUrl.value && !isHeic.value) {
+        return localThumbnailUrl.value;
+    }
+
+    return mediaOriginalUrl.value;
 });
 
 /**
- * The fast local thumbnail URL stored on the public disk.
- * Null when the thumbnail has not yet been generated.
+ * Fast listing URL for media thumbnails.
+ * This may be a local thumbnail path or a Worker/CDN URL.
  */
 const localThumbnailUrl = computed(() => props.media?.thumbnail_url || null);
+
+const resolvedThumbnailUrl = computed(() => {
+    if (!props.useThumbnail || isHeic.value) {
+        return null;
+    }
+
+    // Preferred explicit thumbnail from backend.
+    if (localThumbnailUrl.value && !/\/albums\//.test(localThumbnailUrl.value)) {
+        return localThumbnailUrl.value;
+    }
+
+    // If backend fell back to original URL, derive deterministic thumbnail key.
+    const mediaId = props.media?.id;
+    const albumId = props.media?.album_id ?? 0;
+    const original = mediaOriginalUrl.value;
+
+    if (mediaId && original && /^https?:\/\//.test(original)) {
+        try {
+            const origin = new URL(original).origin;
+            return `${origin}/thumbnails/${albumId}/${mediaId}.jpg`;
+        } catch (_e) {
+            return localThumbnailUrl.value;
+        }
+    }
+
+    return localThumbnailUrl.value;
+});
 
 const cleanupObjectUrl = () => {
     if (objectUrl) {
@@ -205,6 +246,7 @@ const syncUrl = async () => {
     isLoading.value = false;
     hasImageLoaded.value = false;
     attemptedHeicConversion.value = false;
+    attemptedThumbnailFallback.value = false;
     resolvedUrl.value = '';
 
     if (!mediaProxyUrl.value) {
@@ -213,16 +255,24 @@ const syncUrl = async () => {
         return;
     }
 
-    // Use the fast local thumbnail for listing/thumbnail contexts.
-    // Falls back to the regular presigned/proxy URL when unavailable.
-    if (props.useThumbnail && localThumbnailUrl.value && !isHeic.value) {
-        resolvedUrl.value = localThumbnailUrl.value;
+    // Preview mode must always use original media for quality/zoom behavior.
+    if (props.preview) {
+        resolvedUrl.value = isHeic.value
+            ? (heicProxyUrl.value || mediaOriginalUrl.value)
+            : mediaOriginalUrl.value;
+        return;
+    }
+
+    // Use the fast listing URL for grid/list contexts.
+    // Falls back to the regular media URL when unavailable.
+    if (props.useThumbnail && resolvedThumbnailUrl.value && !isHeic.value) {
+        resolvedUrl.value = resolvedThumbnailUrl.value;
         return;
     }
 
     resolvedUrl.value = isHeic.value
-        ? (heicProxyUrl.value || mediaProxyUrl.value)
-        : mediaProxyUrl.value;
+        ? (heicProxyUrl.value || mediaOriginalUrl.value)
+        : mediaOriginalUrl.value;
 };
 
 const onImgLoad = (e) => {
@@ -242,6 +292,21 @@ const onVideoError = () => {
 };
 
 const onImageError = async () => {
+    if (
+        props.useThumbnail
+        && resolvedThumbnailUrl.value
+        && resolvedUrl.value === resolvedThumbnailUrl.value
+        && !attemptedThumbnailFallback.value
+        && mediaOriginalUrl.value
+    ) {
+        // Thumbnail key may not exist in R2 yet; fall back to original media URL.
+        attemptedThumbnailFallback.value = true;
+        hasImageLoaded.value = false;
+        conversionFailed.value = false;
+        resolvedUrl.value = mediaOriginalUrl.value;
+        return;
+    }
+
     if (isHeic.value && !attemptedHeicConversion.value) {
         const converted = await convertHeicToBrowserImage();
 
@@ -310,12 +375,6 @@ onBeforeUnmount(() => {
 
     <!-- ─── GRID MODE: wrapper with aspect-ratio + blurred actual-image bg ── -->
     <div v-else-if="!conversionFailed" class="media-container">
-        <!--
-            Blurred version of the ACTUAL image shown while the img element is
-            still downloading.  Both point to the same URL so the browser
-            satisfies both from one HTTP request / cache entry.
-            inset: -12% overflows the container boundaries to hide blur edges.
-        -->
         <div
             v-if="!hasImageLoaded && resolvedUrl"
             class="media-blur-bg"

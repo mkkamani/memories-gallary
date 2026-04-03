@@ -37,6 +37,21 @@ class R2StorageService implements StorageServiceInterface
         return (string) config("filesystems.disks.{$this->disk}.driver", 'local');
     }
 
+    protected function cdnUrl(): string
+    {
+        return rtrim((string) config('filesystems.cdn_url', ''), '/');
+    }
+
+    protected function cdnPathUrl(string $path): string
+    {
+        return $this->cdnUrl() . '/' . ltrim($path, '/');
+    }
+
+    protected function shouldUseCdn(): bool
+    {
+        return $this->disk !== 'public' && $this->cdnUrl() !== '';
+    }
+
     /**
      * Upload a file to the R2 bucket under the given directory path.
      * Returns the full stored key (path) of the uploaded file.
@@ -122,6 +137,10 @@ class R2StorageService implements StorageServiceInterface
     {
         if ($this->disk === 'public') {
             return asset('storage/' . ltrim($path, '/'));
+        }
+
+        if ($this->shouldUseCdn()) {
+            return $this->cdnPathUrl($path);
         }
 
         $storage = $this->disk();

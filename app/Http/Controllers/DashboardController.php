@@ -143,13 +143,16 @@ class DashboardController extends Controller
 
     /**
      * Build a normalized album card payload for dashboard lists.
-     * Counts include all descendant folders and their media.
+     * Counts are scoped to the album itself to match album detail pages.
      */
     private function formatDashboardAlbumCard(Album $album): array
     {
         $coverMedia = $this->resolveAlbumCoverMedia($album);
-        $descendantIds = $album->descendants()->pluck('id');
-        $albumIds = $descendantIds->prepend($album->id);
+        $nestedAlbumIds = $album->descendants()->pluck('id')->prepend($album->id)->all();
+        $photoCount = Media::whereIn('album_id', $nestedAlbumIds)->where('file_type', 'image')->count();
+        $videoCount = Media::whereIn('album_id', $nestedAlbumIds)->where('file_type', 'video')->count();
+        $fileCount = Media::whereIn('album_id', $nestedAlbumIds)->whereNotIn('file_type', ['image', 'video'])->count();
+        $childrenCount = $album->children()->count();
 
         return [
             'id'          => $album->id,
@@ -157,8 +160,12 @@ class DashboardController extends Controller
             'path'        => $album->path,
             'name'        => $album->title,
             'date'        => optional($album->updated_at)->format('Y-m-d'),
-            'itemCount'   => Media::whereIn('album_id', $albumIds)->count(),
-            'folderCount' => $descendantIds->count(),
+            'itemCount'   => $photoCount + $videoCount + $fileCount,
+            'folderCount' => $childrenCount,
+            'photo_count' => $photoCount,
+            'video_count' => $videoCount,
+            'file_count'  => $fileCount,
+            'children_count' => $childrenCount,
             'coverUrl'    => $coverMedia?->url,
             'coverMedia'  => $this->formatAlbumCoverMediaArray($coverMedia),
         ];

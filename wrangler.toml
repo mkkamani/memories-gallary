@@ -1,0 +1,13 @@
+name = "cx-memories-media"
+main = "cloudflare/media-worker.mjs"
+compatibility_date = "2026-04-03"
+workers_dev = true
+
+[[r2_buckets]]
+binding = "MEDIA_BUCKET"
+bucket_name = "cx-memories"
+
+[env.production]
+routes = [
+    { pattern = "cx-memories-media.cypherox.workers.dev/*", zone_name = "cypherox.workers.dev" }
+]

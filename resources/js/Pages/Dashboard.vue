@@ -365,7 +365,24 @@ onBeforeUnmount(() => {
                                     <svg class="w-4 h-4 text-orange-500 fill-orange-500/20" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 7v10a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-6l-2-2H5a2 2 0 00-2 2z"/></svg>
                                     <p class="text-sm font-bold text-foreground truncate">{{ album.name }}</p>
                                 </div>
-                                <p class="text-[11px] text-muted-foreground mt-0.5">{{ formatNumber(album.itemCount || 0) }} items · {{ formatNumber(album.folderCount || 0) }} folders</p>
+                                <p class="text-[11px] text-muted-foreground mt-0.5 flex items-center gap-2.5">
+                                    <template v-if="album.photo_count > 0">
+                                        <svg class="w-3.5 h-3.5 text-blue-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect><circle cx="8.5" cy="8.5" r="1.5"></circle><path d="M21 15l-5-5L5 21"></path></svg>
+                                        <span class="font-medium">{{ formatNumber(album.photo_count) }}</span>
+                                    </template>
+                                    <template v-if="album.video_count > 0">
+                                        <svg class="w-3.5 h-3.5 text-purple-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="23 7 16 12 23 17 23 7"></polygon><rect x="1" y="5" width="15" height="14" rx="2" ry="2"></rect></svg>
+                                        <span class="font-medium">{{ formatNumber(album.video_count) }}</span>
+                                    </template>
+                                    <template v-if="album.file_count > 0">
+                                        <svg class="w-3.5 h-3.5 text-amber-600" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M13 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9z"></path><polyline points="13 2 13 9 20 9"></polyline></svg>
+                                        <span class="font-medium">{{ formatNumber(album.file_count) }}</span>
+                                    </template>
+                                    <template v-if="album.children_count > 0">
+                                        <svg class="w-3.5 h-3.5 text-orange-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"></path></svg>
+                                        <span class="font-medium">{{ formatNumber(album.children_count) }}</span>
+                                    </template>
+                                </p>
                             </div>
                         </Link>
                     </div>
@@ -407,7 +424,24 @@ onBeforeUnmount(() => {
                                         <svg class="w-4 h-4 text-orange-500 fill-orange-500/20" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 7v10a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-6l-2-2H5a2 2 0 00-2 2z"/></svg>
                                         <p class="text-sm font-bold text-foreground truncate">{{ album.name }}</p>
                                     </div>
-                                    <p class="text-[11px] text-muted-foreground mt-0.5">{{ formatNumber(album.itemCount || 0) }} items · {{ formatNumber(album.folderCount || 0) }} folders</p>
+                                    <p class="text-[11px] text-muted-foreground mt-0.5 flex items-center gap-2.5">
+                                        <template v-if="album.photo_count > 0">
+                                            <svg class="w-3.5 h-3.5 text-blue-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect><circle cx="8.5" cy="8.5" r="1.5"></circle><path d="M21 15l-5-5L5 21"></path></svg>
+                                            <span class="font-medium">{{ formatNumber(album.photo_count) }}</span>
+                                        </template>
+                                        <template v-if="album.video_count > 0">
+                                            <svg class="w-3.5 h-3.5 text-purple-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="23 7 16 12 23 17 23 7"></polygon><rect x="1" y="5" width="15" height="14" rx="2" ry="2"></rect></svg>
+                                            <span class="font-medium">{{ formatNumber(album.video_count) }}</span>
+                                        </template>
+                                        <template v-if="album.file_count > 0">
+                                            <svg class="w-3.5 h-3.5 text-amber-600" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M13 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9z"></path><polyline points="13 2 13 9 20 9"></polyline></svg>
+                                            <span class="font-medium">{{ formatNumber(album.file_count) }}</span>
+                                        </template>
+                                        <template v-if="album.children_count > 0">
+                                            <svg class="w-3.5 h-3.5 text-orange-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"></path></svg>
+                                            <span class="font-medium">{{ formatNumber(album.children_count) }}</span>
+                                        </template>
+                                    </p>
                                 </div>
                             </Link>
                         </div>
@@ -415,7 +449,7 @@ onBeforeUnmount(() => {
                     </div>
 
                     <div class="space-y-4 pt-4">
-                        <h3 class="font-heading font-bold text-lg text-foreground">Recent Photos &amp; Videos</h3>
+                        <h3 class="font-heading font-bold text-lg text-foreground">Recent Photos <span class="font-sans">&amp;</span> Videos</h3>
                         <div
                             v-if="recentVisualMedia.length"
                             ref="recentMediaMasonryRef"
