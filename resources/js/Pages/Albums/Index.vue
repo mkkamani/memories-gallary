@@ -244,7 +244,7 @@ const submitImport = () => {
                         <option value="Rajkot">Rajkot</option>
                     </select>
 
-                    <input v-model="search" type="text" placeholder="Search albums..." class="h-11 bg-bg-input border-border text-foreground rounded-pill shadow-sm focus:border-primary focus:ring-1 focus:ring-primary w-full md:w-64 px-4 text-sm" />
+                    <input v-model="search" type="text" placeholder="Search albums..." class="hidden md:block h-11 bg-bg-input border-border text-foreground rounded-pill shadow-sm focus:border-primary focus:ring-1 focus:ring-primary md:w-64 px-4 text-sm" />
 
                     <div class="relative" v-if="canCreateActions">
                         <button @click.stop="showNewMenu = !showNewMenu" class="flex items-center gap-2 h-11 px-6 rounded-pill bg-gradient-to-r from-primary to-accent-hover text-primary-foreground font-bold text-sm shadow-lg hover:translate-y-[-2px] transition-all whitespace-nowrap">
@@ -483,17 +483,17 @@ const submitImport = () => {
                 </template>
             </div>
 
-            <div v-else class="bg-bg-card border border-border rounded-2xl overflow-visible">
-                <div class="grid grid-cols-[1fr_120px_120px_150px_40px] items-center px-6 py-3 border-b border-border bg-bg-elevated/50">
+            <div v-else class="bg-bg-card border border-border rounded-2xl overflow-hidden">
+                <div class="grid grid-cols-[minmax(0,1fr)_88px_96px_40px] sm:grid-cols-[1fr_120px_120px_150px_40px] items-center px-4 sm:px-6 py-3 border-b border-border bg-bg-elevated/50">
                     <span class="text-xs font-bold text-muted-foreground uppercase tracking-wider">Name</span>
                     <span class="text-xs font-bold text-muted-foreground uppercase tracking-wider text-center">Items</span>
                     <span class="text-xs font-bold text-muted-foreground uppercase tracking-wider">Location</span>
-                    <span class="text-xs font-bold text-muted-foreground uppercase tracking-wider">Last Modified</span>
+                    <span class="hidden sm:block text-xs font-bold text-muted-foreground uppercase tracking-wider">Last Modified</span>
                     <span />
                 </div>
                 <div class="divide-y divide-border">
                     <template v-for="album in userAlbums" :key="album.id">
-                        <div class="grid grid-cols-[1fr_120px_120px_150px_40px] items-center px-6 py-4 hover:bg-bg-hover transition-colors cursor-pointer group" @click="router.visit(route('albums.show', album.path || album.slug || album.id))">
+                        <div class="grid grid-cols-[minmax(0,1fr)_88px_96px_40px] sm:grid-cols-[1fr_120px_120px_150px_40px] items-center px-4 sm:px-6 py-4 hover:bg-bg-hover transition-colors cursor-pointer group" @click="router.visit(route('albums.show', album.path || album.slug || album.id))">
                             <div class="flex items-center gap-4">
                                 <button @click="togglePin($event, album)" class="p-1.5 rounded-full transition-all" :class="pinnedAlbums.includes(album.id) ? 'text-primary' : 'text-muted-foreground opacity-0 group-hover:opacity-100'">
                                     <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-pin w-4 h-4 fill-current"><path d="M12 17v5"></path><path d="M9 10.76a2 2 0 0 1-1.11 1.79l-1.78.9A2 2 0 0 0 5 15.24V16a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1v-.76a2 2 0 0 0-1.11-1.79l-1.78-.9A2 2 0 0 1 15 10.76V7a1 1 0 0 1 1-1 2 2 0 0 0 0-4H8a2 2 0 0 0 0 4 1 1 0 0 1 1 1z"></path></svg>
@@ -501,7 +501,10 @@ const submitImport = () => {
                                 <div class="w-10 h-10 rounded-lg bg-orange-500/10 flex items-center justify-center text-orange-500">
                                     <svg class="w-5 h-5 fill-orange-500/20" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 7v10a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-6l-2-2H5a2 2 0 00-2 2z"/></svg>
                                 </div>
-                                <span class="text-sm font-bold text-foreground">{{ album.title }}</span>
+                                <div class="min-w-0">
+                                    <span class="block truncate text-sm font-bold text-foreground">{{ album.title }}</span>
+                                    <span class="block text-[11px] text-muted-foreground sm:hidden">{{ new Date(album.created_at || Date.now()).toLocaleDateString() }}</span>
+                                </div>
                             </div>
                             <span class="text-sm text-muted-foreground text-center flex items-center justify-center gap-2.5">
                                 <template v-if="album.photo_count || (!album.photo_count && !album.video_count && !album.file_count)">
@@ -522,7 +525,7 @@ const submitImport = () => {
                                     {{ album.location || '-' }}
                                 </span>
                             </div>
-                            <span class="text-sm text-muted-foreground">{{ new Date(album.created_at || Date.now()).toLocaleDateString() }}</span>
+                            <span class="hidden sm:block text-sm text-muted-foreground">{{ new Date(album.created_at || Date.now()).toLocaleDateString() }}</span>
                             <div class="relative">
                                 <button @click="toggleActionMenu($event, album.id)" class="p-2 rounded-full border border-border/80 bg-bg-card/90 text-foreground shadow-sm transition-all hover:bg-bg-elevated hover:border-primary/30 hover:text-foreground">
                                     <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 5v.01M12 12v.01M12 19v.01M12 6a1 1 0 110-2 1 1 0 010 2zm0 7a1 1 0 110-2 1 1 0 010 2zm0 7a1 1 0 110-2 1 1 0 010 2z"/></svg>

@@ -431,13 +431,13 @@ const {
         <div class="animate-fade-in text-foreground space-y-6" @click="closeActionMenu">
 
             <!-- Header with Breadcrumbs and New Button -->
-            <div class="flex flex-col md:flex-row md:items-center justify-between gap-4">
-                <div class="flex items-center gap-2 overflow-x-auto pb-2 md:pb-0 scrollbar-hide flex-1">
+            <div class="flex flex-col md:flex-row md:items-center justify-between gap-3 md:gap-4">
+                <div class="flex items-center gap-2 min-w-0 flex-1">
                     <Link :href="parentAlbumSlug ? route('albums.show', parentAlbumSlug) : route('albums.index')" class="p-2 rounded-full hover:bg-bg-hover text-muted-foreground transition-all shrink-0">
                         <svg class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 19l-7-7m0 0l7-7m-7 7h18"/></svg>
                     </Link>
 
-                    <div class="flex items-center gap-1 text-sm text-muted-foreground whitespace-nowrap min-w-0 flex-1">
+                    <div class="flex items-center gap-1 text-sm text-muted-foreground whitespace-nowrap min-w-0 flex-1 overflow-x-auto scrollbar-hide pr-1">
                         <Link :href="route('albums.index')" class="hover:text-foreground cursor-pointer transition-colors">Albums</Link>
 
                         <svg class="w-4 h-4 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/></svg>
@@ -463,7 +463,7 @@ const {
                     </div>
                 </div>
 
-                <div class="flex items-center gap-3 shrink-0">
+                <div class="flex items-center justify-between sm:justify-end gap-3 shrink-0">
                     <div class="relative" v-if="canShowToolbar">
                         <button @click.stop="showNewMenu = !showNewMenu" class="flex items-center gap-2 h-10 px-5 rounded-pill bg-gradient-to-r from-primary to-accent-hover text-primary-foreground font-bold text-sm shadow-lg hover:translate-y-[-1px] transition-all">
                             <svg class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/></svg>
@@ -495,9 +495,10 @@ const {
             </div>
 
             <!-- Filter Tabs -->
-            <div class="flex items-center gap-2 border-b border-border pb-2">
+            <div class="border-b border-border pb-2">
+                <div class="flex w-max min-w-full items-center gap-2 overflow-x-auto scrollbar-hide">
                 <template v-for="f in ['All', 'Photos', 'Videos', 'Folders']" :key="f">
-                    <button @click="filter = f" class="px-4 py-1.5 rounded-pill text-xs font-bold transition-all border flex items-center gap-2"
+                    <button @click="filter = f" class="px-3 sm:px-4 py-1.5 rounded-pill text-xs font-bold transition-all border flex items-center gap-2 whitespace-nowrap"
                             :class="filter === f ? 'bg-primary/10 border-primary text-primary' : 'bg-transparent border-transparent text-muted-foreground hover:bg-bg-hover'">
                         <span>{{ f }}</span>
                         <span class="inline-flex items-center rounded-full bg-bg-elevated/50 px-1.5 py-0.5 text-[10px] font-semibold"
@@ -506,6 +507,7 @@ const {
                         </span>
                     </button>
                 </template>
+                </div>
             </div>
 
             <!-- Folders Section -->

@@ -252,6 +252,11 @@ class TerminalController extends Controller
 
     private function cleanOutput(string $text): string
     {
+        // Strip ANSI escape/control sequences so web terminal shows clean text.
+        $text = preg_replace('/\x1B\[[0-?]*[ -\/]*[@-~]/', '', $text) ?? $text; // CSI
+        $text = preg_replace('/\x1B\][^\x07]*\x07/', '', $text) ?? $text; // OSC (BEL-terminated)
+        $text = preg_replace('/\x1B[@-Z\\-_]/', '', $text) ?? $text; // single-char escapes
+
         $text = str_replace(["\r\n", "\r"], "\n", $text);
         $text = preg_replace('/[\t ]+$/m', '', $text) ?? $text;
         $text = preg_replace('/\n{3,}/', "\n\n", $text) ?? $text;
@@ -338,6 +343,15 @@ class TerminalController extends Controller
                 $composerArgs   = trim(substr($userCommand, strlen('composer')));
                 $systemComposer = $this->findComposer();
 
+                // Web terminal output is cleaner and predictable without ANSI/control UI updates.
+                if (!preg_match('/(^|\s)--no-ansi(\s|$)/', $composerArgs)) {
+                    $composerArgs = trim($composerArgs . ' --no-ansi');
+                }
+
+                if (!preg_match('/(^|\s)--no-interaction(\s|$)/', $composerArgs)) {
+                    $composerArgs = trim($composerArgs . ' --no-interaction');
+                }
+
                 if ($systemComposer) {
                     $composerBin = escapeshellarg($this->toShellPath($systemComposer, $shellType));
 
@@ -346,7 +360,9 @@ class TerminalController extends Controller
                     if (in_array($composerExt, ['bat', 'cmd'], true)) {
                         $command = "{$composerBin} {$composerArgs}";
                     } else {
-                        $command = trim("{$php} -d register_argc_argv=0 {$composerBin} {$composerArgs}");
+                        // Composer requires argv to be available so subcommands
+                        // like `install`/`update` are parsed correctly.
+                        $command = trim("{$php} -d register_argc_argv=1 {$composerBin} {$composerArgs}");
                     }
                 } else {
                     $composerPath = $projectRoot . DIRECTORY_SEPARATOR . 'composer.phar';
@@ -360,7 +376,8 @@ class TerminalController extends Controller
                         ], 400);
                     }
 
-                    $command = trim("{$php} -d register_argc_argv=0 composer.phar {$composerArgs}");
+                    // Keep argv enabled so composer subcommands and flags work.
+                    $command = trim("{$php} -d register_argc_argv=1 composer.phar {$composerArgs}");
                 }
             } elseif (stripos($userCommand, 'php artisan') === 0) {
                 $artisanArgs = trim(substr($userCommand, strlen('php artisan')));

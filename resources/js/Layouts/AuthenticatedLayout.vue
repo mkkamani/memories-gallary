@@ -357,7 +357,7 @@ const isActive = (item) => {
                 </button>
 
                 <!-- Notifications -->
-                <div class="relative">
+                <!-- <div class="relative">
                     <button
                         id="notif-btn"
                         @click="showNotifications = !showNotifications; showUserMenu = false"
@@ -365,12 +365,11 @@ const isActive = (item) => {
                     >
                         <Bell class="w-5 h-5 text-muted-foreground" />
                     </button>
-                    <!-- Notification popup mock -->
                     <div id="notif-dropdown" v-if="showNotifications" class="fixed left-4 right-4 top-16 sm:absolute sm:left-auto sm:right-0 sm:top-12 sm:w-80 rounded-2xl border border-border bg-card shadow-2xl p-4 animate-scale-in z-50">
                         <h3 class="font-bold text-base mb-2">Notifications</h3>
                         <p class="text-sm text-muted-foreground">You have no new notifications.</p>
                     </div>
-                </div>
+                </div> -->
 
                 <!-- User Menu -->
                 <div class="relative">

@@ -5,6 +5,7 @@ import {
     Download,
     Minus,
     Plus,
+    RotateCw,
     RotateCcw,
     X,
 } from 'lucide-vue-next';
@@ -73,6 +74,7 @@ const uploaderName = computed(() =>
 const mediaLabel = computed(() => props.media?.file_name || props.media?.title || 'Preview');
 const isVideo = computed(() => props.media?.file_type === 'video');
 const zoomLevel = ref(1);
+const rotationDeg = ref(0);
 const panX = ref(0);
 const panY = ref(0);
 const isPanning = ref(false);
@@ -88,7 +90,7 @@ const imageTransformStyle = computed(() => {
     }
 
     return {
-        transform: `translate(${panX.value}px, ${panY.value}px) scale(${zoomLevel.value})`,
+        transform: `translate(${panX.value}px, ${panY.value}px) scale(${zoomLevel.value}) rotate(${rotationDeg.value}deg)`,
     };
 });
 
@@ -96,13 +98,10 @@ const canPanImage = computed(() => !isVideo.value && zoomLevel.value > 1);
 
 const resetView = () => {
     zoomLevel.value = 1;
+    rotationDeg.value = 0;
     panX.value = 0;
     panY.value = 0;
     isPanning.value = false;
-};
-
-const resetZoom = () => {
-    resetView();
 };
 
 const zoomIn = () => {
@@ -117,6 +116,14 @@ const zoomOut = () => {
         panY.value = 0;
         isPanning.value = false;
     }
+};
+
+const rotateLeft = () => {
+    rotationDeg.value = ((rotationDeg.value - 90) % 360 + 360) % 360;
+};
+
+const rotateRight = () => {
+    rotationDeg.value = (rotationDeg.value + 90) % 360;
 };
 
 const getVideoElement = () => {
@@ -176,7 +183,7 @@ const onImageMouseDown = (event) => {
         return;
     }
 
-    if (event.button !== 2) {
+    if (event.button !== 0) {
         return;
     }
 
@@ -198,9 +205,7 @@ const onMouseMove = (event) => {
 };
 
 const onImageContextMenu = (event) => {
-    if (canPanImage.value) {
-        event.preventDefault();
-    }
+    // Keep browser context menu available; pan uses left-click drag.
 };
 
 const downloadCurrent = () => {
@@ -277,6 +282,16 @@ const onKeydown = (event) => {
     if (event.key === '-') {
         zoomOut();
     }
+
+    if (event.key === '[') {
+        event.preventDefault();
+        rotateLeft();
+    }
+
+    if (event.key === ']') {
+        event.preventDefault();
+        rotateRight();
+    }
 };
 
 const onWheelZoom = (event) => {
@@ -341,7 +356,7 @@ onBeforeUnmount(() => {
             <div class="pointer-events-none absolute inset-x-0 top-0 h-24 bg-gradient-to-b from-black/55 to-transparent"></div>
             <div class="pointer-events-none absolute inset-x-0 bottom-0 h-20 bg-gradient-to-t from-black/45 to-transparent"></div>
 
-            <div class="absolute inset-x-0 top-0 z-20 flex h-16 items-center justify-between px-4 sm:px-6 lg:px-8">
+            <div class="absolute inset-x-0 top-0 z-20 flex h-14 items-center justify-between px-3 sm:h-16 sm:px-6 lg:px-8">
                 <div class="min-w-0 text-white">
                     <h2 class="truncate text-sm font-bold sm:text-base">{{ mediaLabel }}</h2>
                     <p class="mt-0.5 truncate text-[11px] text-white/70 sm:text-xs">{{ metaDate }} · Uploaded by {{ uploaderName }}</p>
@@ -370,27 +385,27 @@ onBeforeUnmount(() => {
 
             <button
                 type="button"
-                class="absolute left-3 top-1/2 z-20 flex h-12 w-12 -translate-y-1/2 items-center justify-center rounded-full border border-white/25 bg-black/55 text-white shadow-[0_8px_25px_rgba(0,0,0,0.4)] transition hover:border-primary/70 hover:bg-primary/35 disabled:cursor-not-allowed disabled:opacity-35 sm:left-5 lg:left-6"
+                class="absolute left-2 top-1/2 z-20 flex h-10 w-10 -translate-y-1/2 items-center justify-center rounded-full border border-white/25 bg-black/55 text-white shadow-[0_8px_25px_rgba(0,0,0,0.4)] transition hover:border-primary/70 hover:bg-primary/35 disabled:cursor-not-allowed disabled:opacity-35 sm:left-5 sm:h-12 sm:w-12 lg:left-6"
                 aria-label="Previous media"
                 :disabled="!canGoPrevious"
                 @click="emit('previous')"
             >
-                <ChevronLeft class="h-6 w-6" />
+                <ChevronLeft class="h-5 w-5 sm:h-6 sm:w-6" />
             </button>
 
             <button
                 type="button"
-                class="absolute right-3 top-1/2 z-20 flex h-12 w-12 -translate-y-1/2 items-center justify-center rounded-full border border-white/25 bg-black/55 text-white shadow-[0_8px_25px_rgba(0,0,0,0.4)] transition hover:border-primary/70 hover:bg-primary/35 disabled:cursor-not-allowed disabled:opacity-35 sm:right-5 lg:right-6"
+                class="absolute right-2 top-1/2 z-20 flex h-10 w-10 -translate-y-1/2 items-center justify-center rounded-full border border-white/25 bg-black/55 text-white shadow-[0_8px_25px_rgba(0,0,0,0.4)] transition hover:border-primary/70 hover:bg-primary/35 disabled:cursor-not-allowed disabled:opacity-35 sm:right-5 sm:h-12 sm:w-12 lg:right-6"
                 aria-label="Next media"
                 :disabled="!canGoNext"
                 @click="emit('next')"
             >
-                <ChevronRight class="h-6 w-6" />
+                <ChevronRight class="h-5 w-5 sm:h-6 sm:w-6" />
             </button>
 
             <div
                 ref="previewStageRef"
-                class="absolute inset-0 flex items-center justify-center px-14 pt-20 pb-20 sm:px-20 sm:pt-24 sm:pb-24 lg:px-24"
+                class="absolute inset-0 flex items-center justify-center px-2 pt-16 pb-28 sm:px-20 sm:pt-24 sm:pb-24 lg:px-24"
                 :class="{ 'cursor-grab': canPanImage && !isPanning, 'cursor-grabbing': canPanImage && isPanning }"
                 @wheel="onWheelZoom"
                 @mousedown="onImageMouseDown"
@@ -401,8 +416,8 @@ onBeforeUnmount(() => {
                             :media="media"
                             :alt="mediaLabel"
                             :preview="true"
-                            image-class="max-h-full max-w-full w-auto h-auto object-contain select-none"
-                            video-class="max-h-full max-w-full rounded-lg bg-black object-contain"
+                            image-class="max-h-[calc(100vh-12rem)] sm:max-h-full max-w-full w-auto h-auto object-contain select-none"
+                            video-class="max-h-[calc(100vh-12rem)] sm:max-h-full max-w-full rounded-lg bg-black object-contain"
                             fallback-class="flex min-h-[18rem] min-w-[18rem] items-center justify-center rounded-2xl border border-white/10 bg-black/35 px-8 text-base font-bold uppercase tracking-[0.3em] text-white/70"
                             :style="imageTransformStyle"
                             :video-controls="isVideo"
@@ -412,15 +427,15 @@ onBeforeUnmount(() => {
                 </div>
             </div>
 
-            <div class="absolute bottom-4 left-1/2 z-20 flex -translate-x-1/2 items-center gap-2 rounded-full border border-white/20 bg-black/55 px-3 py-2 text-white shadow-xl backdrop-blur-md sm:bottom-5">
-                <span class="min-w-12 px-2 text-center text-xs font-semibold text-white/80 sm:text-sm">
-                    {{ formatNumber(currentNumber) }} / {{ formatNumber(totalItems) }}
+            <div class="absolute bottom-3 left-1/2 z-20 flex max-w-[calc(100vw-1rem)] -translate-x-1/2 items-center gap-1 overflow-x-auto rounded-full border border-white/20 bg-black/55 px-2 py-1.5 text-white shadow-xl backdrop-blur-md sm:bottom-5 sm:gap-2 sm:px-3 sm:py-2">
+                <span class="min-w-[56px] whitespace-nowrap px-2 text-center text-xs font-semibold leading-none text-white/80 sm:text-sm">
+                    {{ formatNumber(currentNumber) }}/{{ formatNumber(totalItems) }}
                 </span>
 
                 <button
                     v-if="!isVideo"
                     type="button"
-                    class="inline-flex h-9 w-9 items-center justify-center rounded-full transition hover:bg-white/15"
+                    class="inline-flex h-8 w-8 items-center justify-center rounded-full transition hover:bg-white/15 sm:h-9 sm:w-9"
                     aria-label="Zoom out"
                     @click="zoomOut"
                 >
@@ -430,9 +445,10 @@ onBeforeUnmount(() => {
                 <button
                     v-if="!isVideo"
                     type="button"
-                    class="inline-flex h-9 w-9 items-center justify-center rounded-full transition hover:bg-white/15"
-                    aria-label="Reset zoom"
-                    @click="resetZoom"
+                    class="inline-flex h-8 w-8 items-center justify-center rounded-full transition hover:bg-white/15 sm:h-9 sm:w-9"
+                    aria-label="Rotate left"
+                    title="Rotate left (90°)"
+                    @click="rotateLeft"
                 >
                     <RotateCcw class="h-4 w-4" />
                 </button>
@@ -440,7 +456,18 @@ onBeforeUnmount(() => {
                 <button
                     v-if="!isVideo"
                     type="button"
-                    class="inline-flex h-9 w-9 items-center justify-center rounded-full transition hover:bg-white/15"
+                    class="inline-flex h-8 w-8 items-center justify-center rounded-full transition hover:bg-white/15 sm:h-9 sm:w-9"
+                    aria-label="Rotate right"
+                    title="Rotate right (90°)"
+                    @click="rotateRight"
+                >
+                    <RotateCw class="h-4 w-4" />
+                </button>
+
+                <button
+                    v-if="!isVideo"
+                    type="button"
+                    class="inline-flex h-8 w-8 items-center justify-center rounded-full transition hover:bg-white/15 sm:h-9 sm:w-9"
                     aria-label="Zoom in"
                     @click="zoomIn"
                 >

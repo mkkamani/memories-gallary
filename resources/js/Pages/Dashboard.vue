@@ -234,24 +234,24 @@ onBeforeUnmount(() => {
     <AuthenticatedLayout>
         <div class="animate-fade-in text-foreground space-y-8 py-2">
 
-            <div class="flex items-center justify-between">
-                <div>
+            <div class="flex items-start sm:items-center justify-between gap-3">
+                <div class="min-w-0">
                     <h1 v-if="userRole === 'admin'" class="font-heading font-bold text-3xl">Overview</h1>
                     <h1 v-else-if="userRole === 'manager'" class="font-heading font-bold text-3xl">Manager Hub</h1>
                     <h1 v-else class="font-heading font-bold text-3xl">My Workspace</h1>
 
-                    <p class="text-muted-foreground mt-1 text-sm">
+                    <p class="text-muted-foreground mt-1 text-sm max-w-[24ch] sm:max-w-none">
                         {{ userRole === 'admin' ? 'Monitor platform assets and user contributions' :
                            userRole === 'manager' ? 'Coordinate albums and team contributions' :
                            'Access albums and contribute your media' }}
                     </p>
                 </div>
 
-                <Link v-if="userRole !== 'member'" href="/albums/create" class="flex items-center gap-2 h-10 px-5 rounded-pill bg-gradient-to-r from-primary to-accent-hover text-primary-foreground font-bold text-sm shadow-lg hover:shadow-primary/20 transition-all">
+                <Link v-if="userRole !== 'member'" href="/albums/create" class="shrink-0 whitespace-nowrap inline-flex items-center gap-2 h-9 px-3 sm:h-10 sm:px-5 rounded-pill bg-gradient-to-r from-primary to-accent-hover text-primary-foreground font-bold text-xs sm:text-sm shadow-lg hover:shadow-primary/20 transition-all">
                     <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/></svg>
                     New Album
                 </Link>
-                <Link v-else href="/albums" class="flex items-center gap-2 h-10 px-5 rounded-pill bg-primary text-primary-foreground font-bold text-sm shadow-lg hover:shadow-primary/20 transition-all">
+                <Link v-else href="/albums" class="shrink-0 whitespace-nowrap inline-flex items-center gap-2 h-9 px-3 sm:h-10 sm:px-5 rounded-pill bg-primary text-primary-foreground font-bold text-xs sm:text-sm shadow-lg hover:shadow-primary/20 transition-all">
                     <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12"/></svg>
                     Upload Files
                 </Link>
@@ -358,6 +358,10 @@ onBeforeUnmount(() => {
                                         <svg class="w-12 h-12" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 7v10a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-6l-2-2H5a2 2 0 00-2 2z"/></svg>
                                     </div>
                                     <div class="absolute inset-0 bg-black/20 opacity-0 group-hover:opacity-100 transition-opacity"></div>
+                                    <div v-if="album.location" class="absolute bottom-2 right-2 flex items-center gap-1 text-[10px] bg-black/50 text-white px-2 py-0.5 rounded-md backdrop-blur-md">
+                                        <svg class="w-3 h-3 text-blue-400" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z"/><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 11a3 3 0 11-6 0 3 3 0 016 0z"/></svg>
+                                        {{ album.location }}
+                                    </div>
                                 </div>
                             </div>
                             <div class="px-1">
@@ -417,6 +421,10 @@ onBeforeUnmount(() => {
                                             <svg class="w-12 h-12" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 7v10a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-6l-2-2H5a2 2 0 00-2 2z"/></svg>
                                         </div>
                                         <div class="absolute inset-0 bg-black/20 opacity-0 group-hover:opacity-100 transition-opacity"></div>
+                                        <div v-if="album.location" class="absolute bottom-2 right-2 flex items-center gap-1 text-[10px] bg-black/50 text-white px-2 py-0.5 rounded-md backdrop-blur-md">
+                                            <svg class="w-3 h-3 text-blue-400" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z"/><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 11a3 3 0 11-6 0 3 3 0 016 0z"/></svg>
+                                            {{ album.location }}
+                                        </div>
                                     </div>
                                 </div>
                                 <div class="px-1">

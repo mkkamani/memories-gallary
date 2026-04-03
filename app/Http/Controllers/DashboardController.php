@@ -159,6 +159,7 @@ class DashboardController extends Controller
             'slug'        => $album->slug,
             'path'        => $album->path,
             'name'        => $album->title,
+            'location'    => $album->location,
             'date'        => optional($album->updated_at)->format('Y-m-d'),
             'itemCount'   => $photoCount + $videoCount + $fileCount,
             'folderCount' => $childrenCount,
