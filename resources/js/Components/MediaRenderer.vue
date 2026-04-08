@@ -63,6 +63,11 @@ const props = defineProps({
         type: Boolean,
         default: false,
     },
+    // When true, never run client-side HEIC conversion; render direct URL only.
+    disableHeicConversion: {
+        type: Boolean,
+        default: false,
+    },
 });
 
 const emit = defineEmits(['load']);
@@ -115,15 +120,35 @@ const isHeic = computed(() => {
 });
 
 const heicProxyUrl = computed(() => {
-    if (props.media?.id && isHeic.value) {
+    if (!isHeic.value) {
+        return null;
+    }
+
+    // Prefer Worker/CDN-backed URL first so HEIC preview/fallback uses
+    // the same cached R2 path as thumbnails.
+    if (props.media?.url) {
+        return props.media.url;
+    }
+
+    if (derivedWorkerMediaUrl.value) {
+        return derivedWorkerMediaUrl.value;
+    }
+
+    // Keep raw route only as a last fallback.
+    if (props.media?.id) {
         return `/media/${props.media.id}/raw`;
     }
+
     return null;
 });
 
 const mediaOriginalUrl = computed(() => {
     if (props.media?.url) {
         return props.media.url;
+    }
+
+    if (derivedWorkerMediaUrl.value) {
+        return derivedWorkerMediaUrl.value;
     }
 
     if (props.media?.id) {
@@ -134,7 +159,11 @@ const mediaOriginalUrl = computed(() => {
 });
 
 const mediaProxyUrl = computed(() => {
-    if (props.useThumbnail && localThumbnailUrl.value && !isHeic.value) {
+    if (props.useThumbnail && resolvedThumbnailUrl.value) {
+        return resolvedThumbnailUrl.value;
+    }
+
+    if (props.useThumbnail && localThumbnailUrl.value) {
         return localThumbnailUrl.value;
     }
 
@@ -147,8 +176,60 @@ const mediaProxyUrl = computed(() => {
  */
 const localThumbnailUrl = computed(() => props.media?.thumbnail_url || null);
 
+const workerOrigin = computed(() => {
+    for (const candidate of [props.media?.url, localThumbnailUrl.value]) {
+        if (typeof candidate !== 'string' || candidate === '') {
+            continue;
+        }
+
+        if (!/^https?:\/\//.test(candidate)) {
+            continue;
+        }
+
+        try {
+            return new URL(candidate).origin;
+        } catch (_e) {
+            // Ignore malformed URL candidates and continue.
+        }
+    }
+
+    return null;
+});
+
+const derivedWorkerMediaUrl = computed(() => {
+    const origin = workerOrigin.value;
+    const path = typeof props.media?.file_path === 'string' ? props.media.file_path.trim() : '';
+
+    if (!origin || path === '') {
+        return null;
+    }
+
+    return `${origin}/${path.replace(/^\/+/, '')}`;
+});
+
+const derivedThumbnailUrl = computed(() => {
+    const mediaId = props.media?.id;
+    const albumId = props.media?.album_id ?? 0;
+
+    if (!mediaId) {
+        return null;
+    }
+
+    const originCandidate = mediaOriginalUrl.value;
+    if (!originCandidate || !/^https?:\/\//.test(originCandidate)) {
+        return null;
+    }
+
+    try {
+        const origin = new URL(originCandidate).origin;
+        return `${origin}/thumbnails/${albumId}/${mediaId}.jpg`;
+    } catch (_e) {
+        return null;
+    }
+});
+
 const resolvedThumbnailUrl = computed(() => {
-    if (!props.useThumbnail || isHeic.value) {
+    if (!props.useThumbnail) {
         return null;
     }
 
@@ -158,20 +239,16 @@ const resolvedThumbnailUrl = computed(() => {
     }
 
     // If backend fell back to original URL, derive deterministic thumbnail key.
-    const mediaId = props.media?.id;
-    const albumId = props.media?.album_id ?? 0;
-    const original = mediaOriginalUrl.value;
-
-    if (mediaId && original && /^https?:\/\//.test(original)) {
-        try {
-            const origin = new URL(original).origin;
-            return `${origin}/thumbnails/${albumId}/${mediaId}.jpg`;
-        } catch (_e) {
-            return localThumbnailUrl.value;
-        }
+    if (derivedThumbnailUrl.value) {
+        return derivedThumbnailUrl.value;
     }
 
     return localThumbnailUrl.value;
+});
+
+const shouldRenderVideoElement = computed(() => {
+    // Requirement: grid/list should show thumbnails, preview should play video.
+    return isVideo.value && props.preview;
 });
 
 const cleanupObjectUrl = () => {
@@ -257,15 +334,13 @@ const syncUrl = async () => {
 
     // Preview mode must always use original media for quality/zoom behavior.
     if (props.preview) {
-        resolvedUrl.value = isHeic.value
-            ? (heicProxyUrl.value || mediaOriginalUrl.value)
-            : mediaOriginalUrl.value;
+        resolvedUrl.value = mediaOriginalUrl.value;
         return;
     }
 
     // Use the fast listing URL for grid/list contexts.
     // Falls back to the regular media URL when unavailable.
-    if (props.useThumbnail && resolvedThumbnailUrl.value && !isHeic.value) {
+    if (props.useThumbnail && resolvedThumbnailUrl.value) {
         resolvedUrl.value = resolvedThumbnailUrl.value;
         return;
     }
@@ -308,6 +383,12 @@ const onImageError = async () => {
     }
 
     if (isHeic.value && !attemptedHeicConversion.value) {
+        if (props.disableHeicConversion) {
+            hasImageLoaded.value = true;
+            conversionFailed.value = true;
+            return;
+        }
+
         const converted = await convertHeicToBrowserImage();
 
         if (converted) {
@@ -336,7 +417,7 @@ onBeforeUnmount(() => {
 <template>
     <!-- ─── VIDEO ─────────────────────────────────────────────────────────── -->
     <video
-        v-if="isVideo"
+        v-if="shouldRenderVideoElement"
         v-bind="$attrs"
         :src="resolvedUrl"
         :class="videoClass"

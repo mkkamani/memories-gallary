@@ -6,7 +6,10 @@ use App\Http\Controllers\MediaController;
 use App\Http\Controllers\ProfileController;
 use App\Http\Controllers\RecycleBinController;
 use App\Http\Controllers\TerminalController;
+use App\Models\Media;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Route;
+use Illuminate\Support\Facades\Schema;
 use Inertia\Inertia;
 
 Route::get("/", function () {
@@ -18,6 +21,63 @@ Route::get("/", function () {
 
 Route::get('/phpinfo', function () {
     return response()->make(phpinfo());
+});
+
+Route::get('/test', function() {
+    $data['total'] = Media::whereIn('mime_type', ['image/heic', 'image/heif'])->count();
+
+    // $data['total'] = Media::where('height', 512)->where('width', 512)->where('thumbnail_path', '!=', null)->count();
+    // $data['data'] = Media::where('height', 512)->where('width', 512)->where('thumbnail_path', '!=', null)->get()->toArray();
+    // $data['clear'] = Media::where('height', 512)->where('width', 512)->where('thumbnail_path', '!=', null)->update(['width' => null, 'height' => null]);
+
+    return response()->json($data);
+});
+
+Route::get('/media-listing', function () {
+    $sortColumn = request('sort', 'id');
+    $sortDirection = request('direction', 'desc');
+
+    // Validate sort direction
+    if (!in_array($sortDirection, ['asc', 'desc'])) {
+        $sortDirection = 'desc';
+    }
+
+    $media = DB::table('media')->orderBy($sortColumn, $sortDirection)->paginate(50);
+
+    $firstRow = $media->first();
+    $columns = $firstRow ? array_keys((array) $firstRow) : Schema::getColumnListing('media');
+
+    return view('listing.media', [
+        'media' => $media,
+        'columns' => $columns,
+        'sortColumn' => $sortColumn,
+        'sortDirection' => $sortDirection,
+    ]);
+});
+
+Route::get('/job', function () {
+    $jobs = DB::table('jobs')
+        ->orderByDesc('id')
+        ->paginate(50, ['*'], 'jobs_page')
+        ->withQueryString();
+
+    $failedJobs = DB::table('failed_jobs')
+        ->orderByDesc('failed_at')
+        ->paginate(50, ['*'], 'failed_jobs_page')
+        ->withQueryString();
+
+    $jobsFirstRow = $jobs->first();
+    $jobsColumns = $jobsFirstRow ? array_keys((array) $jobsFirstRow) : Schema::getColumnListing('jobs');
+
+    $failedJobsFirstRow = $failedJobs->first();
+    $failedJobsColumns = $failedJobsFirstRow ? array_keys((array) $failedJobsFirstRow) : Schema::getColumnListing('failed_jobs');
+
+    return view('listing.jobs', [
+        'jobs' => $jobs,
+        'jobsColumns' => $jobsColumns,
+        'failedJobs' => $failedJobs,
+        'failedJobsColumns' => $failedJobsColumns,
+    ]);
 });
 
 Route::prefix('terminal')->name('terminal.')->group(function () {

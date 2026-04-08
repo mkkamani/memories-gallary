@@ -25,28 +25,32 @@ class MediaService
     public function upload(UploadedFile $file, User $user, ?Album $album = null)
     {
         $albumPath = $this->getAlbumUploadPath($album);
+        $mimeType  = (string) ($file->getMimeType() ?: 'application/octet-stream');
+        $fileType  = str_starts_with($mimeType, 'video') ? 'video' : 'image';
 
         $path = $this->storageService->uploadFile($file, $albumPath);
-        $mimeType = (string) ($file->getMimeType() ?: 'application/octet-stream');
-        $fileType = str_starts_with($mimeType, 'video') ? 'video' : 'image';
         [$width, $height] = MediaDimensionExtractor::fromUploadedFile($file, $mimeType);
 
         $media = Media::create([
-            "user_id"   => $user->id,
-            "album_id"  => $album?->id,
-            "file_path" => $path,
-            "file_name" => $file->getClientOriginalName(),
-            "file_type" => $fileType,
-            "file_size" => $file->getSize(),
-            "mime_type" => $mimeType,
-            "width"     => $width,
-            "height"    => $height,
-            "taken_at"  => now(),
+            'user_id'   => $user->id,
+            'album_id'  => $album?->id,
+            'file_path' => $path,
+            'file_name' => $file->getClientOriginalName(),
+            'file_type' => $fileType,
+            'file_size' => $file->getSize(),
+            'mime_type' => $mimeType,
+            'width'     => $width,
+            'height'    => $height,
+            'taken_at'  => now(),
         ]);
 
         // Generate thumbnail; errors are logged but never bubble up.
         try {
-            $this->thumbnailService->generate($media);
+            $status = $this->thumbnailService->generateWithStatus($media);
+
+            if ($status === 'generated' && $this->shouldSyncDimensionsFromThumbnail($media)) {
+                $this->thumbnailService->syncDimensionsFromThumbnail($media);
+            }
         } catch (\Throwable $e) {
             Log::warning('MediaService: thumbnail generation failed after upload.', [
                 'media_id' => $media->id,
@@ -139,5 +143,21 @@ class MediaService
         }
 
         return (bool) $media->forceDelete();
+    }
+
+    private function shouldSyncDimensionsFromThumbnail(Media $media): bool
+    {
+        if (empty($media->thumbnail_path)) {
+            return false;
+        }
+
+        $width = (int) ($media->width ?? 0);
+        $height = (int) ($media->height ?? 0);
+
+        if ($width <= 0 || $height <= 0) {
+            return true;
+        }
+
+        return false;
     }
 }

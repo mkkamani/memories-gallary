@@ -1,19 +1,57 @@
 const ALLOWED_METHODS = 'GET, HEAD, OPTIONS';
 const DEFAULT_CACHE_CONTROL = 'public, max-age=86400';
 const THUMB_CACHE_CONTROL = 'public, max-age=31536000, immutable';
+const HEIC_CACHE_CONTROL = 'public, max-age=31536000, immutable';
 const IMAGE_CACHE_CONTROL = 'public, max-age=604800';
 const VIDEO_CACHE_CONTROL = 'public, max-age=86400';
+// Bump this value to invalidate all existing Worker edge-cache entries.
+const CACHE_VERSION = '2026-04-08-1';
+
+function extractKeyFromRequest(request) {
+    const url = new URL(request.url);
+    return decodeURIComponent(url.pathname.replace(/^\/+/, ''));
+}
+
+function normalizeEtag(etag) {
+    if (!etag) {
+        return '';
+    }
+
+    return String(etag)
+        .replace(/^W\//, '')
+        .replace(/"/g, '')
+        .trim();
+}
+
+function buildCacheKey(request) {
+    const url = new URL(request.url);
+    url.searchParams.set('__cv', CACHE_VERSION);
+
+    return new Request(url.toString(), { method: 'GET' });
+}
 
 function cacheControlFor(key, contentType = '') {
     if (key.startsWith('thumbnails/')) {
         return THUMB_CACHE_CONTROL;
     }
 
-    if (contentType.startsWith('image/')) {
+    const loweredKey = key.toLowerCase();
+    const loweredType = contentType.toLowerCase();
+
+    if (
+        loweredType.includes('image/heic')
+        || loweredType.includes('image/heif')
+        || loweredKey.endsWith('.heic')
+        || loweredKey.endsWith('.heif')
+    ) {
+        return HEIC_CACHE_CONTROL;
+    }
+
+    if (loweredType.startsWith('image/')) {
         return IMAGE_CACHE_CONTROL;
     }
 
-    if (contentType.startsWith('video/')) {
+    if (loweredType.startsWith('video/')) {
         return VIDEO_CACHE_CONTROL;
     }
 
@@ -55,17 +93,17 @@ function methodNotAllowedResponse() {
 }
 
 async function fromR2(request, env) {
-    const url = new URL(request.url);
-    const key = decodeURIComponent(url.pathname.replace(/^\/+/, ''));
+    const key = extractKeyFromRequest(request);
 
     if (!key) {
         return notFoundResponse();
     }
 
     const getOptions = {};
-
     const rangeHeader = request.headers.get('range');
-    if (rangeHeader) {
+    const hasRangeRequest = !!rangeHeader;
+
+    if (hasRangeRequest) {
         getOptions.range = request.headers;
     }
 
@@ -88,9 +126,14 @@ async function fromR2(request, env) {
     const cacheControl = cacheControlFor(key, contentType);
     withCors(headers, cacheControl);
 
-    if (object.range) {
+    if (hasRangeRequest && object.range) {
         const { offset, length, size } = object.range;
-        headers.set('Content-Range', `bytes ${offset}-${offset + length - 1}/${size}`);
+        const totalSize = object.size ?? size;
+
+        if (totalSize != null) {
+            headers.set('Content-Range', `bytes ${offset}-${offset + length - 1}/${totalSize}`);
+        }
+
         headers.set('Content-Length', String(length));
 
         return new Response(request.method === 'HEAD' ? null : object.body, {
@@ -109,6 +152,21 @@ async function fromR2(request, env) {
     });
 }
 
+async function warmFullObjectCache(request, env, cache, cacheKey) {
+    const warmRequest = new Request(request.url, {
+        method: 'GET',
+        headers: new Headers({
+            Accept: request.headers.get('Accept') || '*/*',
+        }),
+    });
+
+    const warmResponse = await fromR2(warmRequest, env);
+
+    if (warmResponse.ok && warmResponse.status === 200) {
+        await cache.put(cacheKey, warmResponse.clone());
+    }
+}
+
 export default {
     async fetch(request, env, ctx) {
         if (request.method === 'OPTIONS') {
@@ -119,18 +177,49 @@ export default {
             return methodNotAllowedResponse();
         }
 
+        const cache = caches.default;
+        const cacheKey = buildCacheKey(request);
+        const key = extractKeyFromRequest(request);
         const hasRangeRequest = request.headers.has('range');
 
-        // Skip edge cache for range requests to avoid fragmented cache entries.
+        // For range/video playback requests, return the requested bytes
+        // immediately and warm the full-object GET cache asynchronously.
         if (hasRangeRequest) {
+            const cached = await cache.match(cacheKey);
+
+            if (!cached) {
+                ctx.waitUntil(warmFullObjectCache(request, env, cache, cacheKey));
+            }
+
             return fromR2(request, env);
         }
 
-        const cache = caches.default;
-        const cacheKey = new Request(request.url, { method: request.method });
         const cached = await cache.match(cacheKey);
 
         if (cached) {
+            // Verify cached object still exists and is still the latest version in R2.
+            const head = await env.MEDIA_BUCKET.head(key);
+
+            if (!head) {
+                await cache.delete(cacheKey);
+                return notFoundResponse();
+            }
+
+            const cachedEtag = normalizeEtag(cached.headers.get('etag'));
+            const sourceEtag = normalizeEtag(head.httpEtag);
+
+            if (cachedEtag !== '' && sourceEtag !== '' && cachedEtag !== sourceEtag) {
+                const freshResponse = await fromR2(request, env);
+
+                if (freshResponse.ok) {
+                    ctx.waitUntil(cache.put(cacheKey, freshResponse.clone()));
+                } else {
+                    await cache.delete(cacheKey);
+                }
+
+                return freshResponse;
+            }
+
             return new Response(request.method === 'HEAD' ? null : cached.body, {
                 status: cached.status,
                 headers: new Headers(cached.headers),

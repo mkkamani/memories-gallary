@@ -21,6 +21,8 @@ class SyncFromR2 extends Command
         {--prefix=albums  : R2 path prefix to scan (default: albums)}
         {--user_id=1      : User ID to assign as owner for newly created albums and media}
         {--dry-run        : Preview what would be created without writing to the database}
+        {--prune          : Delete DB media records for files no longer in R2 (sync cleanup)}
+        {--regenerate-thumbnails : Delete and regenerate thumbnails for all synced media}
     ';
 
     protected $description = 'Sync the folder/file structure already in Cloudflare R2 into the albums and media database tables';
@@ -37,13 +39,17 @@ class SyncFromR2 extends Command
     private int $thumbGenerated = 0;
     private int $thumbSkipped = 0;
     private int $thumbFailed = 0;
+    private int $thumbRegenerated = 0;
     private int $coversUpdated = 0;
     private int $coversSkipped = 0;
+    private int $mediaDeleted = 0;
 
     public function handle(ThumbnailService $thumbnailService): int
     {
         $this->disk   = (string) config('filesystems.media_disk', 'public');
         $this->dryRun = (bool) $this->option('dry-run');
+        $prune        = (bool) $this->option('prune');
+        $regenerate   = (bool) $this->option('regenerate-thumbnails');
         $prefix       = rtrim((string) $this->option('prefix'), '/');
         $userId       = (int) $this->option('user_id');
 
@@ -149,6 +155,10 @@ class SyncFromR2 extends Command
             return 1;
         }
 
+        if ($this->shouldRegisterPrefixAsAlbum($prefix)) {
+            $dirPaths[$prefix] = true;
+        }
+
         // Sort dirs by depth (fewest slashes first) so parents are created before children
         $sortedDirs = array_keys($dirPaths);
         usort($sortedDirs, fn ($a, $b) => substr_count($a, '/') <=> substr_count($b, '/'));
@@ -193,6 +203,18 @@ class SyncFromR2 extends Command
         $this->newLine(2);
 
         // ------------------------------------------------------------------
+        // 3b. Regenerate thumbnails (optional)
+        // ------------------------------------------------------------------
+        if ($regenerate) {
+            $this->newLine();
+            $this->info('--- Regenerating thumbnails for all synced media ---');
+            $this->regenerateAllThumbnails($albumMap, $thumbnailService);
+            $this->newLine();
+        } elseif ($this->mediaCreated > 0 || $this->mediaSkipped > 0) {
+            $this->warn('[INFO] Use --regenerate-thumbnails flag to delete and regenerate all thumbnails.');
+        }
+
+        // ------------------------------------------------------------------
         // 4. Sync album cover images from cover-images/*
         // ------------------------------------------------------------------
         if ($prefix === 'albums') {
@@ -203,16 +225,28 @@ class SyncFromR2 extends Command
         }
 
         // ------------------------------------------------------------------
-        // 5. Summary
+        // 5. Prune orphaned media: delete DB records for files no longer in R2
+        // ------------------------------------------------------------------
+        if ($prune) {
+            $this->newLine();
+            $this->info('--- Pruning orphaned media (files in DB but not in R2) ---');
+            $this->pruneOrphanedMedia($albumMap, $thumbnailService);
+            $this->newLine();
+        } elseif ($this->albumsCreated > 0 || $this->mediaCreated > 0) {
+            $this->warn('[INFO] Use --prune flag to delete DB records for files that have been removed from R2.');
+        }
+
+        // ------------------------------------------------------------------
+        // 6. Summary
         // ------------------------------------------------------------------
         $this->info('Sync complete.');
         $this->table(
-            ['Entity', 'Created', 'Skipped (already in DB)'],
+            ['Entity', 'Created', 'Skipped', 'Regenerated', 'Deleted'],
             [
-                ['Albums', $this->albumsCreated, $this->albumsSkipped],
-                ['Media',  $this->mediaCreated,  $this->mediaSkipped],
-                ['Thumbnails', $this->thumbGenerated, ($this->thumbSkipped + $this->thumbFailed)],
-                ['Cover images', $this->coversUpdated, $this->coversSkipped],
+                ['Albums', $this->albumsCreated, $this->albumsSkipped, '—', 0],
+                ['Media',  $this->mediaCreated,  $this->mediaSkipped, '—', $this->mediaDeleted],
+                ['Thumbnails', $this->thumbGenerated, ($this->thumbSkipped + $this->thumbFailed), $this->thumbRegenerated, '—'],
+                ['Cover images', $this->coversUpdated, $this->coversSkipped, '—', 0],
             ],
         );
 
@@ -342,10 +376,13 @@ class SyncFromR2 extends Command
                 'taken_at'  => $takenAt,
             ]);
 
-            if ($fileType === 'image') {
+            if ($fileType === 'image' || $fileType === 'video') {
                 $thumbStatus = $thumbnailService->generateWithStatus($media);
 
                 if ($thumbStatus === 'generated') {
+                    if ($this->shouldSyncDimensionsFromThumbnail($media)) {
+                        $thumbnailService->syncDimensionsFromThumbnail($media);
+                    }
                     $this->thumbGenerated++;
                 } elseif ($thumbStatus === 'skipped') {
                     $this->thumbSkipped++;
@@ -359,6 +396,22 @@ class SyncFromR2 extends Command
             $this->mediaSkipped++;
             $this->warn("  [SKIP] {$filePath}: " . $e->getMessage());
         }
+    }
+
+    private function shouldSyncDimensionsFromThumbnail(Media $media): bool
+    {
+        if (empty($media->thumbnail_path)) {
+            return false;
+        }
+
+        $width = (int) ($media->width ?? 0);
+        $height = (int) ($media->height ?? 0);
+
+        if ($width <= 0 || $height <= 0) {
+            return true;
+        }
+
+        return false;
     }
 
     private function syncCoverImages(): void
@@ -535,6 +588,25 @@ class SyncFromR2 extends Command
         return $this->mimeFromExt($ext) !== 'application/octet-stream';
     }
 
+    private function shouldRegisterPrefixAsAlbum(string $prefix): bool
+    {
+        $prefix = trim($prefix, '/');
+
+        if ($prefix === '' || $prefix === 'albums') {
+            return false;
+        }
+
+        if (! $this->isUnderKnownLocationPath($prefix)) {
+            return false;
+        }
+
+        if ($this->isLocationContainerPath($prefix)) {
+            return false;
+        }
+
+        return true;
+    }
+
     private function isLocationContainerDir(string $dirPath, string $prefix): bool
     {
         $cleanPrefix = trim($prefix, '/');
@@ -595,5 +667,146 @@ class SyncFromR2 extends Command
         }
 
         return $slug;
+    }
+
+    /**
+     * Delete media records from the database if their file_path no longer exists in R2.
+     * Also removes associated thumbnails.
+     *
+     * This ensures the database and R2 storage stay in sync when files are deleted from R2.
+     */
+    private function pruneOrphanedMedia(array $albumMap, ThumbnailService $thumbnailService): void
+    {
+        if (empty($albumMap)) {
+            $this->info('No albums synced; nothing to prune.');
+            return;
+        }
+
+        $albumIds = array_map(fn (Album $a) => $a->id, array_filter($albumMap));
+
+        if (empty($albumIds)) {
+            $this->info('No albums in map; nothing to prune.');
+            return;
+        }
+
+        // Get all media records belonging to any synced album
+        $mediaRecords = Media::whereIn('album_id', $albumIds)->get();
+
+        if ($mediaRecords->isEmpty()) {
+            $this->info('No media records to check.');
+            return;
+        }
+
+        $bar = $this->output->createProgressBar($mediaRecords->count());
+        $bar->start();
+
+        foreach ($mediaRecords as $media) {
+            // Check if the file still exists in R2
+            if (!Storage::disk($this->disk)->exists($media->file_path)) {
+                $this->mediaDeleted++;
+
+                if (!$this->dryRun) {
+                    try {
+                        // Delete thumbnail first
+                        if (!empty($media->thumbnail_path)) {
+                            $thumbnailService->delete($media);
+                        }
+
+                        // Delete the media record
+                        $media->forceDelete();
+
+                        $this->newLine();
+                        $this->line("  [DELETED] {$media->file_name} (no longer in R2)");
+                    } catch (\Throwable $e) {
+                        $this->newLine();
+                        $this->warn("  [FAILED TO DELETE] {$media->file_name}: {$e->getMessage()}");
+                        $this->mediaDeleted--;
+                    }
+                } else {
+                    $this->newLine();
+                    $this->line("  [DRY] Would delete: {$media->file_name}");
+                }
+            }
+
+            $bar->advance();
+        }
+
+        $bar->finish();
+        $this->newLine(2);
+
+        if ($this->mediaDeleted === 0) {
+            $this->info('No orphaned media found.');
+        } else {
+            $this->info("Deleted {$this->mediaDeleted} orphaned media record(s).");
+        }
+    }
+
+    /**
+     * Delete and regenerate thumbnails for all media in synced albums.
+     * This is useful after fixing thumbnail generation bugs or when upgrading ffmpeg.
+     */
+    private function regenerateAllThumbnails(array $albumMap, ThumbnailService $thumbnailService): void
+    {
+        if (empty($albumMap)) {
+            $this->info('No albums synced; nothing to regenerate.');
+            return;
+        }
+
+        $albumIds = array_map(fn (Album $a) => $a->id, array_filter($albumMap));
+
+        if (empty($albumIds)) {
+            $this->info('No albums in map; nothing to regenerate.');
+            return;
+        }
+
+        // Get all image/video records belonging to any synced album.
+        $mediaRecords = Media::whereIn('album_id', $albumIds)
+            ->whereIn('file_type', ['image', 'video'])
+            ->get();
+
+        if ($mediaRecords->isEmpty()) {
+            $this->info('No image/video records to regenerate.');
+            return;
+        }
+
+        $bar = $this->output->createProgressBar($mediaRecords->count());
+        $bar->start();
+
+        foreach ($mediaRecords as $media) {
+            if (!$this->dryRun) {
+                try {
+                    // Delete existing thumbnail from R2
+                    if (!empty($media->thumbnail_path)) {
+                        $thumbnailService->delete($media);
+                        $media->refresh();
+                    }
+
+                    // Generate new thumbnail
+                    $status = $thumbnailService->generateWithStatus($media);
+
+                    if ($status === 'generated') {
+                        $this->thumbRegenerated++;
+                        if ($this->shouldSyncDimensionsFromThumbnail($media)) {
+                            $thumbnailService->syncDimensionsFromThumbnail($media);
+                        }
+                    } else {
+                        $this->newLine();
+                        $this->warn("  [FAILED] {$media->file_name}: {$status}");
+                    }
+                } catch (\Throwable $e) {
+                    $this->newLine();
+                    $this->warn("  [ERROR] {$media->file_name}: {$e->getMessage()}");
+                }
+            } else {
+                $this->thumbRegenerated++;
+            }
+
+            $bar->advance();
+        }
+
+        $bar->finish();
+        $this->newLine(2);
+
+        $this->info("Regenerated {$this->thumbRegenerated} thumbnail(s).");
     }
 }

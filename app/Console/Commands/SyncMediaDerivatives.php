@@ -2,9 +2,9 @@
 
 namespace App\Console\Commands;
 
+use App\Jobs\SyncMediaDerivativesChunkJob;
 use App\Models\Media;
-use App\Services\ThumbnailService;
-use App\Support\MediaDimensionExtractor;
+use App\Services\MediaDerivativeSyncService;
 use Illuminate\Console\Command;
 
 class SyncMediaDerivatives extends Command
@@ -15,20 +15,25 @@ class SyncMediaDerivatives extends Command
     protected $signature = 'sync:media-records
                             {--force : Regenerate even if a thumbnail already exists}
                             {--ids=  : Comma-separated list of media IDs to process}
-                            {--limit=0 : Maximum number of items to process (0 = all)}';
+                            {--limit=0 : Maximum number of items to process (0 = all)}
+                            {--queue : Dispatch processing to queue jobs}
+                            {--queue-chunk=200 : Number of media IDs per queued job}
+                            {--queue-name=media-sync : Queue name for dispatched jobs}';
 
     /**
      * @var string
      */
-    protected $description = 'Sync missing media derivatives: dimensions (width/height) and thumbnails (thumbnail_path) in one pass';
+    protected $description = 'Sync missing media derivatives: dimensions (images only) and thumbnails for images/videos in one pass';
 
-    public function handle(ThumbnailService $service): int
+    public function handle(MediaDerivativeSyncService $syncService): int
     {
         $force = (bool) $this->option('force');
         $limit = (int) $this->option('limit');
+        $useQueue = (bool) $this->option('queue');
         $disk = (string) config('filesystems.media_disk', 'public');
 
-        $query = Media::query()->where('file_type', 'image');
+        $query = Media::query()->whereIn('file_type', ['image', 'video']);
+        // $query = Media::query()->where('file_type', 'video');
 
         if ($ids = $this->option('ids')) {
             $idList = array_filter(array_map('intval', explode(',', (string) $ids)));
@@ -55,83 +60,42 @@ class SyncMediaDerivatives extends Command
         $total = $selectedIds->count();
 
         if ($total === 0) {
-            $this->info('No images to process.');
+            $this->info('No image/video items to process.');
             return self::SUCCESS;
         }
 
-        $this->line("Processing {$total} image(s)…");
+        if ($useQueue) {
+            $chunkSize = max(1, (int) $this->option('queue-chunk'));
+            $queueName = trim((string) $this->option('queue-name')) ?: 'media-sync';
+            $chunks = array_chunk($selectedIds->all(), $chunkSize);
+
+            foreach ($chunks as $chunk) {
+                SyncMediaDerivativesChunkJob::dispatch($chunk, $force, $disk)
+                    ->onQueue($queueName);
+            }
+
+            $this->info(sprintf(
+                'Dispatched %d media item(s) as %d queued job(s) on queue "%s".',
+                $total,
+                count($chunks),
+                $queueName,
+            ));
+
+            $this->line('Start a queue worker to process them, e.g.: php artisan queue:work --queue=' . $queueName . ' --tries=1 --timeout=7200');
+
+            return self::SUCCESS;
+        }
+
+        $this->line("Processing {$total} media item(s)…");
         $bar = $this->output->createProgressBar($total);
         $bar->start();
 
-        $dimensionUpdated = 0;
-        $dimensionFailed = 0;
-        $dimensionSkipped = 0;
-
-        $thumbGenerated = 0;
-        $thumbSkipped = 0;
-        $thumbFailed  = 0;
-
-        Media::whereIn('id', $selectedIds)
-            ->orderBy('id')
-            ->chunk(50, function ($items) use (
-                $service,
-                $force,
-                $disk,
-                &$dimensionUpdated,
-                &$dimensionFailed,
-                &$dimensionSkipped,
-                &$thumbGenerated,
-                &$thumbSkipped,
-                &$thumbFailed,
-                $bar,
-            ) {
-                foreach ($items as $media) {
-                    $needsDimensions = empty($media->width) || empty($media->height);
-
-                    if ($needsDimensions) {
-                        $dimensions = MediaDimensionExtractor::fromStorage(
-                            $disk,
-                            (string) $media->file_path,
-                            (string) ($media->mime_type ?: 'application/octet-stream'),
-                        );
-
-                        if ($dimensions[0] !== null && $dimensions[1] !== null) {
-                            $media->update([
-                                'width' => $dimensions[0],
-                                'height' => $dimensions[1],
-                            ]);
-                            $dimensionUpdated++;
-                        } else {
-                            $dimensionFailed++;
-                        }
-                    } else {
-                        $dimensionSkipped++;
-                    }
-
-                    $shouldGenerateThumb = $force || empty($media->thumbnail_path);
-
-                    if ($shouldGenerateThumb) {
-                        if ($force && !empty($media->thumbnail_path)) {
-                            // Delete old thumbnail before regenerating.
-                            $service->delete($media);
-                        }
-
-                        $status = $service->generateWithStatus($media);
-
-                        if ($status === 'generated') {
-                            $thumbGenerated++;
-                        } elseif ($status === 'skipped') {
-                            $thumbSkipped++;
-                        } else {
-                            $thumbFailed++;
-                        }
-                    } else {
-                        $thumbSkipped++;
-                    }
-
-                    $bar->advance();
-                }
-            });
+        $stats = $syncService->syncByIds(
+            $selectedIds->all(),
+            $force,
+            $disk,
+            fn() => $bar->advance(),
+        );
 
         $bar->finish();
         $this->newLine(2);
@@ -139,8 +103,8 @@ class SyncMediaDerivatives extends Command
         $this->table(
             ['Task', 'Updated/Generated', 'Skipped', 'Failed'],
             [
-                ['Dimensions (width/height)', $dimensionUpdated, $dimensionSkipped, $dimensionFailed],
-                ['Thumbnails (thumbnail_path)', $thumbGenerated, $thumbSkipped, $thumbFailed],
+                ['Dimensions (width/height)', $stats['dimensionUpdated'], $stats['dimensionSkipped'], $stats['dimensionFailed']],
+                ['Thumbnails (thumbnail_path)', $stats['thumbGenerated'], $stats['thumbSkipped'], $stats['thumbFailed']],
             ],
         );
 

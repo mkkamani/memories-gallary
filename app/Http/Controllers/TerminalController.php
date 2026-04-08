@@ -68,7 +68,7 @@ class TerminalController extends Controller
      * the directories of key binaries (PHP, Composer) that are typically
      * absent from the minimal PATH Apache/WAMP provides.
      */
-    private function buildEnrichedPath(string $phpBinaryDir, string $shellType): string
+    private function buildEnrichedPath(string $phpBinaryDir, string $shellType, string $homeDirectory): string
     {
         $existing = getenv('PATH') ?: (getenv('Path') ?: '');
 
@@ -84,7 +84,10 @@ class TerminalController extends Controller
             $extras[] = '/usr/local/bin';
             $extras[] = '/usr/bin';
             $extras[] = '/bin';
-            $extras[] = getenv('HOME') . '/.composer/vendor/bin';
+            $extras[] = $homeDirectory . '/bin';
+            $extras[] = $homeDirectory . '/.local/bin';
+            $extras[] = $homeDirectory . '/.local/ffmpeg';
+            $extras[] = $homeDirectory . '/.composer/vendor/bin';
         }
 
         $all = array_unique(array_filter(array_map('trim', array_merge($extras, explode(PATH_SEPARATOR, $existing)))));
@@ -96,6 +99,36 @@ class TerminalController extends Controller
         $bashPaths = array_map(fn($p) => $this->toShellPath($p, $shellType), $all);
 
         return implode(':', $bashPaths);
+    }
+
+    private function resolveHomeDirectory(string $currentDirectory, string $projectRoot): string
+    {
+        $home = trim((string) getenv('HOME'));
+
+        if ($home !== '' && is_dir($home)) {
+            return str_replace('\\', '/', $home);
+        }
+
+        $candidates = array_values(array_unique(array_filter([
+            $currentDirectory,
+            $projectRoot,
+            getcwd() ?: null,
+        ])));
+
+        foreach ($candidates as $candidate) {
+            $normalized = str_replace('\\', '/', $candidate);
+
+            if (preg_match('#^/home[^/]*/[^/]+#', $normalized, $matches) === 1) {
+                return $matches[0];
+            }
+
+            if (preg_match('#^/Users/[^/]+#', $normalized, $matches) === 1) {
+                return $matches[0];
+            }
+        }
+
+        // Final fallback: keep non-root writable path if available.
+        return str_replace('\\', '/', $projectRoot);
     }
 
     private function resolveShell(): ?array
@@ -334,8 +367,11 @@ class TerminalController extends Controller
             $phpBinaryDir = dirname($phpBinary);
             $php          = escapeshellarg($this->toShellPath($phpBinary, $shellType));
 
+            $homeDirectory = $this->resolveHomeDirectory($currentDirectory, $projectRoot);
+            putenv('HOME=' . $homeDirectory);
+
             // Enrich the shell PATH so the Process can find php, composer, etc.
-            $enrichedPath = $this->buildEnrichedPath($phpBinaryDir, $shellType);
+            $enrichedPath = $this->buildEnrichedPath($phpBinaryDir, $shellType, $homeDirectory);
 
             $isComposerCommand = stripos($userCommand, 'composer') === 0;
 
@@ -392,7 +428,9 @@ class TerminalController extends Controller
             }
 
             $shellDirectory = $this->toShellPath($currentDirectory, $shellType);
-            $bashCommand = "export PATH=" . escapeshellarg($enrichedPath) . ":\$PATH && cd " . escapeshellarg($shellDirectory) . " && " . $command;
+            $bashCommand = "export HOME=" . escapeshellarg($homeDirectory)
+                . " && export PATH=" . escapeshellarg($enrichedPath) . ":\$PATH && cd "
+                . escapeshellarg($shellDirectory) . " && " . $command;
 
             $process = new Process([...$shell['command'], $bashCommand], $projectRoot);
             $process->setTimeout(3600);

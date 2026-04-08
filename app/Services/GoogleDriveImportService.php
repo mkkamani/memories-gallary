@@ -182,7 +182,7 @@ class GoogleDriveImportService
 
                 $storagePath = 'media/drive/'.date('Y/m/d');
                 $fileName = $name;
-                $stored = Storage::disk('public')->put("{$storagePath}/{$fileName}", $content);
+                $stored = Storage::disk($this->mediaDisk())->put("{$storagePath}/{$fileName}", $content);
 
                 $mediaData = [
                     'album_id' => $albumId,
@@ -196,7 +196,7 @@ class GoogleDriveImportService
                     'height' => $height,
                 ];
 
-                Media::create($mediaData);
+                $this->persistImportedMedia($mediaData);
 
                 $processed++;
             }
@@ -302,7 +302,7 @@ class GoogleDriveImportService
 
                 $storagePath = 'media/drive/'.date('Y/m/d');
                 $fileName = $name;
-                $stored = Storage::disk('public')->put("{$storagePath}/{$fileName}", $content);
+                $stored = Storage::disk($this->mediaDisk())->put("{$storagePath}/{$fileName}", $content);
 
                 $mediaData = [
                     'album_id' => $albumId,
@@ -316,7 +316,7 @@ class GoogleDriveImportService
                     'height' => $height,
                 ];
 
-                Media::create($mediaData);
+                $this->persistImportedMedia($mediaData);
 
                 $processed++;
             }
@@ -377,7 +377,7 @@ class GoogleDriveImportService
 
                 $storagePath = 'media/drive/'.date('Y/m/d');
                 $fileName = $name;
-                $stored = Storage::disk('public')->put("{$storagePath}/{$fileName}", $content);
+                $stored = Storage::disk($this->mediaDisk())->put("{$storagePath}/{$fileName}", $content);
 
                 $mediaData = [
                     'album_id' => $albumId,
@@ -391,7 +391,7 @@ class GoogleDriveImportService
                     'height' => $height,
                 ];
 
-                Media::create($mediaData);
+                $this->persistImportedMedia($mediaData);
 
                 $processed++;
             }
@@ -400,5 +400,50 @@ class GoogleDriveImportService
         } while ($pageToken);
 
         return $processed;
+    }
+
+    private function persistImportedMedia(array $mediaData): void
+    {
+        $media = Media::create($mediaData);
+
+        if (!in_array((string) ($media->file_type ?? ''), ['image', 'video'], true)) {
+            return;
+        }
+
+        try {
+            $thumbnailService = app(ThumbnailService::class);
+            $status = $thumbnailService->generateWithStatus($media);
+
+            if ($status === 'generated' && $this->shouldSyncDimensionsFromThumbnail($media)) {
+                $thumbnailService->syncDimensionsFromThumbnail($media);
+            }
+        } catch (\Throwable) {
+            // Keep import resilient; media row and original file are already stored.
+        }
+    }
+
+    private function shouldSyncDimensionsFromThumbnail(Media $media): bool
+    {
+        if (empty($media->thumbnail_path)) {
+            return false;
+        }
+
+        $width = (int) ($media->width ?? 0);
+        $height = (int) ($media->height ?? 0);
+
+        if ($width <= 0 || $height <= 0) {
+            return true;
+        }
+
+        $mimeType = strtolower((string) ($media->mime_type ?? ''));
+        return (str_contains($mimeType, 'heic') || str_contains($mimeType, 'heif'))
+            && $width === 512
+            && $height === 512;
+    }
+
+    private function mediaDisk(): string
+    {
+        $disk = (string) config('filesystems.media_disk', 'public');
+        return $disk === '' ? 'public' : $disk;
     }
 }
