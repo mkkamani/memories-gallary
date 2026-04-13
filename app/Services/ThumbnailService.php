@@ -46,7 +46,7 @@ class ThumbnailService
     {
         $this->manager = new ImageManager(
             new Driver(),
-            autoOrientation: false,
+            autoOrientation: true,
             decodeAnimation: false,
             strip: true,
         );
@@ -91,10 +91,6 @@ class ThumbnailService
 
     private function generateImageThumbnail(Media $media): string
     {
-        if ($this->wouldLikelyExceedMemory($media)) {
-            return $this->generateLargeImageThumbnailWithFfmpeg($media);
-        }
-
         $sourcePath = null;
 
         try {
@@ -107,6 +103,11 @@ class ThumbnailService
                     'file_path' => $media->file_path,
                 ]);
                 return 'failed';
+            }
+
+            // Decide using real source dimensions when possible to prevent GD OOM.
+            if ($this->shouldUseFfmpegForImage($media, $sourcePath)) {
+                return $this->generateLargeImageThumbnailWithFfmpeg($media, $sourcePath);
             }
 
             $this->saveImageAsThumbnail($media, $sourcePath);
@@ -196,7 +197,7 @@ class ThumbnailService
         }
     }
 
-    private function generateLargeImageThumbnailWithFfmpeg(Media $media): string
+    private function generateLargeImageThumbnailWithFfmpeg(Media $media, ?string $existingSourcePath = null): string
     {
         if (!$this->isFfmpegAvailable()) {
             Log::warning('ThumbnailService: oversized image requires ffmpeg fallback but ffmpeg is unavailable.', [
@@ -212,10 +213,16 @@ class ThumbnailService
 
         $sourcePath = null;
         $framePath = null;
+        $ownsSourcePath = false;
 
         try {
-            $mediaDisk = (string) config('filesystems.media_disk', 'public');
-            $sourcePath = $this->downloadToTemporaryFile($mediaDisk, $media->file_path);
+            if (is_string($existingSourcePath) && $existingSourcePath !== '') {
+                $sourcePath = $existingSourcePath;
+            } else {
+                $mediaDisk = (string) config('filesystems.media_disk', 'public');
+                $sourcePath = $this->downloadToTemporaryFile($mediaDisk, $media->file_path);
+                $ownsSourcePath = true;
+            }
 
             if ($sourcePath === null) {
                 Log::warning('ThumbnailService: could not read oversized source image.', [
@@ -291,7 +298,7 @@ class ThumbnailService
             if (is_string($framePath) && $framePath !== '' && file_exists($framePath)) {
                 @unlink($framePath);
             }
-            if (is_string($sourcePath) && $sourcePath !== '' && file_exists($sourcePath)) {
+            if ($ownsSourcePath && is_string($sourcePath) && $sourcePath !== '' && file_exists($sourcePath)) {
                 @unlink($sourcePath);
             }
         }
@@ -491,6 +498,47 @@ class ThumbnailService
 
         $budget = (int) floor($memoryLimit * self::MEMORY_BUDGET_RATIO);
         return $estimatedBytes > $budget;
+    }
+
+    private function shouldUseFfmpegForImage(Media $media, ?string $sourcePath = null): bool
+    {
+        $mime = strtolower((string) ($media->mime_type ?? ''));
+        if (str_contains($mime, 'heic') || str_contains($mime, 'heif')) {
+            return true;
+        }
+
+        if ($sourcePath !== null && $this->wouldSourceImageLikelyExceedMemory($sourcePath)) {
+            return true;
+        }
+
+        return $this->wouldLikelyExceedMemory($media);
+    }
+
+    private function wouldSourceImageLikelyExceedMemory(string $sourcePath): bool
+    {
+        try {
+            $size = @getimagesize($sourcePath);
+            if (!is_array($size) || empty($size[0]) || empty($size[1])) {
+                return false;
+            }
+
+            $width = (int) $size[0];
+            $height = (int) $size[1];
+            if ($width <= 0 || $height <= 0) {
+                return false;
+            }
+
+            $estimatedBytes = (int) ($width * $height * self::GD_BYTES_PER_PIXEL);
+            $memoryLimit = $this->memoryLimitBytes();
+            if ($memoryLimit <= 0) {
+                return false;
+            }
+
+            $budget = (int) floor($memoryLimit * self::MEMORY_BUDGET_RATIO);
+            return $estimatedBytes > $budget;
+        } catch (\Throwable $e) {
+            return false;
+        }
     }
 
     private function memoryLimitBytes(): int

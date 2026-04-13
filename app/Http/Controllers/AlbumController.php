@@ -69,18 +69,40 @@ class AlbumController extends Controller
             ->get()
             ->map(function ($album) use ($pinnedAlbumIds) {
                 $nestedAlbumIds = $album->descendants()->pluck("id")->prepend($album->id)->all();
-                $nestedMediaQuery = \App\Models\Media::whereIn("album_id", $nestedAlbumIds)
-                    ->orderBy("created_at", "desc");
 
-                $nestedMedia = $nestedMediaQuery->limit(5)->get();
+                // Direct counts (only this album)
                 $photoCount = $album->media()->where('file_type', 'image')->count();
                 $videoCount = $album->media()->where('file_type', 'video')->count();
                 $fileCount = $album->media()->whereNotIn('file_type', ['image', 'video'])->count();
                 $mediaCount = $photoCount + $videoCount + $fileCount;
 
-                // Use cover_image if available, otherwise first media
-                $thumbnailUrl = $this->resolveCoverImageUrl($album->cover_image) ?: ($nestedMedia->first()?->url);
-                $thumbnailMedia = $album->cover_image ? null : $nestedMedia->first();
+                // Total nested counts (this album + all descendants)
+                $totalPhotoCount = \App\Models\Media::whereIn("album_id", $nestedAlbumIds)
+                    ->where('file_type', 'image')
+                    ->count();
+                $totalVideoCount = \App\Models\Media::whereIn("album_id", $nestedAlbumIds)
+                    ->where('file_type', 'video')
+                    ->count();
+                $totalFileCount = \App\Models\Media::whereIn("album_id", $nestedAlbumIds)
+                    ->whereNotIn('file_type', ['image', 'video'])
+                    ->count();
+                $totalFolderCount = $album->descendants()->count();
+
+                // Use cover_image if set, otherwise fall back to the last non-HEIC image
+                // across this album and all its descendants.
+                $coverMedia = ! $album->cover_image
+                    ? \App\Models\Media::whereIn("album_id", $nestedAlbumIds)
+                        ->where('file_type', 'image')
+                        ->whereNotIn('mime_type', ['image/heic', 'image/heif'])
+                        ->latest()
+                        ->first()
+                    : null;
+
+                $thumbnailUrl = $this->resolveCoverImageUrl($album->cover_image)
+                    ?: $coverMedia?->thumbnail_url
+                    ?: $coverMedia?->url;
+
+                $thumbnailMedia = $coverMedia;
 
                 return [
                     "id" => $album->id,
@@ -97,6 +119,10 @@ class AlbumController extends Controller
                     "photo_count" => $photoCount,
                     "video_count" => $videoCount,
                     "file_count" => $fileCount,
+                    "total_photo_count" => $totalPhotoCount,
+                    "total_video_count" => $totalVideoCount,
+                    "total_file_count" => $totalFileCount,
+                    "total_folder_count" => $totalFolderCount,
                     "children_count" => $album->children_count,
                     "thumbnail" => $thumbnailUrl,
                     "thumbnail_media" => $thumbnailMedia

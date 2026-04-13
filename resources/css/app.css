@@ -287,6 +287,7 @@
         0% {
             background-position: 200% 0;
         }
+
         100% {
             background-position: -200% 0;
         }
@@ -294,12 +295,10 @@
 
     .cover-wave-placeholder {
         z-index: 2;
-        background: linear-gradient(
-            110deg,
-            rgba(255, 255, 255, 0) 30%,
-            rgba(255, 255, 255, 0.22) 48%,
-            rgba(255, 255, 255, 0) 66%
-        );
+        background: linear-gradient(110deg,
+                rgba(255, 255, 255, 0) 30%,
+                rgb(112 112 112 / 22%) 48%,
+                rgba(255, 255, 255, 0) 66%);
         background-size: 220% 100%;
         animation: cover-wave 1.6s linear infinite;
         will-change: background-position;
@@ -348,6 +347,46 @@
     :root .glass-card,
     :root .glass-card-static {
         box-shadow: 0 1px 3px hsl(220 14% 50% / 0.08);
+    }
+
+    .app-navbar {
+        isolation: isolate;
+    }
+
+    .app-navbar--top {
+        background: hsl(var(--background) / 0.9);
+        backdrop-filter: blur(10px) saturate(120%);
+        -webkit-backdrop-filter: blur(10px) saturate(120%);
+    }
+
+    .app-navbar--scrolled {
+        background: hsl(var(--background) / 0.86);
+        backdrop-filter: blur(18px) saturate(145%);
+        -webkit-backdrop-filter: blur(18px) saturate(145%);
+    }
+
+    .dark .app-navbar--top {
+        background: hsl(var(--background) / 0.82);
+    }
+
+    .dark .app-navbar--scrolled {
+        background: hsl(var(--background) / 0.76);
+    }
+
+    .app-navbar .text-muted-foreground {
+        color: hsl(var(--foreground) / 0.72) !important;
+    }
+
+    .app-navbar input::placeholder {
+        color: hsl(var(--foreground) / 0.5);
+    }
+
+    .dark .app-navbar .text-muted-foreground {
+        color: hsl(var(--foreground) / 0.78) !important;
+    }
+
+    .dark .app-navbar input::placeholder {
+        color: hsl(var(--foreground) / 0.58);
     }
 
     .public-panel {
@@ -527,12 +566,10 @@
 }
 
 #nprogress .bar {
-    background: linear-gradient(
-        90deg,
-        hsl(14 100% 50%) 0%,
-        hsl(var(--primary)) 40%,
-        hsl(var(--accent-hover)) 100%
-    ) !important;
+    background: linear-gradient(90deg,
+            hsl(14 100% 50%) 0%,
+            hsl(var(--primary)) 40%,
+            hsl(var(--accent-hover)) 100%) !important;
     position: fixed;
     z-index: 9999;
     top: 0;

@@ -74,11 +74,82 @@ const statsGridClass = computed(() => (
 // ─────────────────────────────────────────────────────────────────────────────
 
 const MASONRY_ROW_UNIT = 10;
-const MASONRY_GAP = 16;
+const MASONRY_ROW_GAP = 12;
 
 const recentMediaMasonryRef = ref(null);
 const recentMediaNaturalDims = ref({});
 const recentMediaSpanMap = ref({});
+
+const resolveRecentMediaColumnWidth = (grid) => {
+    const containerW = grid?.clientWidth || grid?.offsetWidth || 0;
+    let colWidth = 220;
+
+    if (containerW > 0) {
+        const styles = window.getComputedStyle(grid);
+        const template = styles.gridTemplateColumns || '';
+        const colGap = parseFloat(styles.columnGap) || 16;
+
+        let colCount = 0;
+
+        const repeatMatch = template.match(/repeat\((\d+),/);
+        if (repeatMatch) {
+            colCount = Number(repeatMatch[1]) || 0;
+        }
+
+        if (!colCount) {
+            colCount = (template.match(/\S+/g) || []).length;
+        }
+
+        if (!colCount) {
+            const firstItem = grid.querySelector('[data-media-id]');
+            const firstWidth = Number(firstItem?.getBoundingClientRect?.().width || 0);
+            if (firstWidth > 0) {
+                colCount = Math.max(1, Math.round((containerW + colGap) / (firstWidth + colGap)));
+            }
+        }
+
+        colCount = Math.max(1, colCount);
+        colWidth = (containerW - colGap * (colCount - 1)) / colCount;
+    }
+
+    return colWidth;
+};
+
+const spanFromRecentMediaHeight = (height) => {
+    const safeHeight = Number(height);
+    if (!Number.isFinite(safeHeight) || safeHeight <= 0) {
+        return 1;
+    }
+
+    return Math.max(1, Math.ceil((safeHeight + MASONRY_ROW_GAP) / (MASONRY_ROW_UNIT + MASONRY_ROW_GAP)));
+};
+
+const estimateRecentMediaSpan = (width, height, grid) => {
+    const w = Number(width);
+    const h = Number(height);
+    if (w <= 0 || h <= 0) {
+        return null;
+    }
+
+    const colWidth = resolveRecentMediaColumnWidth(grid);
+    const imageHeight = (h / w) * colWidth;
+
+    return spanFromRecentMediaHeight(imageHeight);
+};
+
+const getRecentMediaSpan = (item) => {
+    const explicit = recentMediaSpanMap.value[item.id];
+    if (explicit) {
+        return explicit;
+    }
+
+    const estimated = estimateRecentMediaSpan(item.width, item.height, recentMediaMasonryRef.value);
+    if (estimated) {
+        return estimated;
+    }
+
+    return 22;
+};
 
 const formatSize = (bytes) => {
     if (!bytes) return '0.00 B';
@@ -161,17 +232,10 @@ const calcRecentMediaSpan = (mediaId) => {
         return;
     }
 
-    const grid = recentMediaMasonryRef.value;
-    const containerW = grid.clientWidth || grid.offsetWidth;
-    let colWidth = 220;
-    if (containerW > 0) {
-        const styles = window.getComputedStyle(grid);
-        const colCount = (styles.gridTemplateColumns.match(/\S+/g) || []).length || 1;
-        const colGap = parseFloat(styles.columnGap) || 16;
-        colWidth = (containerW - colGap * (colCount - 1)) / colCount;
+    const span = estimateRecentMediaSpan(dims.w, dims.h, recentMediaMasonryRef.value);
+    if (!span) {
+        return;
     }
-    const imageHeight = (dims.h / dims.w) * colWidth;
-    const span = Math.ceil((imageHeight + MASONRY_GAP) / MASONRY_ROW_UNIT);
 
     recentMediaSpanMap.value = {
         ...recentMediaSpanMap.value,
@@ -350,6 +414,7 @@ onBeforeUnmount(() => {
                                         v-if="album.coverMedia"
                                         :media="album.coverMedia"
                                         :alt="album.name"
+                                        :use-thumbnail="true"
                                         image-class="w-full h-full object-cover will-change-transform group-hover:scale-[1.035] transition-transform duration-700 ease-out"
                                         video-class="w-full h-full object-cover will-change-transform group-hover:scale-[1.035] transition-transform duration-700 ease-out"
                                         fallback-class="flex h-full w-full items-center justify-center bg-primary/5 text-xs font-bold uppercase tracking-[0.24em] text-primary/60"
@@ -413,6 +478,7 @@ onBeforeUnmount(() => {
                                             v-if="album.coverMedia"
                                             :media="album.coverMedia"
                                             :alt="album.name"
+                                            :use-thumbnail="true"
                                             image-class="w-full h-full object-cover will-change-transform group-hover:scale-[1.035] transition-transform duration-700 ease-out"
                                             video-class="w-full h-full object-cover will-change-transform group-hover:scale-[1.035] transition-transform duration-700 ease-out"
                                             fallback-class="flex h-full w-full items-center justify-center bg-primary/5 text-xs font-bold uppercase tracking-[0.24em] text-primary/60"
@@ -461,35 +527,34 @@ onBeforeUnmount(() => {
                         <div
                             v-if="recentVisualMedia.length"
                             ref="recentMediaMasonryRef"
-                            class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 items-start"
-                            style="grid-auto-rows: 10px; row-gap: 0; column-gap: 1rem; grid-auto-flow: dense;"
+                            class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5"
+                            style="grid-auto-rows: 10px; row-gap: 12px; column-gap: 0.5rem; grid-auto-flow: dense;"
                         >
                             <template v-for="item in recentVisualMedia" :key="item.id">
                                 <div
                                     :data-media-id="item.id"
-                                    :style="{ gridRowEnd: 'span ' + (recentMediaSpanMap[item.id] || 22) }"
+                                    :style="{ gridRowEnd: 'span ' + getRecentMediaSpan(item) }"
                                     @click="openPreview(item, recentVisualMedia)"
                                     class="group relative w-full rounded-2xl overflow-hidden border border-border bg-bg-elevated cursor-pointer hover:border-primary/50 transition-all shadow-sm hover:shadow-lg animate-fade-in-up"
                                 >
-                                    <div class="relative overflow-hidden rounded-2xl">
-                                        <MediaRenderer
-                                            :media="item"
-                                            :alt="item.file_name"
-                                            :use-thumbnail="true"
-                                            image-class="w-full h-auto block object-cover transition-transform duration-700 group-hover:scale-105"
-                                            video-class="w-full h-auto block object-cover transition-transform duration-700 group-hover:scale-105"
-                                            fallback-class="flex h-[180px] w-full items-center justify-center bg-bg-hover text-sm font-bold uppercase tracking-[0.24em] text-muted-foreground"
-                                            @load="rememberRecentMediaDims(item.id, $event)"
-                                        />
-                                        <div v-if="item.file_type === 'video'" class="absolute inset-0 flex items-center justify-center">
-                                            <div class="w-10 h-10 rounded-full bg-black/60 flex items-center justify-center">
-                                                <svg class="w-5 h-5 text-white" fill="currentColor" viewBox="0 0 20 20"><path d="M6.3 2.841A1.5 1.5 0 004 4.11V15.89a1.5 1.5 0 002.3 1.269l9.344-5.89a1.5 1.5 0 000-2.538L6.3 2.84z"></path></svg>
-                                            </div>
+                                    <MediaRenderer
+                                        :media="item"
+                                        :alt="item.file_name"
+                                        :use-thumbnail="true"
+                                        :fill="true"
+                                        image-class="transition-transform duration-700 group-hover:scale-105"
+                                        video-class="transition-transform duration-700 group-hover:scale-105"
+                                        fallback-class="flex w-full h-full items-center justify-center bg-bg-hover text-sm font-bold uppercase tracking-[0.24em] text-muted-foreground"
+                                        @load="rememberRecentMediaDims(item.id, $event)"
+                                    />
+                                    <div v-if="item.file_type === 'video'" class="absolute inset-0 z-10 flex items-center justify-center">
+                                        <div class="w-10 h-10 rounded-full bg-black/60 flex items-center justify-center">
+                                            <svg class="w-5 h-5 text-white" fill="currentColor" viewBox="0 0 20 20"><path d="M6.3 2.841A1.5 1.5 0 004 4.11V15.89a1.5 1.5 0 002.3 1.269l9.344-5.89a1.5 1.5 0 000-2.538L6.3 2.84z"></path></svg>
                                         </div>
-                                        <div class="absolute inset-0 bg-gradient-to-t from-black/60 via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-opacity flex items-end p-3 rounded-xl">
-                                            <div class="flex items-center justify-between w-full">
-                                                <span class="text-white text-[10px] font-bold truncate tracking-wide">By {{ item.user?.name || 'Unknown' }}</span>
-                                            </div>
+                                    </div>
+                                    <div class="absolute inset-0 z-10 bg-gradient-to-t from-black/60 via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-opacity flex items-end p-3 rounded-xl">
+                                        <div class="flex items-center justify-between w-full">
+                                            <span class="text-white text-[10px] font-bold truncate tracking-wide">By {{ item.user?.name || 'Unknown' }}</span>
                                         </div>
                                     </div>
                                 </div>

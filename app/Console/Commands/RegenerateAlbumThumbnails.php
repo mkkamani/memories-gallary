@@ -10,39 +10,67 @@ use Illuminate\Console\Command;
 class RegenerateAlbumThumbnails extends Command
 {
     protected $signature = 'thumbnails:regenerate
-        {--album= : Album ID or slug to process}
+        {--prefix=albums : R2 path prefix scope (default: albums)}
+        {--album= : Optional album ID or slug to scope cleanup}
         {--dry-run : Preview without deleting/generating thumbnails}
         {--chunk=100 : Number of media records to process per chunk}';
 
-    protected $description = 'Delete old thumbnails from storage and regenerate new thumbnails for media in the selected album.';
+    protected $description = 'Delete old thumbnails from storage and regenerate new thumbnails for media in the selected scope (prefix or album).';
+
+    public function __construct()
+    {
+        parent::__construct();
+
+        @ini_set('memory_limit', '1024M');
+    }
 
     public function handle(ThumbnailService $thumbnailService): int
     {
+        $prefix = $this->normalizePath((string) $this->option('prefix'));
         $albumOption = trim((string) $this->option('album'));
         $dryRun = (bool) $this->option('dry-run');
         $chunkSize = max(1, (int) $this->option('chunk'));
 
-        if ($albumOption === '') {
-            $this->error('The --album option is required. Provide an album ID or album slug.');
-            return self::FAILURE;
-        }
+        $album = null;
+        if ($albumOption !== '') {
+            $album = $this->resolveAlbum($albumOption);
 
-        $album = $this->resolveAlbum($albumOption);
-
-        if (! $album) {
-            $this->error("Album not found for --album={$albumOption}");
-            return self::FAILURE;
+            if (! $album) {
+                $this->error("Album not found for --album={$albumOption}");
+                return self::FAILURE;
+            }
         }
 
         $query = Media::query()
-            ->where('album_id', $album->id)
             ->whereIn('file_type', ['image', 'video'])
+            ->whereRaw('LOWER(mime_type) != ?', ['image/heic'])
             ->orderBy('id');
+
+        if ($album) {
+            $query->where('album_id', $album->id);
+            $this->info("Scoping to album {$album->title} (#{$album->id}).");
+        } else {
+            if ($prefix === '') {
+                $this->error('Invalid --prefix value.');
+                return self::FAILURE;
+            }
+
+            $query->where(function ($scoped) use ($prefix) {
+                $scoped->whereRaw('TRIM(LEADING \'/\' FROM file_path) = ?', [$prefix])
+                    ->orWhereRaw('TRIM(LEADING \'/\' FROM file_path) LIKE ?', [$prefix . '/%']);
+            });
+
+            $this->info("Scoping to prefix [{$prefix}].");
+        }
 
         $total = (int) (clone $query)->count();
 
         if ($total === 0) {
-            $this->info("No image/video records found in album {$album->title} (#{$album->id}).");
+            if ($album) {
+                $this->info("No image/video records found in album {$album->title} (#{$album->id}).");
+            } else {
+                $this->info('No image/video records found in selected prefix scope.');
+            }
             return self::SUCCESS;
         }
 
@@ -50,7 +78,11 @@ class RegenerateAlbumThumbnails extends Command
             $this->warn('[DRY RUN] No thumbnails will be deleted or regenerated.');
         }
 
-        $this->info("Processing album {$album->title} (#{$album->id}) with {$total} media record(s)...");
+        if ($album) {
+            $this->info("Processing album {$album->title} (#{$album->id}) with {$total} media record(s)...");
+        } else {
+            $this->info("Processing prefix {$prefix} with {$total} media record(s)...");
+        }
 
         $deletedOld = 0;
         $regenerated = 0;
@@ -89,18 +121,17 @@ class RegenerateAlbumThumbnails extends Command
 
                     if ($status === 'generated') {
                         $regenerated++;
-
-                        if ($this->shouldSyncDimensionsFromThumbnail($media)) {
-                            $thumbnailService->syncDimensionsFromThumbnail($media);
-                        }
+                        $thumbnailService->syncDimensionsFromThumbnail($media);
                     } elseif ($status === 'skipped') {
                         $skipped++;
                     } else {
+                        $this->cleanupFailedThumbnail($thumbnailService, $media);
                         $failed++;
                         $this->newLine();
                         $this->warn("  [FAILED] Media #{$media->id} ({$media->file_name})");
                     }
                 } catch (\Throwable $e) {
+                    $this->cleanupFailedThumbnail($thumbnailService, $media);
                     $failed++;
                     $this->newLine();
                     $this->warn("  [ERROR] Media #{$media->id} ({$media->file_name}): {$e->getMessage()}");
@@ -116,7 +147,7 @@ class RegenerateAlbumThumbnails extends Command
         $this->table(
             ['Metric', 'Count'],
             [
-                ['Album', "{$album->title} (#{$album->id})"],
+                ['Scope', $album ? "Album {$album->title} (#{$album->id})" : "Prefix {$prefix}"],
                 ['Total media', $total],
                 ['Old thumbnails deleted', $deletedOld],
                 ['Regenerated', $regenerated],
@@ -135,21 +166,26 @@ class RegenerateAlbumThumbnails extends Command
     private function resolveAlbum(string $albumOption): ?Album
     {
         if (ctype_digit($albumOption)) {
-            return Album::find((int) $albumOption);
+            return Album::withTrashed()->find((int) $albumOption);
         }
 
-        return Album::where('slug', $albumOption)->first();
+        return Album::withTrashed()->where('slug', $albumOption)->first();
     }
 
-    private function shouldSyncDimensionsFromThumbnail(Media $media): bool
+    private function normalizePath(string $path): string
     {
-        if (empty($media->thumbnail_path)) {
-            return false;
+        return trim(str_replace('\\', '/', $path), '/');
+    }
+
+
+    private function cleanupFailedThumbnail(ThumbnailService $thumbnailService, Media $media): void
+    {
+        try {
+            $thumbnailService->delete($media);
+            $media->refresh();
+        } catch (\Throwable $cleanupError) {
+            $this->newLine();
+            $this->warn("  [CLEANUP ERROR] Media #{$media->id} ({$media->file_name}): {$cleanupError->getMessage()}");
         }
-
-        $width = (int) ($media->width ?? 0);
-        $height = (int) ($media->height ?? 0);
-
-        return $width <= 0 || $height <= 0;
     }
 }

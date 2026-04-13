@@ -121,9 +121,13 @@ class DashboardController extends Controller
             }
         }
 
-        // 2. Latest media from the album itself or any nested descendant
+        // 2. Latest non-HEIC image from the album itself or any nested descendant
         $albumIds = $album->descendants()->pluck('id')->prepend($album->id)->all();
-        return Media::whereIn('album_id', $albumIds)->latest()->first();
+        return Media::whereIn('album_id', $albumIds)
+            ->where('file_type', 'image')
+            ->whereNotIn('mime_type', ['image/heic', 'image/heif'])
+            ->latest()
+            ->first();
     }
 
     private function formatAlbumCoverMediaArray(?Media $media): ?array
@@ -195,7 +199,7 @@ class DashboardController extends Controller
         $myStorageUsed  = $this->formatBytes($myStorageBytes);
 
         // Recent Media
-        $recentMedia = Media::with(['user', 'album'])->inRandomOrder()->take(20)->get();
+        $recentMedia = Media::with(['user', 'album'])->inRandomOrder()->take(50)->get();
 
         // Pinned Albums (scoped to current user)
         $recentAlbums = $user

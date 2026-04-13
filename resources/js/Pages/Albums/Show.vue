@@ -39,33 +39,115 @@ const isPinned = ref(!!props.album?.is_pinned);
 const isPinProcessing = ref(false);
 
 // ── Pinterest-style LTR masonry ──────────────────────────────────────────────
-// CSS Grid masonry using 10 px row tracks with no row-gap.
-// Items use align-self:start (via grid's items-start) so the visible card
-// height equals the image's natural rendered height — no bg strip below.
-// Each item's span = ceil((imageH + 16) / 10)  →  ~16 px gap between rows.
+// CSS Grid masonry using 10 px row tracks with a fixed row-gap.
+// Span is derived from measured rendered card height when possible so
+// orientation metadata or stale DB dimensions do not leave empty holes.
 const MASONRY_ROW_UNIT = 10; // px — must match grid-auto-rows below
-const MASONRY_GAP      = 16; // px — visual row gap between cards
+const MASONRY_ROW_GAP = 12; // px — must match row-gap below
 
 const masonryRef = ref(null);
 const naturalDims = ref({}); // { [fileId]: { w, h } }
 const spanMap    = ref({}); // { [fileId]: row span count }
 
-function calcSpan(fileId) {
-    const dims = naturalDims.value[fileId];
-    if (!dims || !masonryRef.value) return;
-    // Derive column width from the container so spans are correct even on first
-    // render before individual cells have a reliable clientWidth.
-    const grid = masonryRef.value;
-    const containerW = grid.clientWidth || grid.offsetWidth;
+function resolveMasonryColumnWidth(grid) {
+    const containerW = grid?.clientWidth || grid?.offsetWidth || 0;
     let colWidth = 220;
+
     if (containerW > 0) {
         const styles = window.getComputedStyle(grid);
-        const colCount = (styles.gridTemplateColumns.match(/\S+/g) || []).length || 1;
+        const template = styles.gridTemplateColumns || '';
         const colGap = parseFloat(styles.columnGap) || 16;
+
+        let colCount = 0;
+
+        const repeatMatch = template.match(/repeat\((\d+),/);
+        if (repeatMatch) {
+            colCount = Number(repeatMatch[1]) || 0;
+        }
+
+        if (!colCount) {
+            colCount = template === '' ? 1 : template.split(' ').filter(Boolean).length;
+        }
+
+        if (!colCount) {
+            const firstItem = grid.querySelector('[data-file-id]');
+            const firstWidth = Number(firstItem?.getBoundingClientRect?.().width || 0);
+            if (firstWidth > 0) {
+                colCount = Math.max(1, Math.round((containerW + colGap) / (firstWidth + colGap)));
+            }
+        }
+
+        colCount = Math.max(1, colCount);
         colWidth = (containerW - colGap * (colCount - 1)) / colCount;
     }
-    const imageH = dims.h / dims.w * colWidth;
-    const span = Math.ceil((imageH + MASONRY_GAP) / MASONRY_ROW_UNIT);
+
+    return colWidth;
+}
+
+function estimateSpanFromDimensions(width, height, grid) {
+    const w = Number(width);
+    const h = Number(height);
+    if (w <= 0 || h <= 0) {
+        return null;
+    }
+
+    const colWidth = resolveMasonryColumnWidth(grid);
+    const cardHeight = (h / w) * colWidth;
+
+    return spanFromCardHeight(cardHeight);
+}
+
+function spanFromCardHeight(cardHeight) {
+    const height = Number(cardHeight);
+    if (!Number.isFinite(height) || height <= 0) {
+        return 1;
+    }
+
+    // CSS grid span formula with row gap:
+    // span = ceil((itemHeight + rowGap) / (rowUnit + rowGap))
+    return Math.max(1, Math.ceil((height + MASONRY_ROW_GAP) / (MASONRY_ROW_UNIT + MASONRY_ROW_GAP)));
+}
+
+function getFileSpan(file) {
+    const explicit = spanMap.value[file.id];
+    if (explicit) {
+        return explicit;
+    }
+
+    const estimated = estimateSpanFromDimensions(file.width, file.height, masonryRef.value);
+    if (estimated) {
+        return estimated;
+    }
+
+    return 22;
+}
+
+function calcSpan(fileId) {
+    const grid = masonryRef.value;
+    if (!grid) return;
+
+    const item = grid.querySelector(`[data-file-id="${fileId}"]`);
+    const measuredHeight = Number(item?.getBoundingClientRect?.().height || 0);
+
+    const dims = naturalDims.value[fileId];
+    let cardHeight = null;
+
+    if (dims && dims.w > 0 && dims.h > 0) {
+        // Prefer known media dimensions so placeholder/card measurement does not
+        // lock the item into an incorrect landscape span.
+        const span = estimateSpanFromDimensions(dims.w, dims.h, grid);
+        if (!span) {
+            return;
+        }
+        spanMap.value = { ...spanMap.value, [fileId]: span };
+        return;
+    } else if (measuredHeight > 0) {
+        cardHeight = measuredHeight;
+    } else {
+        return;
+    }
+
+    const span = spanFromCardHeight(cardHeight);
     spanMap.value = { ...spanMap.value, [fileId]: span };
 }
 
@@ -502,7 +584,7 @@ const {
                             :class="filter === f ? 'bg-primary/10 border-primary text-primary' : 'bg-transparent border-transparent text-muted-foreground hover:bg-bg-hover'">
                         <span>{{ f }}</span>
                         <span class="inline-flex items-center rounded-full bg-bg-elevated/50 px-1.5 py-0.5 text-[10px] font-semibold"
-                              :class="filter === f ? 'bg-primary/10 text-primary' : 'text-muted-foreground'">
+                            :class="filter === f ? 'bg-primary/10 text-primary' : 'text-muted-foreground'">
                             {{ formatNumber(getFilterCount(f)) }}
                         </span>
                     </button>
@@ -583,14 +665,14 @@ const {
                 <div
                     v-if="viewMode === 'grid'"
                     ref="masonryRef"
-                    class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 items-start"
-                    style="grid-auto-rows: 10px; row-gap: 0; column-gap: 1rem; grid-auto-flow: dense;"
+                    class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 items-start"
+                    style="grid-auto-rows: 10px; row-gap: 12px; column-gap: 0.5rem; grid-auto-flow: dense;"
                 >
                     <div
                         v-for="file in filteredFiles"
                         :key="file.id"
                         :data-file-id="file.id"
-                        :style="{ gridRowEnd: 'span ' + (spanMap[file.id] || 22) }"
+                        :style="{ gridRowEnd: 'span ' + getFileSpan(file) }"
                         @click="openPreview(file)"
                         class="group relative w-full rounded-2xl overflow-hidden border border-border bg-bg-elevated cursor-pointer hover:border-primary/50 transition-all shadow-sm hover:shadow-xl animate-fade-in-up"
                     >
@@ -601,7 +683,7 @@ const {
                                 :use-thumbnail="true"
                                 image-class="w-full h-auto block object-cover transition-transform duration-700 group-hover:scale-105"
                                 video-class="w-full h-auto block object-cover transition-transform duration-700 group-hover:scale-105"
-                                fallback-class="flex h-[180px] w-full items-center justify-center bg-bg-hover text-sm font-bold uppercase tracking-[0.24em] text-muted-foreground"
+                                fallback-class="flex w-full items-center justify-center bg-bg-hover text-sm font-bold uppercase tracking-[0.24em] text-muted-foreground"
                                 @load="dims => onFileLoad(file.id, dims)"
                             />
 

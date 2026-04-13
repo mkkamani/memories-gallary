@@ -30,6 +30,24 @@ const showUserMenu = ref(false);
 const showNotifications = ref(false);
 const scrolled = ref(false);
 
+const handleWindowScroll = () => {
+    scrolled.value = window.scrollY > 10;
+};
+
+const handleDocumentClick = (e) => {
+    const userMenu = document.getElementById('user-menu-dropdown');
+    const userBtn = document.getElementById('user-menu-btn');
+    if (showUserMenu.value && userMenu && userBtn && !userMenu.contains(e.target) && !userBtn.contains(e.target)) {
+        showUserMenu.value = false;
+    }
+
+    const notifMenu = document.getElementById('notif-dropdown');
+    const notifBtn = document.getElementById('notif-btn');
+    if (showNotifications.value && notifMenu && notifBtn && !notifMenu.contains(e.target) && !notifBtn.contains(e.target)) {
+        showNotifications.value = false;
+    }
+};
+
 // ── Flash / Toast ─────────────────────────────────────────────────────────────
 const toasts = ref([]); // [{ id, type, message }]
 const toastHovered = ref(false);
@@ -211,27 +229,15 @@ onMounted(() => {
 
     syncSearchQueryFromPage();
 
-    window.addEventListener('scroll', () => {
-        scrolled.value = window.scrollY > 10;
-    });
-
-    document.addEventListener('click', (e) => {
-        const userMenu = document.getElementById('user-menu-dropdown');
-        const userBtn = document.getElementById('user-menu-btn');
-        if (showUserMenu.value && userMenu && userBtn && !userMenu.contains(e.target) && !userBtn.contains(e.target)) {
-            showUserMenu.value = false;
-        }
-
-        const notifMenu = document.getElementById('notif-dropdown');
-        const notifBtn = document.getElementById('notif-btn');
-        if (showNotifications.value && notifMenu && notifBtn && !notifMenu.contains(e.target) && !notifBtn.contains(e.target)) {
-            showNotifications.value = false;
-        }
-    });
+    handleWindowScroll();
+    window.addEventListener('scroll', handleWindowScroll, { passive: true });
+    document.addEventListener('click', handleDocumentClick);
 });
 
 onBeforeUnmount(() => {
     clearAllToasts();
+    window.removeEventListener('scroll', handleWindowScroll);
+    document.removeEventListener('click', handleDocumentClick);
 });
 
 const navItems = computed(() => {
@@ -317,10 +323,10 @@ const isActive = (item) => {
 
         <!-- Header -->
         <header
-            class="fixed top-0 right-0 z-50 h-16 flex items-center px-4 lg:px-6 transition-all duration-300"
+            class="app-navbar fixed top-0 right-0 z-50 h-16 flex items-center px-4 lg:px-6 transition-all duration-300"
             :class="[
                 collapsed ? 'md:left-16' : 'md:left-56',
-                scrolled ? 'bg-background/95 backdrop-blur-xl border-b border-border shadow-sm' : 'bg-background/80 backdrop-blur-md',
+                scrolled ? 'app-navbar--scrolled border-b border-border shadow-sm' : 'app-navbar--top',
                 'left-0'
             ]"
         >

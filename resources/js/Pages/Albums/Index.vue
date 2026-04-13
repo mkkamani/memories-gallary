@@ -303,6 +303,7 @@ const submitImport = () => {
                                     v-if="album.thumbnail_media"
                                     :media="album.thumbnail_media"
                                     :alt="album.title"
+                                    :use-thumbnail="true"
                                     image-class="w-full h-full object-cover will-change-transform group-hover:scale-[1.035] transition-transform duration-700 ease-out"
                                     video-class="w-full h-full object-cover will-change-transform group-hover:scale-[1.035] transition-transform duration-700 ease-out"
                                     fallback-class="flex h-full w-full items-center justify-center bg-purple-500/5 text-xs font-bold uppercase tracking-[0.24em] text-purple-500"
@@ -354,6 +355,7 @@ const submitImport = () => {
                                 v-if="album.thumbnail_media"
                                 :media="album.thumbnail_media"
                                 :alt="album.title"
+                                :use-thumbnail="true"
                                     image-class="w-full h-full object-cover will-change-transform group-hover:scale-[1.035] transition-transform duration-700 ease-out"
                                     video-class="w-full h-full object-cover will-change-transform group-hover:scale-[1.035] transition-transform duration-700 ease-out"
                                 fallback-class="flex h-full w-full items-center justify-center bg-primary/5 text-xs font-bold uppercase tracking-[0.24em] text-primary/60"
@@ -382,6 +384,7 @@ const submitImport = () => {
                                     v-else-if="getCoverFallbackMedia(album)"
                                     :media="getCoverFallbackMedia(album)"
                                     :alt="album.title"
+                                    :use-thumbnail="true"
                                     image-class="w-full h-full object-cover will-change-transform group-hover:scale-[1.035] transition-transform duration-700 ease-out"
                                     video-class="w-full h-full object-cover will-change-transform group-hover:scale-[1.035] transition-transform duration-700 ease-out"
                                     fallback-class="flex h-full w-full items-center justify-center bg-primary/5 text-xs font-bold uppercase tracking-[0.24em] text-primary/60"
@@ -460,21 +463,21 @@ const submitImport = () => {
                                 <h3 class="text-sm font-bold text-foreground truncate">{{ album.title }}</h3>
                             </div>
                             <p class="text-[11px] text-muted-foreground mt-0.5 flex items-center gap-2.5">
-                                <template v-if="album.photo_count > 0">
+                                <template v-if="album.total_photo_count > 0">
                                     <svg class="w-3.5 h-3.5 text-blue-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect><circle cx="8.5" cy="8.5" r="1.5"></circle><path d="M21 15l-5-5L5 21"></path></svg>
-                                    <span class="font-medium">{{ formatNumber(album.photo_count) }}</span>
+                                    <span class="font-medium">{{ formatNumber(album.total_photo_count) }}</span>
                                 </template>
-                                <template v-if="album.video_count > 0">
+                                <template v-if="album.total_video_count > 0">
                                     <svg class="w-3.5 h-3.5 text-purple-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="23 7 16 12 23 17 23 7"></polygon><rect x="1" y="5" width="15" height="14" rx="2" ry="2"></rect></svg>
-                                    <span class="font-medium">{{ formatNumber(album.video_count) }}</span>
+                                    <span class="font-medium">{{ formatNumber(album.total_video_count) }}</span>
                                 </template>
-                                <template v-if="album.file_count > 0">
+                                <template v-if="album.total_file_count > 0">
                                     <svg class="w-3.5 h-3.5 text-amber-600" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M13 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9z"></path><polyline points="13 2 13 9 20 9"></polyline></svg>
-                                    <span class="font-medium">{{ formatNumber(album.file_count) }}</span>
+                                    <span class="font-medium">{{ formatNumber(album.total_file_count) }}</span>
                                 </template>
-                                <template v-if="album.children_count > 0">
+                                <template v-if="album.total_folder_count > 0">
                                     <svg class="w-3.5 h-3.5 text-orange-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"></path></svg>
-                                    <span class="font-medium">{{ formatNumber(album.children_count) }}</span>
+                                    <span class="font-medium">{{ formatNumber(album.total_folder_count) }}</span>
                                 </template>
                             </p>
 
@@ -507,17 +510,21 @@ const submitImport = () => {
                                 </div>
                             </div>
                             <span class="text-sm text-muted-foreground text-center flex items-center justify-center gap-2.5">
-                                <template v-if="album.photo_count || (!album.photo_count && !album.video_count && !album.file_count)">
+                                <template v-if="album.total_photo_count > 0">
                                     <svg class="w-4 h-4 text-blue-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect><circle cx="8.5" cy="8.5" r="1.5"></circle><path d="M21 15l-5-5L5 21"></path></svg>
-                                    <span class="font-medium">{{ formatNumber(album.photo_count || 0) }}</span>
+                                    <span class="font-medium">{{ formatNumber(album.total_photo_count) }}</span>
                                 </template>
-                                <template v-if="album.video_count">
+                                <template v-if="album.total_video_count > 0">
                                     <svg class="w-4 h-4 text-purple-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="23 7 16 12 23 17 23 7"></polygon><rect x="1" y="5" width="15" height="14" rx="2" ry="2"></rect></svg>
-                                    <span class="font-medium">{{ formatNumber(album.video_count) }}</span>
+                                    <span class="font-medium">{{ formatNumber(album.total_video_count) }}</span>
                                 </template>
-                                <template v-if="album.file_count">
+                                <template v-if="album.total_file_count > 0">
                                     <svg class="w-4 h-4 text-amber-600" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M13 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9z"></path><polyline points="13 2 13 9 20 9"></polyline></svg>
-                                    <span class="font-medium">{{ formatNumber(album.file_count) }}</span>
+                                    <span class="font-medium">{{ formatNumber(album.total_file_count) }}</span>
+                                </template>
+                                <template v-if="album.total_folder_count > 0">
+                                    <svg class="w-4 h-4 text-orange-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"></path></svg>
+                                    <span class="font-medium">{{ formatNumber(album.total_folder_count) }}</span>
                                 </template>
                             </span>
                             <div>

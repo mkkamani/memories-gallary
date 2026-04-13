@@ -78,6 +78,9 @@ const isLoading = ref(false);
 const hasImageLoaded = ref(false);
 const attemptedHeicConversion = ref(false);
 const attemptedThumbnailFallback = ref(false);
+const lastEmittedDbDimsKey = ref('');
+const loadedNaturalWidth = ref(null);
+const loadedNaturalHeight = ref(null);
 
 let objectUrl = null;
 let runId = 0;
@@ -98,14 +101,63 @@ const intrinsicHeight = computed(() => {
     const value = Number(props.media?.height);
     return Number.isFinite(value) && value > 0 ? value : null;
 });
+const hasSuspiciousHeicDbDimensions = computed(() => {
+    if (!isHeic.value) {
+        return false;
+    }
+
+    const w = intrinsicWidth.value;
+    const h = intrinsicHeight.value;
+
+    if (!w || !h) {
+        return false;
+    }
+
+    // Some HEIC dimension extractors return embedded preview dimensions
+    // (commonly 512x512) instead of true photo dimensions.
+    return w === h && [256, 512, 1024].includes(w);
+});
+const reliableDbWidth = computed(() => {
+    if (hasSuspiciousHeicDbDimensions.value) {
+        return null;
+    }
+
+    return intrinsicWidth.value;
+});
+const reliableDbHeight = computed(() => {
+    if (hasSuspiciousHeicDbDimensions.value) {
+        return null;
+    }
+
+    return intrinsicHeight.value;
+});
+const shouldLockSquareHeicTile = computed(() => {
+    // In grid mode, keep known-suspicious HEIC metadata tiles square so
+    // masonry row spans don't jump and overlap during lazy-loading.
+    return hasSuspiciousHeicDbDimensions.value && !props.preview && !props.fill;
+});
+const displayWidth = computed(() => {
+    if (shouldLockSquareHeicTile.value) {
+        return intrinsicWidth.value || 1;
+    }
+
+    return loadedNaturalWidth.value || reliableDbWidth.value;
+});
+const displayHeight = computed(() => {
+    if (shouldLockSquareHeicTile.value) {
+        return intrinsicHeight.value || 1;
+    }
+
+    return loadedNaturalHeight.value || reliableDbHeight.value;
+});
 const containerStyle = computed(() => {
     if (props.fill) {
         // Fill mode: stretch to cover the positioned ancestor (e.g. fixed-height strip tiles).
         return { position: 'absolute', inset: '0', width: '100%', height: '100%' };
     }
-    if (intrinsicWidth.value && intrinsicHeight.value) {
+    if (displayWidth.value && displayHeight.value) {
         // Use CSS aspect-ratio only — paddingBottom conflicts and causes double height.
-        return { aspectRatio: `${intrinsicWidth.value} / ${intrinsicHeight.value}` };
+        return { aspectRatio: `${displayWidth.value} / ${displayHeight.value}` };
     }
     // No DB dimensions yet: reserve a minimum height so the grid cell isn't zero-height.
     return { minHeight: '160px' };
@@ -124,19 +176,22 @@ const heicProxyUrl = computed(() => {
         return null;
     }
 
-    // Prefer Worker/CDN-backed URL first so HEIC preview/fallback uses
-    // the same cached R2 path as thumbnails.
+    // Always prefer the same-origin Laravel proxy route so the JS fetch() in
+    // convertHeicToBrowserImage() never touches a cross-origin URL.
+    // Cross-origin <img> loads use "no-cors" mode, which the browser may cache
+    // as an opaque response. A subsequent cors-mode fetch() to the same URL
+    // receives that opaque response — which JS cannot read — causing conversion
+    // to silently fail. The local proxy is same-origin, so this never happens.
+    if (props.media?.id) {
+        return `/media/${props.media.id}/raw`;
+    }
+
     if (props.media?.url) {
         return props.media.url;
     }
 
     if (derivedWorkerMediaUrl.value) {
         return derivedWorkerMediaUrl.value;
-    }
-
-    // Keep raw route only as a last fallback.
-    if (props.media?.id) {
-        return `/media/${props.media.id}/raw`;
     }
 
     return null;
@@ -250,6 +305,10 @@ const shouldRenderVideoElement = computed(() => {
     // Requirement: grid/list should show thumbnails, preview should play video.
     return isVideo.value && props.preview;
 });
+const shouldUseHeicCoverMode = computed(() => {
+    // Only force cover behavior in grid cards for HEIC/HEIF.
+    return isHeic.value && !props.preview && !props.fill;
+});
 
 const cleanupObjectUrl = () => {
     if (objectUrl) {
@@ -318,12 +377,27 @@ const convertHeicToBrowserImage = async () => {
 const syncUrl = async () => {
     runId += 1;
 
+    // Emit stored DB dimensions immediately so parent layouts can reserve
+    // the correct card height before the media file finishes loading.
+    const dbW = Number(shouldLockSquareHeicTile.value ? intrinsicWidth.value : reliableDbWidth.value);
+    const dbH = Number(shouldLockSquareHeicTile.value ? intrinsicHeight.value : reliableDbHeight.value);
+    if (Number.isFinite(dbW) && Number.isFinite(dbH) && dbW > 0 && dbH > 0) {
+        const mediaId = props.media?.id ?? 'unknown';
+        const dimsKey = `${mediaId}:${dbW}x${dbH}`;
+        if (lastEmittedDbDimsKey.value !== dimsKey) {
+            lastEmittedDbDimsKey.value = dimsKey;
+            emit('load', { naturalWidth: dbW, naturalHeight: dbH });
+        }
+    }
+
     cleanupObjectUrl();
     conversionFailed.value = false;
     isLoading.value = false;
     hasImageLoaded.value = false;
     attemptedHeicConversion.value = false;
     attemptedThumbnailFallback.value = false;
+    loadedNaturalWidth.value = null;
+    loadedNaturalHeight.value = null;
     resolvedUrl.value = '';
 
     if (!mediaProxyUrl.value) {
@@ -334,7 +408,13 @@ const syncUrl = async () => {
 
     // Preview mode must always use original media for quality/zoom behavior.
     if (props.preview) {
-        resolvedUrl.value = mediaOriginalUrl.value;
+        if (isHeic.value) {
+            // Start conversion immediately for HEIC in preview — avoids loading
+            // the unrenderable HEIC URL as <img src> and the opaque-cache issue.
+            await convertHeicToBrowserImage();
+        } else {
+            resolvedUrl.value = mediaOriginalUrl.value;
+        }
         return;
     }
 
@@ -352,12 +432,22 @@ const syncUrl = async () => {
 
 const onImgLoad = (e) => {
     const img = e.target;
+    loadedNaturalWidth.value = Number(img.naturalWidth) > 0 ? img.naturalWidth : null;
+    loadedNaturalHeight.value = Number(img.naturalHeight) > 0 ? img.naturalHeight : null;
     hasImageLoaded.value = true;
+
+    if (shouldLockSquareHeicTile.value && intrinsicWidth.value && intrinsicHeight.value) {
+        emit('load', { naturalWidth: intrinsicWidth.value, naturalHeight: intrinsicHeight.value });
+        return;
+    }
+
     emit('load', { naturalWidth: img.naturalWidth, naturalHeight: img.naturalHeight });
 };
 
 const onVideoMeta = (e) => {
     const v = e.target;
+    loadedNaturalWidth.value = Number(v.videoWidth) > 0 ? v.videoWidth : null;
+    loadedNaturalHeight.value = Number(v.videoHeight) > 0 ? v.videoHeight : null;
     emit('load', { naturalWidth: v.videoWidth || 16, naturalHeight: v.videoHeight || 9 });
 };
 
@@ -374,11 +464,19 @@ const onImageError = async () => {
         && !attemptedThumbnailFallback.value
         && mediaOriginalUrl.value
     ) {
-        // Thumbnail key may not exist in R2 yet; fall back to original media URL.
         attemptedThumbnailFallback.value = true;
         hasImageLoaded.value = false;
         conversionFailed.value = false;
-        resolvedUrl.value = mediaOriginalUrl.value;
+
+        if (isHeic.value) {
+            // For HEIC, skip setting the cross-origin HEIC URL as <img src>.
+            // That no-cors request would be cached as an opaque response, which
+            // the subsequent cors fetch() in convertHeicToBrowserImage cannot read.
+            // Jump straight to conversion using the same-origin proxy instead.
+            await convertHeicToBrowserImage();
+        } else {
+            resolvedUrl.value = mediaOriginalUrl.value;
+        }
         return;
     }
 
@@ -401,7 +499,7 @@ const onImageError = async () => {
 };
 
 watch(
-    () => [props.media?.id, props.media?.url, props.media?.thumbnail_url, props.media?.file_name, props.media?.mime_type, props.media?.file_type],
+    () => [props.media?.id, props.media?.url, props.media?.thumbnail_url, props.media?.file_name, props.media?.mime_type, props.media?.file_type, props.media?.width, props.media?.height],
     () => {
         syncUrl();
     },
@@ -420,6 +518,8 @@ onBeforeUnmount(() => {
         v-if="shouldRenderVideoElement"
         v-bind="$attrs"
         :src="resolvedUrl"
+        :width="displayWidth || undefined"
+        :height="displayHeight || undefined"
         :class="videoClass"
         :controls="videoControls"
         :autoplay="videoAutoplay"
@@ -430,7 +530,7 @@ onBeforeUnmount(() => {
     ></video>
 
     <!-- ─── HEIC conversion in-progress ──────────────────────────────────── -->
-    <div v-else-if="isLoading" :class="fallbackClass" class="relative overflow-hidden">
+    <div v-else-if="isLoading" :class="fallbackClass" :style="containerStyle" class="relative overflow-hidden">
         <div
             v-if="resolvedUrl"
             class="absolute inset-0 scale-110 blur-xl bg-cover bg-center"
@@ -445,8 +545,8 @@ onBeforeUnmount(() => {
         v-bind="$attrs"
         :src="resolvedUrl"
         :alt="alt || media?.file_name || 'Media'"
-        :width="intrinsicWidth || undefined"
-        :height="intrinsicHeight || undefined"
+        :width="displayWidth || undefined"
+        :height="displayHeight || undefined"
         :class="[imageClass, hasImageLoaded ? 'media-image-ready' : 'media-image-loading']"
         decoding="async"
         loading="lazy"
@@ -455,7 +555,7 @@ onBeforeUnmount(() => {
     />
 
     <!-- ─── GRID MODE: wrapper with aspect-ratio + blurred actual-image bg ── -->
-    <div v-else-if="!conversionFailed" class="media-container">
+    <div v-else-if="!conversionFailed" class="media-container" :style="containerStyle">
         <div
             v-if="!hasImageLoaded && resolvedUrl"
             class="media-blur-bg"
@@ -469,9 +569,9 @@ onBeforeUnmount(() => {
             v-bind="$attrs"
             :src="resolvedUrl"
             :alt="alt || media?.file_name || 'Media'"
-            :width="intrinsicWidth || undefined"
-            :height="intrinsicHeight || undefined"
-            :class="fill
+            :width="displayWidth || undefined"
+            :height="displayHeight || undefined"
+            :class="fill || shouldUseHeicCoverMode
                 ? [imageClass, hasImageLoaded ? 'media-img-fill media-img-fill--ready' : 'media-img-fill media-img-fill--loading']
                 : [imageClass, hasImageLoaded ? 'media-image-ready' : 'media-image-loading']"
             decoding="async"
@@ -482,10 +582,11 @@ onBeforeUnmount(() => {
     </div>
 
     <!-- ─── FALLBACK (broken URL / load error / HEIC conversion failed) ───── -->
-    <div v-else :class="fallbackClass">
+    <div v-else :class="fallbackClass" :style="containerStyle">
         <template v-if="isHeic">{{ fallbackLabel }}</template>
+        <h3 v-else-if="alt" class="px-3 text-center text-[1.5rem] font-bold leading-snug opacity-60 break-words line-clamp-3">{{ alt }}</h3>
         <svg v-else class="w-8 h-8 opacity-25" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z"/>
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
         </svg>
     </div>
 </template>
