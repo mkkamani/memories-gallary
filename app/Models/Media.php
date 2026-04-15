@@ -68,6 +68,7 @@ class Media extends Model
         "height",
         "duration",
         "taken_at",
+        "thumb_sync",
     ];
 
     protected $casts = [

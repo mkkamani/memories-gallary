@@ -155,12 +155,8 @@ const containerStyle = computed(() => {
         // Fill mode: stretch to cover the positioned ancestor (e.g. fixed-height strip tiles).
         return { position: 'absolute', inset: '0', width: '100%', height: '100%' };
     }
-    if (displayWidth.value && displayHeight.value) {
-        // Use CSS aspect-ratio only — paddingBottom conflicts and causes double height.
-        return { aspectRatio: `${displayWidth.value} / ${displayHeight.value}` };
-    }
-    // No DB dimensions yet: reserve a minimum height so the grid cell isn't zero-height.
-    return { minHeight: '160px' };
+    // In grid mode, do NOT set aspect-ratio. Always let the image fill the container.
+    return { width: '100%', height: '100%', minHeight: '160px' };
 });
 const isHeic = computed(() => {
     if (isVideo.value) {
@@ -301,6 +297,18 @@ const resolvedThumbnailUrl = computed(() => {
     return localThumbnailUrl.value;
 });
 
+const heicDisplayFallbackUrl = computed(() => {
+    if (!isHeic.value) {
+        return null;
+    }
+
+    if (localThumbnailUrl.value && !/\/albums\//.test(localThumbnailUrl.value)) {
+        return localThumbnailUrl.value;
+    }
+
+    return derivedThumbnailUrl.value || localThumbnailUrl.value || null;
+});
+
 const shouldRenderVideoElement = computed(() => {
     // Requirement: grid/list should show thumbnails, preview should play video.
     return isVideo.value && props.preview;
@@ -367,7 +375,19 @@ const convertHeicToBrowserImage = async () => {
 
         return true;
     } catch (_error) {
-        conversionFailed.value = true;
+        // heic2any can't parse every HEIC variant (codec profiles, HDR, etc.).
+        // The server generates JPG thumbnails server-side, so fall back to the
+        // thumbnail URL before showing the "HEIC" placeholder — gives a degraded
+        // but visible preview.  Only skip this if the thumbnail path was already
+        // exhausted (e.g. in grid mode, thumbnail 404 triggered onImageError
+        // which set attemptedThumbnailFallback before calling us).
+        if (heicDisplayFallbackUrl.value && !attemptedThumbnailFallback.value) {
+            attemptedThumbnailFallback.value = true;
+            resolvedUrl.value = heicDisplayFallbackUrl.value;
+            conversionFailed.value = false;
+        } else {
+            conversionFailed.value = true;
+        }
         return false;
     } finally {
         isLoading.value = false;
@@ -409,9 +429,12 @@ const syncUrl = async () => {
     // Preview mode must always use original media for quality/zoom behavior.
     if (props.preview) {
         if (isHeic.value) {
-            // Start conversion immediately for HEIC in preview — avoids loading
-            // the unrenderable HEIC URL as <img src> and the opaque-cache issue.
-            await convertHeicToBrowserImage();
+            if (heicDisplayFallbackUrl.value) {
+                resolvedUrl.value = heicDisplayFallbackUrl.value;
+            } else {
+                // Only attempt conversion when no server-side JPG thumbnail exists.
+                await convertHeicToBrowserImage();
+            }
         } else {
             resolvedUrl.value = mediaOriginalUrl.value;
         }
@@ -569,11 +592,7 @@ onBeforeUnmount(() => {
             v-bind="$attrs"
             :src="resolvedUrl"
             :alt="alt || media?.file_name || 'Media'"
-            :width="displayWidth || undefined"
-            :height="displayHeight || undefined"
-            :class="fill || shouldUseHeicCoverMode
-                ? [imageClass, hasImageLoaded ? 'media-img-fill media-img-fill--ready' : 'media-img-fill media-img-fill--loading']
-                : [imageClass, hasImageLoaded ? 'media-image-ready' : 'media-image-loading']"
+            :class="'media-img-fill ' + (hasImageLoaded ? 'media-img-fill--ready' : 'media-img-fill--loading')"
             decoding="async"
             loading="lazy"
             @load="onImgLoad"

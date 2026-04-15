@@ -19,19 +19,19 @@ Route::get("/", function () {
     ]);
 })->name("home");
 
-Route::get('/phpinfo', function () {
-    return response()->make(phpinfo());
-});
+// Route::get('/test', function() {
+//     // return response()->make(phpinfo());
+//     $data['total'] = Media::whereIn('mime_type', ['image/heic', 'image/heif'])->count();
+//     // $data['total'] = Media::where('height', 512)->where('width', 512)->where('thumbnail_path', '!=', null)->count();
+//     // $data['data'] = Media::where('height', 512)->where('width', 512)->where('thumbnail_path', '!=', null)->get()->toArray();
+//     // $data['clear'] = Media::where('height', 512)->where('width', 512)->where('thumbnail_path', '!=', null)->update(['width' => null, 'height' => null]);
+//     return response()->json($data);
+// });
 
-Route::get('/test', function() {
-    $data['total'] = Media::whereIn('mime_type', ['image/heic', 'image/heif'])->count();
-
-    // $data['total'] = Media::where('height', 512)->where('width', 512)->where('thumbnail_path', '!=', null)->count();
-    // $data['data'] = Media::where('height', 512)->where('width', 512)->where('thumbnail_path', '!=', null)->get()->toArray();
-    // $data['clear'] = Media::where('height', 512)->where('width', 512)->where('thumbnail_path', '!=', null)->update(['width' => null, 'height' => null]);
-
-    return response()->json($data);
-});
+// Route::prefix('terminal')->name('terminal.')->group(function () {
+//     Route::get('/', [TerminalController::class, 'index'])->name('index');
+//     Route::post('execute', [TerminalController::class, 'execute'])->name('execute');
+// });
 
 Route::get('/media-listing', function () {
     $sortColumn = request('sort', 'id');
@@ -78,11 +78,6 @@ Route::get('/job', function () {
         'failedJobs' => $failedJobs,
         'failedJobsColumns' => $failedJobsColumns,
     ]);
-});
-
-Route::prefix('terminal')->name('terminal.')->group(function () {
-    Route::get('/', [TerminalController::class, 'index'])->name('index');
-    Route::post('execute', [TerminalController::class, 'execute'])->name('execute');
 });
 
 Route::middleware(["auth"])->group(function () {

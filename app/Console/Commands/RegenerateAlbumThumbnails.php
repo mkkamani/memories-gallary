@@ -21,7 +21,7 @@ class RegenerateAlbumThumbnails extends Command
     {
         parent::__construct();
 
-        @ini_set('memory_limit', '1024M');
+        @ini_set('memory_limit', '-1');
     }
 
     public function handle(ThumbnailService $thumbnailService): int
@@ -42,8 +42,10 @@ class RegenerateAlbumThumbnails extends Command
         }
 
         $query = Media::query()
-            ->whereIn('file_type', ['image', 'video'])
+            // ->whereIn('file_type', ['image', 'video'])
+            ->whereIn('file_type', ['image'])
             ->whereRaw('LOWER(mime_type) != ?', ['image/heic'])
+            ->where('thumb_sync', 0)
             ->orderBy('id');
 
         if ($album) {
@@ -64,6 +66,7 @@ class RegenerateAlbumThumbnails extends Command
         }
 
         $total = (int) (clone $query)->count();
+        // dd($total);
 
         if ($total === 0) {
             if ($album) {
@@ -122,6 +125,9 @@ class RegenerateAlbumThumbnails extends Command
                     if ($status === 'generated') {
                         $regenerated++;
                         $thumbnailService->syncDimensionsFromThumbnail($media);
+                        // Set thumb_sync to 1 if regenerated successfully
+                        $media->thumb_sync = 1;
+                        $media->save();
                     } elseif ($status === 'skipped') {
                         $skipped++;
                     } else {
