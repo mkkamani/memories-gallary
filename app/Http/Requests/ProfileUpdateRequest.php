@@ -29,7 +29,7 @@ class ProfileUpdateRequest extends FormRequest
             'avatar' => ['nullable', 'image', 'max:5120'], // 5MB max
         ];
 
-        if (in_array($this->user()?->role, ['admin', 'manager'], true)) {
+        if ($this->user()?->role === 'admin') {
             $rules['role'] = ['required', 'string', Rule::in(['admin', 'manager', 'member'])];
         }
 

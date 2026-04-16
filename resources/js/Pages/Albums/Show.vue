@@ -8,12 +8,14 @@ import MediaRenderer from '@/Components/MediaRenderer.vue';
 import DangerButton from '@/Components/DangerButton.vue';
 import { useMediaPreview } from '@/composables/useMediaPreview';
 import { downloadFile, formatFileSize } from '@/utils/media';
+import { formatNumber } from '@/utils/number';
 // import { useInfiniteScroll } from '@vueuse/core';
 import axios from 'axios';
 
 const props = defineProps({
     album: Object,
     mediaData: Object,
+    mediaCounts: Object,
     breadcrumbs: Array,
 });
 
@@ -37,25 +39,115 @@ const isPinned = ref(!!props.album?.is_pinned);
 const isPinProcessing = ref(false);
 
 // ── Pinterest-style LTR masonry ──────────────────────────────────────────────
-// CSS Grid masonry using 10 px row tracks with no row-gap.
-// Items use align-self:start (via grid's items-start) so the visible card
-// height equals the image's natural rendered height — no bg strip below.
-// Each item's span = ceil((imageH + 16) / 10)  →  ~16 px gap between rows.
+// CSS Grid masonry using 10 px row tracks with a fixed row-gap.
+// Span is derived from measured rendered card height when possible so
+// orientation metadata or stale DB dimensions do not leave empty holes.
 const MASONRY_ROW_UNIT = 10; // px — must match grid-auto-rows below
-const MASONRY_GAP      = 16; // px — visual row gap between cards
+const MASONRY_ROW_GAP = 12; // px — must match row-gap below
 
 const masonryRef = ref(null);
 const naturalDims = ref({}); // { [fileId]: { w, h } }
 const spanMap    = ref({}); // { [fileId]: row span count }
 
+function resolveMasonryColumnWidth(grid) {
+    const containerW = grid?.clientWidth || grid?.offsetWidth || 0;
+    let colWidth = 220;
+
+    if (containerW > 0) {
+        const styles = window.getComputedStyle(grid);
+        const template = styles.gridTemplateColumns || '';
+        const colGap = parseFloat(styles.columnGap) || 16;
+
+        let colCount = 0;
+
+        const repeatMatch = template.match(/repeat\((\d+),/);
+        if (repeatMatch) {
+            colCount = Number(repeatMatch[1]) || 0;
+        }
+
+        if (!colCount) {
+            colCount = template === '' ? 1 : template.split(' ').filter(Boolean).length;
+        }
+
+        if (!colCount) {
+            const firstItem = grid.querySelector('[data-file-id]');
+            const firstWidth = Number(firstItem?.getBoundingClientRect?.().width || 0);
+            if (firstWidth > 0) {
+                colCount = Math.max(1, Math.round((containerW + colGap) / (firstWidth + colGap)));
+            }
+        }
+
+        colCount = Math.max(1, colCount);
+        colWidth = (containerW - colGap * (colCount - 1)) / colCount;
+    }
+
+    return colWidth;
+}
+
+function estimateSpanFromDimensions(width, height, grid) {
+    const w = Number(width);
+    const h = Number(height);
+    if (w <= 0 || h <= 0) {
+        return null;
+    }
+
+    const colWidth = resolveMasonryColumnWidth(grid);
+    const cardHeight = (h / w) * colWidth;
+
+    return spanFromCardHeight(cardHeight);
+}
+
+function spanFromCardHeight(cardHeight) {
+    const height = Number(cardHeight);
+    if (!Number.isFinite(height) || height <= 0) {
+        return 1;
+    }
+
+    // CSS grid span formula with row gap:
+    // span = ceil((itemHeight + rowGap) / (rowUnit + rowGap))
+    return Math.max(1, Math.ceil((height + MASONRY_ROW_GAP) / (MASONRY_ROW_UNIT + MASONRY_ROW_GAP)));
+}
+
+function getFileSpan(file) {
+    const explicit = spanMap.value[file.id];
+    if (explicit) {
+        return explicit;
+    }
+
+    const estimated = estimateSpanFromDimensions(file.width, file.height, masonryRef.value);
+    if (estimated) {
+        return estimated;
+    }
+
+    return 22;
+}
+
 function calcSpan(fileId) {
+    const grid = masonryRef.value;
+    if (!grid) return;
+
+    const item = grid.querySelector(`[data-file-id="${fileId}"]`);
+    const measuredHeight = Number(item?.getBoundingClientRect?.().height || 0);
+
     const dims = naturalDims.value[fileId];
-    if (!dims || !masonryRef.value) return;
-    const item = masonryRef.value.querySelector(`[data-file-id="${fileId}"]`);
-    // clientWidth excludes the 2 px border so the aspect-ratio math is exact.
-    const colWidth = item ? (item.clientWidth || item.offsetWidth) : 220;
-    const imageH = dims.h / dims.w * colWidth;
-    const span = Math.ceil((imageH + MASONRY_GAP) / MASONRY_ROW_UNIT);
+    let cardHeight = null;
+
+    if (dims && dims.w > 0 && dims.h > 0) {
+        // Prefer known media dimensions so placeholder/card measurement does not
+        // lock the item into an incorrect landscape span.
+        const span = estimateSpanFromDimensions(dims.w, dims.h, grid);
+        if (!span) {
+            return;
+        }
+        spanMap.value = { ...spanMap.value, [fileId]: span };
+        return;
+    } else if (measuredHeight > 0) {
+        cardHeight = measuredHeight;
+    } else {
+        return;
+    }
+
+    const span = spanFromCardHeight(cardHeight);
     spanMap.value = { ...spanMap.value, [fileId]: span };
 }
 
@@ -81,7 +173,7 @@ function seedDimsFromDb(fileList) {
         }
     }
     if (changed) {
-        nextTick(() => recalcAllSpans());
+        nextTick(() => requestAnimationFrame(() => recalcAllSpans()));
     }
 }
 
@@ -124,6 +216,10 @@ const folders = computed(() => folderItems.value);
 const files = ref([...(props.mediaData?.data || [])]);
 const nextPageUrl = ref(props.mediaData?.next_page_url || null);
 const isLoadingMore = ref(false);
+const totalMediaCount = ref(Number.isFinite(Number(props.mediaCounts?.all)) ? Number(props.mediaCounts.all) : Number(props.mediaData?.total || files.value.length));
+const totalPhotoCount = ref(Number.isFinite(Number(props.mediaCounts?.photos)) ? Number(props.mediaCounts.photos) : files.value.filter(f => f.file_type === 'image').length);
+const totalVideoCount = ref(Number.isFinite(Number(props.mediaCounts?.videos)) ? Number(props.mediaCounts.videos) : files.value.filter(f => f.file_type === 'video').length);
+const totalFolderCount = ref(Number.isFinite(Number(props.mediaCounts?.folders)) ? Number(props.mediaCounts.folders) : folders.value.length);
 const loadMore = async () => {
     if (!nextPageUrl.value || isLoadingMore.value) return;
 
@@ -141,7 +237,7 @@ const loadMore = async () => {
             seedDimsFromDb(newFiles);
         }
         nextPageUrl.value = response.data.next_page_url || null;
-        nextTick(() => recalcAllSpans());
+        nextTick(() => requestAnimationFrame(() => recalcAllSpans()));
     } catch (e) {
         console.error('[Load More] Error:', e);
     } finally {
@@ -175,14 +271,44 @@ const filteredFiles = computed(() => {
     return allFilteredFiles.value;
 });
 
-const totalFolderCount = computed(() => folders.value.length);
-const totalFileCount = computed(() => {
-    const serverTotal = Number(props.mediaData?.total);
-    if (Number.isFinite(serverTotal) && serverTotal > 0) {
-        return serverTotal;
-    }
+const totalFileCount = computed(() => totalMediaCount.value);
 
-    return files.value.length;
+const photoCount = computed(() => {
+    return totalPhotoCount.value;
+});
+
+const videoCount = computed(() => {
+    return totalVideoCount.value;
+});
+
+const folderCount = computed(() => {
+    return totalFolderCount.value;
+});
+
+const allCount = computed(() => {
+    return totalFileCount.value + totalFolderCount.value;
+});
+
+const getFilterCount = (filterType) => {
+    if (filterType === 'All') return allCount.value;
+    if (filterType === 'Photos') return photoCount.value;
+    if (filterType === 'Videos') return videoCount.value;
+    if (filterType === 'Folders') return folderCount.value;
+    return 0;
+};
+
+const sectionTitle = computed(() => {
+    if (filter.value === 'Photos') return 'Photos';
+    if (filter.value === 'Videos') return 'Videos';
+    if (filter.value === 'Folders') return 'Folders';
+    return 'Files';
+});
+
+const sectionCount = computed(() => {
+    if (filter.value === 'Photos') return photoCount.value;
+    if (filter.value === 'Videos') return videoCount.value;
+    if (filter.value === 'Folders') return folderCount.value;
+    return filteredFiles.value.length + filteredFolders.value.length;
 });
 
 const emptyStateText = computed(() => {
@@ -216,7 +342,7 @@ const emptyStateText = computed(() => {
 onMounted(() => {
     window.addEventListener('resize', recalcAllSpans);
     seedDimsFromDb(files.value);
-    nextTick(() => recalcAllSpans());
+    nextTick(() => requestAnimationFrame(() => recalcAllSpans()));
 });
 
 onBeforeUnmount(() => {
@@ -315,6 +441,7 @@ const deleteItem = () => {
             preserveState: true,
             onSuccess: () => {
                 folderItems.value = folderItems.value.filter(folder => folder.id !== albumId);
+                totalFolderCount.value = Math.max(0, totalFolderCount.value - 1);
                 showDeleteModal.value = false;
                 itemToDelete.value = null;
             },
@@ -329,7 +456,14 @@ const deleteItem = () => {
         router.delete(route('media.destroy', itemToDelete.value.id), {
             preserveScroll: true,
             onSuccess: () => {
+                const deletedFileType = itemToDelete.value?.file_type;
                 removeDeletedMediaFromList(mediaId);
+                totalMediaCount.value = Math.max(0, totalMediaCount.value - 1);
+                if (deletedFileType === 'image') {
+                    totalPhotoCount.value = Math.max(0, totalPhotoCount.value - 1);
+                } else if (deletedFileType === 'video') {
+                    totalVideoCount.value = Math.max(0, totalVideoCount.value - 1);
+                }
                 showDeleteModal.value = false;
                 itemToDelete.value = null;
             },
@@ -379,13 +513,13 @@ const {
         <div class="animate-fade-in text-foreground space-y-6" @click="closeActionMenu">
 
             <!-- Header with Breadcrumbs and New Button -->
-            <div class="flex flex-col md:flex-row md:items-center justify-between gap-4">
-                <div class="flex items-center gap-2 overflow-x-auto pb-2 md:pb-0 scrollbar-hide flex-1">
+            <div class="flex flex-col md:flex-row md:items-center justify-between gap-3 md:gap-4">
+                <div class="flex items-center gap-2 min-w-0 flex-1">
                     <Link :href="parentAlbumSlug ? route('albums.show', parentAlbumSlug) : route('albums.index')" class="p-2 rounded-full hover:bg-bg-hover text-muted-foreground transition-all shrink-0">
                         <svg class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 19l-7-7m0 0l7-7m-7 7h18"/></svg>
                     </Link>
 
-                    <div class="flex items-center gap-1 text-sm text-muted-foreground whitespace-nowrap min-w-0 flex-1">
+                    <div class="flex items-center gap-1 text-sm text-muted-foreground whitespace-nowrap min-w-0 flex-1 overflow-x-auto scrollbar-hide pr-1">
                         <Link :href="route('albums.index')" class="hover:text-foreground cursor-pointer transition-colors">Albums</Link>
 
                         <svg class="w-4 h-4 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/></svg>
@@ -411,7 +545,7 @@ const {
                     </div>
                 </div>
 
-                <div class="flex items-center gap-3 shrink-0">
+                <div class="flex items-center justify-between sm:justify-end gap-3 shrink-0">
                     <div class="relative" v-if="canShowToolbar">
                         <button @click.stop="showNewMenu = !showNewMenu" class="flex items-center gap-2 h-10 px-5 rounded-pill bg-gradient-to-r from-primary to-accent-hover text-primary-foreground font-bold text-sm shadow-lg hover:translate-y-[-1px] transition-all">
                             <svg class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/></svg>
@@ -443,13 +577,19 @@ const {
             </div>
 
             <!-- Filter Tabs -->
-            <div class="flex items-center gap-2 border-b border-border pb-2">
+            <div class="border-b border-border pb-2">
+                <div class="flex w-max min-w-full items-center gap-2 overflow-x-auto scrollbar-hide">
                 <template v-for="f in ['All', 'Photos', 'Videos', 'Folders']" :key="f">
-                    <button @click="filter = f" class="px-4 py-1.5 rounded-pill text-xs font-bold transition-all border"
+                    <button @click="filter = f" class="px-3 sm:px-4 py-1.5 rounded-pill text-xs font-bold transition-all border flex items-center gap-2 whitespace-nowrap"
                             :class="filter === f ? 'bg-primary/10 border-primary text-primary' : 'bg-transparent border-transparent text-muted-foreground hover:bg-bg-hover'">
-                        {{ f }}
+                        <span>{{ f }}</span>
+                        <span class="inline-flex items-center rounded-full bg-bg-elevated/50 px-1.5 py-0.5 text-[10px] font-semibold"
+                            :class="filter === f ? 'bg-primary/10 text-primary' : 'text-muted-foreground'">
+                            {{ formatNumber(getFilterCount(f)) }}
+                        </span>
                     </button>
                 </template>
+                </div>
             </div>
 
             <!-- Folders Section -->
@@ -457,7 +597,7 @@ const {
                 <div class="flex items-center gap-2">
                     <h3 class="text-sm font-bold text-foreground">Folders</h3>
                     <span class="inline-flex items-center rounded-pill bg-bg-elevated px-2.5 py-1 text-[11px] font-bold text-muted-foreground">
-                        {{ totalFolderCount }}
+                        {{ formatNumber(filteredFolders.length) }}
                     </span>
                 </div>
                 <div class="grid gap-4 overflow-visible" :class="viewMode === 'grid' ? 'grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4' : 'grid-cols-1'">
@@ -474,7 +614,24 @@ const {
                         </div>
                         <div class="min-w-0 flex-1">
                             <p class="text-sm font-bold text-foreground truncate">{{ folder.title }}</p>
-                            <p class="text-[10px] text-muted-foreground mt-0.5">{{ folder.media_count }} files</p>
+                            <p class="text-[10px] text-muted-foreground mt-0.5 flex items-center gap-2.5">
+                                <template v-if="folder.photo_count > 0">
+                                    <svg class="w-3.5 h-3.5 text-blue-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect><circle cx="8.5" cy="8.5" r="1.5"></circle><path d="M21 15l-5-5L5 21"></path></svg>
+                                    <span class="font-medium">{{ formatNumber(folder.photo_count) }}</span>
+                                </template>
+                                <template v-if="folder.video_count > 0">
+                                    <svg class="w-3.5 h-3.5 text-purple-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="23 7 16 12 23 17 23 7"></polygon><rect x="1" y="5" width="15" height="14" rx="2" ry="2"></rect></svg>
+                                    <span class="font-medium">{{ formatNumber(folder.video_count) }}</span>
+                                </template>
+                                <template v-if="folder.file_count > 0">
+                                    <svg class="w-3.5 h-3.5 text-amber-600" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M13 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9z"></path><polyline points="13 2 13 9 20 9"></polyline></svg>
+                                    <span class="font-medium">{{ formatNumber(folder.file_count) }}</span>
+                                </template>
+                                <template v-if="folder.children_count > 0">
+                                    <svg class="w-3.5 h-3.5 text-orange-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"></path></svg>
+                                    <span class="font-medium">{{ formatNumber(folder.children_count) }}</span>
+                                </template>
+                            </p>
                         </div>
 
                         <div class="relative overflow-visible" @click.stop>
@@ -499,23 +656,23 @@ const {
             <!-- Files Section -->
             <div v-if="filteredFiles.length > 0" class="space-y-4 files-layer">
                 <div class="flex items-center gap-2">
-                    <h3 class="text-sm font-bold text-foreground">Files</h3>
+                    <h3 class="text-sm font-bold text-foreground">{{ sectionTitle }}</h3>
                     <span class="inline-flex items-center rounded-pill bg-bg-elevated px-2.5 py-1 text-[11px] font-bold text-muted-foreground">
-                        {{ totalFileCount }}
+                        {{ formatNumber(filteredFiles.length) }}
                     </span>
                 </div>
 
                 <div
                     v-if="viewMode === 'grid'"
                     ref="masonryRef"
-                    class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 items-start"
-                    style="grid-auto-rows: 10px; row-gap: 0; column-gap: 1rem; grid-auto-flow: dense;"
+                    class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 items-start"
+                    style="grid-auto-rows: 10px; row-gap: 12px; column-gap: 0.5rem; grid-auto-flow: dense;"
                 >
                     <div
                         v-for="file in filteredFiles"
                         :key="file.id"
                         :data-file-id="file.id"
-                        :style="{ gridRowEnd: 'span ' + (spanMap[file.id] || 22) }"
+                        :style="{ gridRowEnd: 'span ' + getFileSpan(file) }"
                         @click="openPreview(file)"
                         class="group relative w-full rounded-2xl overflow-hidden border border-border bg-bg-elevated cursor-pointer hover:border-primary/50 transition-all shadow-sm hover:shadow-xl animate-fade-in-up"
                     >
@@ -526,7 +683,7 @@ const {
                                 :use-thumbnail="true"
                                 image-class="w-full h-auto block object-cover transition-transform duration-700 group-hover:scale-105"
                                 video-class="w-full h-auto block object-cover transition-transform duration-700 group-hover:scale-105"
-                                fallback-class="flex h-[180px] w-full items-center justify-center bg-bg-hover text-sm font-bold uppercase tracking-[0.24em] text-muted-foreground"
+                                fallback-class="flex w-full items-center justify-center bg-bg-hover text-sm font-bold uppercase tracking-[0.24em] text-muted-foreground"
                                 @load="dims => onFileLoad(file.id, dims)"
                             />
 

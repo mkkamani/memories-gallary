@@ -35,4 +35,10 @@ return [
         ],
     ],
 
+    'ffmpeg' => [
+        'binary' => env('FFMPEG_BINARY', 'ffmpeg'),
+        'thumbnail_seek' => env('FFMPEG_THUMBNAIL_SEEK', '00:00:01.000'),
+        'timeout' => (int) env('FFMPEG_TIMEOUT', 30),
+    ],
+
 ];

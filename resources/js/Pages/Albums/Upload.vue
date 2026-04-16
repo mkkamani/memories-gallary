@@ -3,6 +3,7 @@ import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout.vue';
 import { Head, Link, router, usePage } from '@inertiajs/vue3';
 import { computed, ref } from 'vue';
 import axios from 'axios';
+import { formatNumber } from '@/utils/number';
 
 const props = defineProps({
     album: {
@@ -180,7 +181,7 @@ const submitUpload = async () => {
     } else {
         processing.value = false;
         if (successfulUploads.value > 0) {
-            clientErrors.value.push(`Successfully uploaded ${successfulUploads.value} files, but ${failedUploads.value} failed.`);
+            clientErrors.value.push(`Successfully uploaded ${formatNumber(successfulUploads.value)} files, but ${formatNumber(failedUploads.value)} failed.`);
         }
     }
 };
@@ -293,7 +294,7 @@ const removeSelectedFile = (index) => {
                     </div>
 
                     <div v-if="totalSelected > 0" class="space-y-2 rounded-xl border border-border bg-bg-elevated/40 p-4">
-                        <p class="text-sm font-bold text-foreground">{{ totalSelected }} file(s) selected</p>
+                        <p class="text-sm font-bold text-foreground">{{ formatNumber(totalSelected) }} file(s) selected</p>
                         <div class="max-h-44 space-y-2 overflow-y-auto pr-1">
                             <div v-for="(file, index) in selectedFiles" :key="`${file.name}-${file.size}`" class="flex items-center justify-between rounded-lg border border-border bg-bg-card px-3 py-2 text-sm">
                                 <span class="truncate pr-3 text-foreground">{{ file.name }}</span>
@@ -316,7 +317,7 @@ const removeSelectedFile = (index) => {
                     <div v-if="processing" class="mt-4 mb-6">
                         <div class="flex items-center justify-between mb-2">
                             <span class="text-sm font-semibold text-foreground">
-                                Uploading {{ currentUploadIndex + 1 }} of {{ totalSelected }}...
+                                Uploading {{ formatNumber(currentUploadIndex + 1) }} of {{ formatNumber(totalSelected) }}...
                             </span>
                             <span class="text-sm font-bold text-primary">{{ uploadProgress }}%</span>
                         </div>

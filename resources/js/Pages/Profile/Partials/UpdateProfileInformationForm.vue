@@ -30,7 +30,7 @@ const roleLabel = computed(() => {
     return 'Member';
 });
 
-const canEditRole = computed(() => ['admin', 'manager'].includes(String(user.role || '').toLowerCase()));
+const canEditRole = computed(() => String(user.role || '').toLowerCase() === 'admin');
 </script>
 
 <template>

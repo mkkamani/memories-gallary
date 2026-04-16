@@ -5,6 +5,7 @@ import { computed, ref, watch } from 'vue';
 import Modal from '@/Components/Modal.vue';
 import debounce from 'lodash/debounce';
 import { getInitials } from '@/utils/initials';
+import { formatNumber } from '@/utils/number';
 
 const props = defineProps({
     users: Object,
@@ -113,7 +114,7 @@ const paginationSummary = computed(() => {
     const to = props.users.to || 0;
     const total = props.users.total || 0;
 
-    return `Showing ${from} to ${to} of ${total} entries`;
+    return `Showing ${formatNumber(from)} to ${formatNumber(to)} of ${formatNumber(total)} entries`;
 });
 
 const preserveSearchField = () => {

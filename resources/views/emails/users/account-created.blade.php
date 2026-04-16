@@ -57,7 +57,7 @@
                                 <tr>
                                     <td>
                                         <a href="{{ $loginUrl }}" style="display:inline-block;background:#ff5a1f;color:#ffffff;text-decoration:none;font-weight:700;font-size:15px;padding:12px 22px;border-radius:999px;">
-                                            Go to Login
+                                            Let’s Go
                                         </a>
                                     </td>
                                 </tr>

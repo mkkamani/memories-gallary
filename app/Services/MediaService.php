@@ -9,37 +9,56 @@ use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Str;
 use Illuminate\Support\Facades\Log;
 use App\Interfaces\StorageServiceInterface;
+use App\Support\MediaDimensionExtractor;
 
 class MediaService
 {
     protected $storageService;
+    protected ThumbnailService $thumbnailService;
 
-    public function __construct(StorageServiceInterface $storageService)
+    public function __construct(StorageServiceInterface $storageService, ThumbnailService $thumbnailService)
     {
-        $this->storageService = $storageService;
+        $this->storageService   = $storageService;
+        $this->thumbnailService = $thumbnailService;
     }
 
     public function upload(UploadedFile $file, User $user, ?Album $album = null)
     {
         $albumPath = $this->getAlbumUploadPath($album);
+        $mimeType  = (string) ($file->getMimeType() ?: 'application/octet-stream');
+        $fileType  = str_starts_with($mimeType, 'video') ? 'video' : 'image';
 
         $path = $this->storageService->uploadFile($file, $albumPath);
-        $mimeType = (string) ($file->getMimeType() ?: 'application/octet-stream');
-        $fileType = str_starts_with($mimeType, 'video') ? 'video' : 'image';
-        [$width, $height] = $this->extractImageDimensions($file, $mimeType);
+        [$width, $height] = MediaDimensionExtractor::fromUploadedFile($file, $mimeType);
 
-        return Media::create([
-            "user_id"   => $user->id,
-            "album_id"  => $album?->id,
-            "file_path" => $path,
-            "file_name" => $file->getClientOriginalName(),
-            "file_type" => $fileType,
-            "file_size" => $file->getSize(),
-            "mime_type" => $mimeType,
-            "width"     => $width,
-            "height"    => $height,
-            "taken_at"  => now(),
+        $media = Media::create([
+            'user_id'   => $user->id,
+            'album_id'  => $album?->id,
+            'file_path' => $path,
+            'file_name' => $file->getClientOriginalName(),
+            'file_type' => $fileType,
+            'file_size' => $file->getSize(),
+            'mime_type' => $mimeType,
+            'width'     => $width,
+            'height'    => $height,
+            'taken_at'  => now(),
         ]);
+
+        // Generate thumbnail; errors are logged but never bubble up.
+        try {
+            $status = $this->thumbnailService->generateWithStatus($media);
+
+            if ($status === 'generated' && $this->shouldSyncDimensionsFromThumbnail($media)) {
+                $this->thumbnailService->syncDimensionsFromThumbnail($media);
+            }
+        } catch (\Throwable $e) {
+            Log::warning('MediaService: thumbnail generation failed after upload.', [
+                'media_id' => $media->id,
+                'error'    => $e->getMessage(),
+            ]);
+        }
+
+        return $media;
     }
 
     public function getAlbumUploadPath(?Album $album): string
@@ -65,33 +84,6 @@ class MediaService
     {
         $albumPath = $this->getAlbumUploadPath($album);
         return $this->storageService->uploadFile($file, $albumPath);
-    }
-
-    /**
-     * Read intrinsic dimensions for uploaded image files.
-     *
-     * Returns [null, null] when dimensions cannot be determined.
-     * SVG is intentionally skipped because raster pixel dimensions are optional.
-     *
-     * @return array{0:int|null,1:int|null}
-     */
-    private function extractImageDimensions(UploadedFile $file, string $mimeType): array
-    {
-        if (!str_starts_with($mimeType, 'image/') || $mimeType === 'image/svg+xml') {
-            return [null, null];
-        }
-
-        $realPath = $file->getRealPath();
-        if (!$realPath) {
-            return [null, null];
-        }
-
-        $size = @getimagesize($realPath);
-        if (!is_array($size) || empty($size[0]) || empty($size[1])) {
-            return [null, null];
-        }
-
-        return [(int) $size[0], (int) $size[1]];
     }
 
     /**
@@ -128,6 +120,16 @@ class MediaService
     public function purge(Media $media): bool
     {
         try {
+            $this->thumbnailService->delete($media);
+        } catch (\Throwable $e) {
+            Log::warning('MediaService::purge – could not delete thumbnail; proceeding with media purge.', [
+                'media_id' => $media->id,
+                'thumbnail_path' => $media->thumbnail_path,
+                'error' => $e->getMessage(),
+            ]);
+        }
+
+        try {
             $this->storageService->deleteFile($media->file_path);
         } catch (\Throwable $e) {
             // Log the R2 error but still remove the DB record so orphaned rows
@@ -141,5 +143,21 @@ class MediaService
         }
 
         return (bool) $media->forceDelete();
+    }
+
+    private function shouldSyncDimensionsFromThumbnail(Media $media): bool
+    {
+        if (empty($media->thumbnail_path)) {
+            return false;
+        }
+
+        $width = (int) ($media->width ?? 0);
+        $height = (int) ($media->height ?? 0);
+
+        if ($width <= 0 || $height <= 0) {
+            return true;
+        }
+
+        return false;
     }
 }

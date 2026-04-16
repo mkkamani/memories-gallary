@@ -33,6 +33,20 @@ return [
 
     /*
     |--------------------------------------------------------------------------
+    | Media CDN URL
+    |--------------------------------------------------------------------------
+    |
+    | When set, media stored on object storage disks such as Cloudflare R2
+    | will be served through this CDN/Worker origin instead of presigned URLs
+    | or local thumbnails. This is used for fast, cacheable listing and
+    | preview URLs while keeping local-public storage behavior unchanged.
+    |
+    */
+
+    'cdn_url' => env('CDN_URL', ''),
+
+    /*
+    |--------------------------------------------------------------------------
     | Filesystem Disks
     |--------------------------------------------------------------------------
     |

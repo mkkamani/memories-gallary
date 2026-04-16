@@ -5,6 +5,7 @@ import MediaRenderer from '@/Components/MediaRenderer.vue';
 import { Head, router } from '@inertiajs/vue3';
 import { computed, ref } from 'vue';
 import { formatFileSize } from '@/utils/media';
+import { formatNumber } from '@/utils/number';
 
 const props = defineProps({
     media: Array,
@@ -66,7 +67,7 @@ const nextPurgeIn = computed(() => {
 const stats = computed(() => [
     {
         label: 'Deleted Files',
-        value: mediaItems.value.length,
+        value: formatNumber(mediaItems.value.length),
         accent: 'from-primary/20 via-primary/10 to-transparent',
         text: 'text-primary',
         icon: 'M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z',
@@ -74,7 +75,7 @@ const stats = computed(() => [
     },
     {
         label: 'Deleted Albums',
-        value: albumItems.value.length,
+        value: formatNumber(albumItems.value.length),
         accent: 'from-orange-500/20 via-orange-500/10 to-transparent',
         text: 'text-orange-500',
         icon: 'M3 7v10a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-6l-2-2H5a2 2 0 00-2 2z',
@@ -90,7 +91,7 @@ const stats = computed(() => [
     },
     {
         label: 'Urgent Review',
-        value: urgentItems.value,
+        value: formatNumber(urgentItems.value),
         accent: 'from-error/20 via-error/10 to-transparent',
         text: 'text-error',
         icon: 'M12 9v2m0 4h.01M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z',
@@ -271,7 +272,7 @@ const modalDescription = computed(() => {
                         </div>
                         <span class="inline-flex items-center gap-2 rounded-full border border-border bg-bg-elevated px-3 py-1.5 text-xs font-bold text-muted-foreground">
                             <span class="h-2 w-2 rounded-full bg-orange-500"></span>
-                            {{ albumItems.length }} album{{ albumItems.length === 1 ? '' : 's' }}
+                            {{ formatNumber(albumItems.length) }} album{{ albumItems.length === 1 ? '' : 's' }}
                         </span>
                     </div>
 
@@ -359,7 +360,7 @@ const modalDescription = computed(() => {
                         </div>
                         <span class="inline-flex items-center gap-2 rounded-full border border-border bg-bg-elevated px-3 py-1.5 text-xs font-bold text-muted-foreground">
                             <span class="h-2 w-2 rounded-full bg-primary"></span>
-                            {{ mediaItems.length }} file{{ mediaItems.length === 1 ? '' : 's' }}
+                            {{ formatNumber(mediaItems.length) }} file{{ mediaItems.length === 1 ? '' : 's' }}
                         </span>
                     </div>
 

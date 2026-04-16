@@ -27,14 +27,21 @@ class ProfileController extends Controller
      */
     public function update(ProfileUpdateRequest $request): RedirectResponse
     {
-        $request->user()->fill($request->validated());
+        $validated = $request->validated();
+
+        // Defense-in-depth: only admins can update role from profile endpoint.
+        if (($request->user()->role ?? null) !== 'admin') {
+            unset($validated['role']);
+        }
+
+        $request->user()->fill($validated);
 
         if ($request->hasFile('avatar')) {
             // Delete old avatar if it exists and isn't an external URL
             if ($request->user()->getOriginal('avatar') && !str_starts_with($request->user()->getOriginal('avatar'), 'http')) {
                 \Illuminate\Support\Facades\Storage::disk('public')->delete($request->user()->getOriginal('avatar'));
             }
-            
+
             // Upload new avatar locally
             $path = $request->file('avatar')->store('avatars', 'public');
             $request->user()->avatar = $path;

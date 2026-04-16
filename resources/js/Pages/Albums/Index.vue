@@ -8,6 +8,7 @@ import { downloadFile } from '@/utils/media';
 import DangerButton from '@/Components/DangerButton.vue';
 import SecondaryButton from '@/Components/SecondaryButton.vue';
 import debounce from 'lodash/debounce';
+import { formatNumber } from '@/utils/number';
 
 const props = defineProps({
     albums: Array,
@@ -45,6 +46,13 @@ watch([search, locationFilter], debounce(() => {
 const page = usePage();
 const canManage = computed(() => page.props.auth.user.role === 'admin');
 const canCreateActions = computed(() => ['admin', 'manager', 'member'].includes(page.props.auth.user.role));
+
+const locationBadgeClass = (location) => {
+    if (location === 'Ahmedabad') return 'bg-primary/10 text-primary';
+    if (location === 'Rajkot') return 'bg-info/10 text-info';
+
+    return 'bg-bg-elevated text-muted-foreground';
+};
 
 const confirmDelete = (album) => {
     albumToDelete.value = album;
@@ -236,7 +244,7 @@ const submitImport = () => {
                         <option value="Rajkot">Rajkot</option>
                     </select>
 
-                    <input v-model="search" type="text" placeholder="Search albums..." class="h-11 bg-bg-input border-border text-foreground rounded-pill shadow-sm focus:border-primary focus:ring-1 focus:ring-primary w-full md:w-64 px-4 text-sm" />
+                    <input v-model="search" type="text" placeholder="Search albums..." class="hidden md:block h-11 bg-bg-input border-border text-foreground rounded-pill shadow-sm focus:border-primary focus:ring-1 focus:ring-primary md:w-64 px-4 text-sm" />
 
                     <div class="relative" v-if="canCreateActions">
                         <button @click.stop="showNewMenu = !showNewMenu" class="flex items-center gap-2 h-11 px-6 rounded-pill bg-gradient-to-r from-primary to-accent-hover text-primary-foreground font-bold text-sm shadow-lg hover:translate-y-[-2px] transition-all whitespace-nowrap">
@@ -295,6 +303,7 @@ const submitImport = () => {
                                     v-if="album.thumbnail_media"
                                     :media="album.thumbnail_media"
                                     :alt="album.title"
+                                    :use-thumbnail="true"
                                     image-class="w-full h-full object-cover will-change-transform group-hover:scale-[1.035] transition-transform duration-700 ease-out"
                                     video-class="w-full h-full object-cover will-change-transform group-hover:scale-[1.035] transition-transform duration-700 ease-out"
                                     fallback-class="flex h-full w-full items-center justify-center bg-purple-500/5 text-xs font-bold uppercase tracking-[0.24em] text-purple-500"
@@ -310,7 +319,20 @@ const submitImport = () => {
                                     <svg class="w-4 h-4 text-purple-500 fill-purple-500/20" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 7v10a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-6l-2-2H5a2 2 0 00-2 2z"/></svg>
                                     <h3 class="text-sm font-bold text-foreground truncate">{{ album.title }}</h3>
                                 </div>
-                                <p class="text-[11px] text-muted-foreground mt-0.5">{{ album.media_count }} items</p>
+                                <p class="text-[11px] text-muted-foreground mt-0.5 flex items-center gap-2.5">
+                                    <template v-if="album.photo_count > 0">
+                                        <svg class="w-3.5 h-3.5 text-blue-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect><circle cx="8.5" cy="8.5" r="1.5"></circle><path d="M21 15l-5-5L5 21"></path></svg>
+                                        <span class="font-medium">{{ formatNumber(album.photo_count) }}</span>
+                                    </template>
+                                    <template v-if="album.video_count > 0">
+                                        <svg class="w-3.5 h-3.5 text-purple-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="23 7 16 12 23 17 23 7"></polygon><rect x="1" y="5" width="15" height="14" rx="2" ry="2"></rect></svg>
+                                        <span class="font-medium">{{ formatNumber(album.video_count) }}</span>
+                                    </template>
+                                    <template v-if="album.file_count > 0">
+                                        <svg class="w-3.5 h-3.5 text-amber-600" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M13 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9z"></path><polyline points="13 2 13 9 20 9"></polyline></svg>
+                                        <span class="font-medium">{{ formatNumber(album.file_count) }}</span>
+                                    </template>
+                                </p>
                             </div>
                         </Link>
                     </template>
@@ -333,6 +355,7 @@ const submitImport = () => {
                                 v-if="album.thumbnail_media"
                                 :media="album.thumbnail_media"
                                 :alt="album.title"
+                                :use-thumbnail="true"
                                     image-class="w-full h-full object-cover will-change-transform group-hover:scale-[1.035] transition-transform duration-700 ease-out"
                                     video-class="w-full h-full object-cover will-change-transform group-hover:scale-[1.035] transition-transform duration-700 ease-out"
                                 fallback-class="flex h-full w-full items-center justify-center bg-primary/5 text-xs font-bold uppercase tracking-[0.24em] text-primary/60"
@@ -361,6 +384,7 @@ const submitImport = () => {
                                     v-else-if="getCoverFallbackMedia(album)"
                                     :media="getCoverFallbackMedia(album)"
                                     :alt="album.title"
+                                    :use-thumbnail="true"
                                     image-class="w-full h-full object-cover will-change-transform group-hover:scale-[1.035] transition-transform duration-700 ease-out"
                                     video-class="w-full h-full object-cover will-change-transform group-hover:scale-[1.035] transition-transform duration-700 ease-out"
                                     fallback-class="flex h-full w-full items-center justify-center bg-primary/5 text-xs font-bold uppercase tracking-[0.24em] text-primary/60"
@@ -427,7 +451,7 @@ const submitImport = () => {
                                     v-if="isOverflowPreviewTile(album, idx)"
                                     class="absolute inset-0 z-10 bg-black/55 backdrop-blur-[1px] flex items-center justify-center"
                                 >
-                                    <span class="text-white text-sm font-bold tracking-wide">+{{ getHiddenPreviewCount(album) }}</span>
+                                    <span class="text-white text-sm font-bold tracking-wide">+{{ formatNumber(getHiddenPreviewCount(album)) }}</span>
                                 </div>
                             </div>
                         </div>
@@ -438,24 +462,41 @@ const submitImport = () => {
                                 <svg class="w-4 h-4 text-orange-500 fill-orange-500/20" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 7v10a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-6l-2-2H5a2 2 0 00-2 2z"/></svg>
                                 <h3 class="text-sm font-bold text-foreground truncate">{{ album.title }}</h3>
                             </div>
-                            <p class="text-[11px] text-muted-foreground mt-0.5">{{ album.media_count }} items<template v-if="album.children_count">, {{ album.children_count }} folders</template></p>
+                            <p class="text-[11px] text-muted-foreground mt-0.5 flex items-center gap-2.5">
+                                <template v-if="album.total_photo_count > 0">
+                                    <svg class="w-3.5 h-3.5 text-blue-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect><circle cx="8.5" cy="8.5" r="1.5"></circle><path d="M21 15l-5-5L5 21"></path></svg>
+                                    <span class="font-medium">{{ formatNumber(album.total_photo_count) }}</span>
+                                </template>
+                                <template v-if="album.total_video_count > 0">
+                                    <svg class="w-3.5 h-3.5 text-purple-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="23 7 16 12 23 17 23 7"></polygon><rect x="1" y="5" width="15" height="14" rx="2" ry="2"></rect></svg>
+                                    <span class="font-medium">{{ formatNumber(album.total_video_count) }}</span>
+                                </template>
+                                <template v-if="album.total_file_count > 0">
+                                    <svg class="w-3.5 h-3.5 text-amber-600" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M13 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9z"></path><polyline points="13 2 13 9 20 9"></polyline></svg>
+                                    <span class="font-medium">{{ formatNumber(album.total_file_count) }}</span>
+                                </template>
+                                <template v-if="album.total_folder_count > 0">
+                                    <svg class="w-3.5 h-3.5 text-orange-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"></path></svg>
+                                    <span class="font-medium">{{ formatNumber(album.total_folder_count) }}</span>
+                                </template>
+                            </p>
 
                         </div>
                     </div>
                 </template>
             </div>
 
-            <div v-else class="bg-bg-card border border-border rounded-2xl overflow-visible">
-                <div class="grid grid-cols-[1fr_120px_120px_150px_40px] items-center px-6 py-3 border-b border-border bg-bg-elevated/50">
+            <div v-else class="bg-bg-card border border-border rounded-2xl overflow-hidden">
+                <div class="grid grid-cols-[minmax(0,1fr)_88px_96px_40px] sm:grid-cols-[1fr_120px_120px_150px_40px] items-center px-4 sm:px-6 py-3 border-b border-border bg-bg-elevated/50">
                     <span class="text-xs font-bold text-muted-foreground uppercase tracking-wider">Name</span>
                     <span class="text-xs font-bold text-muted-foreground uppercase tracking-wider text-center">Items</span>
                     <span class="text-xs font-bold text-muted-foreground uppercase tracking-wider">Location</span>
-                    <span class="text-xs font-bold text-muted-foreground uppercase tracking-wider">Last Modified</span>
+                    <span class="hidden sm:block text-xs font-bold text-muted-foreground uppercase tracking-wider">Last Modified</span>
                     <span />
                 </div>
                 <div class="divide-y divide-border">
                     <template v-for="album in userAlbums" :key="album.id">
-                        <div class="grid grid-cols-[1fr_120px_120px_150px_40px] items-center px-6 py-4 hover:bg-bg-hover transition-colors cursor-pointer group" @click="router.visit(route('albums.show', album.path || album.slug || album.id))">
+                        <div class="grid grid-cols-[minmax(0,1fr)_88px_96px_40px] sm:grid-cols-[1fr_120px_120px_150px_40px] items-center px-4 sm:px-6 py-4 hover:bg-bg-hover transition-colors cursor-pointer group" @click="router.visit(route('albums.show', album.path || album.slug || album.id))">
                             <div class="flex items-center gap-4">
                                 <button @click="togglePin($event, album)" class="p-1.5 rounded-full transition-all" :class="pinnedAlbums.includes(album.id) ? 'text-primary' : 'text-muted-foreground opacity-0 group-hover:opacity-100'">
                                     <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-pin w-4 h-4 fill-current"><path d="M12 17v5"></path><path d="M9 10.76a2 2 0 0 1-1.11 1.79l-1.78.9A2 2 0 0 0 5 15.24V16a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1v-.76a2 2 0 0 0-1.11-1.79l-1.78-.9A2 2 0 0 1 15 10.76V7a1 1 0 0 1 1-1 2 2 0 0 0 0-4H8a2 2 0 0 0 0 4 1 1 0 0 1 1 1z"></path></svg>
@@ -463,11 +504,35 @@ const submitImport = () => {
                                 <div class="w-10 h-10 rounded-lg bg-orange-500/10 flex items-center justify-center text-orange-500">
                                     <svg class="w-5 h-5 fill-orange-500/20" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 7v10a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-6l-2-2H5a2 2 0 00-2 2z"/></svg>
                                 </div>
-                                <span class="text-sm font-bold text-foreground">{{ album.title }}</span>
+                                <div class="min-w-0">
+                                    <span class="block truncate text-sm font-bold text-foreground">{{ album.title }}</span>
+                                    <span class="block text-[11px] text-muted-foreground sm:hidden">{{ new Date(album.created_at || Date.now()).toLocaleDateString() }}</span>
+                                </div>
                             </div>
-                            <span class="text-sm text-muted-foreground text-center">{{ album.media_count }}</span>
-                            <span class="text-[11px] font-medium text-blue-500">{{ album.location || '-' }}</span>
-                            <span class="text-sm text-muted-foreground">{{ new Date(album.created_at || Date.now()).toLocaleDateString() }}</span>
+                            <span class="text-sm text-muted-foreground text-center flex items-center justify-center gap-2.5">
+                                <template v-if="album.total_photo_count > 0">
+                                    <svg class="w-4 h-4 text-blue-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect><circle cx="8.5" cy="8.5" r="1.5"></circle><path d="M21 15l-5-5L5 21"></path></svg>
+                                    <span class="font-medium">{{ formatNumber(album.total_photo_count) }}</span>
+                                </template>
+                                <template v-if="album.total_video_count > 0">
+                                    <svg class="w-4 h-4 text-purple-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="23 7 16 12 23 17 23 7"></polygon><rect x="1" y="5" width="15" height="14" rx="2" ry="2"></rect></svg>
+                                    <span class="font-medium">{{ formatNumber(album.total_video_count) }}</span>
+                                </template>
+                                <template v-if="album.total_file_count > 0">
+                                    <svg class="w-4 h-4 text-amber-600" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M13 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9z"></path><polyline points="13 2 13 9 20 9"></polyline></svg>
+                                    <span class="font-medium">{{ formatNumber(album.total_file_count) }}</span>
+                                </template>
+                                <template v-if="album.total_folder_count > 0">
+                                    <svg class="w-4 h-4 text-orange-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"></path></svg>
+                                    <span class="font-medium">{{ formatNumber(album.total_folder_count) }}</span>
+                                </template>
+                            </span>
+                            <div>
+                                <span class="inline-flex rounded-full px-3 py-1 text-xs font-semibold" :class="locationBadgeClass(album.location)">
+                                    {{ album.location || '-' }}
+                                </span>
+                            </div>
+                            <span class="hidden sm:block text-sm text-muted-foreground">{{ new Date(album.created_at || Date.now()).toLocaleDateString() }}</span>
                             <div class="relative">
                                 <button @click="toggleActionMenu($event, album.id)" class="p-2 rounded-full border border-border/80 bg-bg-card/90 text-foreground shadow-sm transition-all hover:bg-bg-elevated hover:border-primary/30 hover:text-foreground">
                                     <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 5v.01M12 12v.01M12 19v.01M12 6a1 1 0 110-2 1 1 0 010 2zm0 7a1 1 0 110-2 1 1 0 010 2zm0 7a1 1 0 110-2 1 1 0 010 2z"/></svg>
@@ -508,7 +573,7 @@ const submitImport = () => {
 
                 <p class="mt-2 text-sm text-muted-foreground">
                     Are you sure you want to delete <span class="font-bold text-foreground">"{{ albumToDelete?.title }}"</span>?
-                    <span v-if="albumToDelete?.children_count > 0" class="text-error font-medium"> This will also delete {{ albumToDelete.children_count }} nested album(s) inside it.</span>
+                    <span v-if="albumToDelete?.children_count > 0" class="text-error font-medium"> This will also delete {{ formatNumber(albumToDelete.children_count) }} nested album(s) inside it.</span>
                 </p>
 
                 <div class="mt-6 flex justify-end gap-3">
