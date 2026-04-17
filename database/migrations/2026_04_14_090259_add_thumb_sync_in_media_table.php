@@ -12,7 +12,7 @@ return new class extends Migration
     public function up(): void
     {
         Schema::table('media', function (Blueprint $table) {
-            $table->boolean('thumb_sync')->default(false)->after('thumb_path');
+            $table->boolean('thumb_sync')->default(false)->after('thumbnail_path');
         });
     }
 

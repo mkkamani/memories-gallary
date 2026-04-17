@@ -55,6 +55,20 @@ class Media extends Model
         return asset('storage/' . ltrim($this->file_path, '/'));
     }
 
+    protected function plainThumbnailUrl(string $disk): string
+    {
+        if ($disk === 'public') {
+            return '/storage/' . ltrim((string) $this->thumbnail_path, '/');
+        }
+
+        $baseUrl = (string) config("filesystems.disks.{$disk}.url", '');
+        if ($baseUrl !== '') {
+            return rtrim($baseUrl, '/') . '/' . ltrim((string) $this->thumbnail_path, '/');
+        }
+
+        return '/storage/' . ltrim((string) $this->thumbnail_path, '/');
+    }
+
     protected $fillable = [
         "album_id",
         "user_id",
@@ -75,7 +89,7 @@ class Media extends Model
         "taken_at" => "datetime",
     ];
 
-    protected $appends = ["url", "thumbnail_url"];
+    protected $appends = ["url", "thumbnail_url", "preview_url", "preview_fallback_url"];
 
     public function user()
     {
@@ -151,17 +165,53 @@ class Media extends Model
     {
         $disk = self::mediaDisk();
 
-        if (!empty($this->thumbnail_path)) {
-            if (self::shouldUseMediaCdn($disk) && self::mediaDiskIsObjectStorage($disk)) {
-                return $this->mediaCdnPathUrl((string) $this->thumbnail_path);
-            }
+        if (empty($this->thumbnail_path)) {
+            // If thumbnail is missing, gracefully fall back to original media URL.
+            return $this->getUrlAttribute();
+        }
 
-            // For local/public disk, keep same-origin relative URL.
+        if (self::shouldUseMediaCdn($disk) && self::mediaDiskIsObjectStorage($disk)) {
+            return $this->mediaCdnPathUrl((string) $this->thumbnail_path);
+        }
+
+        // For local/public disk, keep same-origin relative URL.
+        if ($disk === 'public') {
             return '/storage/' . ltrim((string) $this->thumbnail_path, '/');
         }
 
-        // If thumbnail is missing, gracefully fall back to original media URL.
-        return $this->getUrlAttribute();
+        // For object storage without CDN URL, use a temporary signed URL.
+        try {
+            /** @var FilesystemAdapter $storage */
+            $storage = Storage::disk($disk);
+
+            if (method_exists($storage, 'temporaryUrl')) {
+                return $storage->temporaryUrl(
+                    (string) $this->thumbnail_path,
+                    now()->addHours(6),
+                );
+            }
+
+            return $this->plainThumbnailUrl($disk);
+        } catch (\Throwable $e) {
+            Log::warning('Media: failed to generate thumbnail URL.', [
+                'media_id' => $this->id,
+                'thumbnail_path' => $this->thumbnail_path,
+                'disk' => $disk,
+                'error' => $e->getMessage(),
+            ]);
+
+            return $this->plainThumbnailUrl($disk);
+        }
+    }
+
+    public function getPreviewUrlAttribute(): ?string
+    {
+        return $this->previewDerivativeUrl('webp') ?? $this->getThumbnailUrlAttribute();
+    }
+
+    public function getPreviewFallbackUrlAttribute(): ?string
+    {
+        return $this->getThumbnailUrlAttribute();
     }
 
     /**
@@ -268,6 +318,49 @@ class Media extends Model
                 'quality' => 82,
             ])];
         })->toArray();
+    }
+
+    private function previewDerivativePath(string $ext): string
+    {
+        $albumSegment = $this->album_id ?? 0;
+        return 'previews/' . $albumSegment . '/' . $this->id . '.' . ltrim(strtolower($ext), '.');
+    }
+
+    private function previewDerivativeUrl(string $ext): ?string
+    {
+        $disk = self::mediaDisk();
+        $path = $this->previewDerivativePath($ext);
+
+        if (self::shouldUseMediaCdn($disk) && self::mediaDiskIsObjectStorage($disk)) {
+            return $this->mediaCdnPathUrl($path);
+        }
+
+        if ($disk === 'public') {
+            return '/storage/' . ltrim($path, '/');
+        }
+
+        try {
+            /** @var FilesystemAdapter $storage */
+            $storage = Storage::disk($disk);
+
+            if (method_exists($storage, 'temporaryUrl')) {
+                return $storage->temporaryUrl($path, now()->addHours(6));
+            }
+
+            $baseUrl = (string) config("filesystems.disks.{$disk}.url", '');
+            if ($baseUrl !== '') {
+                return rtrim($baseUrl, '/') . '/' . ltrim($path, '/');
+            }
+        } catch (\Throwable $e) {
+            Log::warning('Media: failed to generate preview derivative URL.', [
+                'media_id' => $this->id,
+                'path' => $path,
+                'disk' => $disk,
+                'error' => $e->getMessage(),
+            ]);
+        }
+
+        return null;
     }
 }
 

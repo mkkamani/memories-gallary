@@ -5,14 +5,20 @@ namespace App\Services;
 use App\Models\User;
 use App\Models\Album;
 use App\Models\Media;
+use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Str;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Storage;
 use App\Interfaces\StorageServiceInterface;
+use Intervention\Image\ImageManager;
+use Intervention\Image\Drivers\Gd\Driver;
+use Intervention\Image\Encoders\JpegEncoder;
 
 class AlbumService
 {
     private const COVER_IMAGE_EXTENSIONS = ['jpg', 'jpeg', 'png', 'gif', 'webp', 'avif', 'heic', 'heif'];
+    private const COVER_THUMBNAIL_SIZE = 480;
+    private const COVER_THUMBNAIL_QUALITY = 82;
 
     public function __construct(
         protected StorageServiceInterface $storageService,
@@ -185,6 +191,29 @@ class AlbumService
     {
         $basePath = (string) ($album->r2_path ?: $this->computeR2Path($album));
         return $this->getCoverImageStemForAlbumPath($basePath, $album->id, $album->title);
+    }
+
+    public function generateCoverThumbnailFromUpload(UploadedFile $file, string $coverPath): string
+    {
+        $disk = (string) config('filesystems.media_disk', 'public');
+        $imageManager = new ImageManager(
+            new Driver(),
+            autoOrientation: true,
+            decodeAnimation: false,
+            strip: true,
+        );
+
+        $image = $imageManager->make($file->getPathname());
+        $image->resize(self::COVER_THUMBNAIL_SIZE, self::COVER_THUMBNAIL_SIZE, function ($constraint) {
+            $constraint->aspectRatio();
+            $constraint->upsize();
+        });
+
+        $jpeg = $image->encode(new JpegEncoder(self::COVER_THUMBNAIL_QUALITY, progressive: true, strip: true))->toString();
+        $coverPath = trim($coverPath, '/');
+        Storage::disk($disk)->put($coverPath, $jpeg);
+
+        return $coverPath;
     }
 
     public function deleteCoverImageVariants(string $coverStem, ?string $exceptPath = null): void

@@ -1,6 +1,7 @@
 <script setup>
 import heic2any from 'heic2any';
 import { computed, onBeforeUnmount, ref, watch } from 'vue';
+import { decodeHeicBlobWithLibheif } from '@/utils/heicDecode';
 
 defineOptions({
     inheritAttrs: false,
@@ -226,6 +227,8 @@ const mediaProxyUrl = computed(() => {
  * This may be a local thumbnail path or a Worker/CDN URL.
  */
 const localThumbnailUrl = computed(() => props.media?.thumbnail_url || null);
+const localPreviewUrl = computed(() => props.media?.preview_url || null);
+const localPreviewFallbackUrl = computed(() => props.media?.preview_fallback_url || null);
 
 const workerOrigin = computed(() => {
     for (const candidate of [props.media?.url, localThumbnailUrl.value]) {
@@ -325,6 +328,25 @@ const cleanupObjectUrl = () => {
     }
 };
 
+const preloadImageUrl = (url) => new Promise((resolve, reject) => {
+    if (!url) {
+        reject(new Error('Missing image URL to preload.'));
+        return;
+    }
+
+    const img = new Image();
+    img.decoding = 'async';
+    img.onload = () => resolve(true);
+    img.onerror = () => reject(new Error('Image preload failed.'));
+    img.src = url;
+
+    if (typeof img.decode === 'function') {
+        img.decode().then(() => resolve(true)).catch(() => {
+            // Keep onload/onerror as fallback path for older browsers.
+        });
+    }
+});
+
 const getHeicSourceMimeType = () => {
     if (mimeType.value.includes('heif')) {
         return 'image/heif';
@@ -333,15 +355,17 @@ const getHeicSourceMimeType = () => {
     return 'image/heic';
 };
 
-const convertHeicToBrowserImage = async () => {
+const convertHeicToBrowserImage = async ({ silent = false, preserveOnFail = false } = {}) => {
     if (!isHeic.value || attemptedHeicConversion.value) {
         return false;
     }
 
     attemptedHeicConversion.value = true;
-    isLoading.value = true;
-    conversionFailed.value = false;
-    hasImageLoaded.value = false;
+    if (!silent) {
+        isLoading.value = true;
+        conversionFailed.value = false;
+        hasImageLoaded.value = false;
+    }
 
     try {
         const fetchUrl = heicProxyUrl.value || mediaProxyUrl.value;
@@ -363,18 +387,45 @@ const convertHeicToBrowserImage = async () => {
             type: getHeicSourceMimeType(),
         });
 
-        const converted = await heic2any({
-            blob: heicBlob,
-            toType: 'image/jpeg',
-            quality: 0.9,
-        });
+        let outputBlob = null;
 
-        const outputBlob = Array.isArray(converted) ? converted[0] : converted;
-        objectUrl = URL.createObjectURL(outputBlob);
-        resolvedUrl.value = objectUrl;
+        try {
+            // Prefer libheif-js: it decodes top-level HEIC image items and avoids
+            // accidental low-res embedded preview selection.
+            outputBlob = await decodeHeicBlobWithLibheif(heicBlob, {
+                mimeType: 'image/png',
+                quality: 0.98,
+            });
+        } catch (_libheifError) {
+            // Keep heic2any as a compatibility fallback for browsers/devices where
+            // wasm decoding fails, so preview still remains functional.
+            const converted = await heic2any({
+                blob: heicBlob,
+                toType: 'image/jpeg',
+                quality: 0.95,
+            });
+
+            outputBlob = Array.isArray(converted) ? converted[0] : converted;
+        }
+
+        const nextObjectUrl = URL.createObjectURL(outputBlob);
+
+        // Prevent preview flicker: preload the decoded HEIC object URL fully,
+        // then swap src in one step so the old image stays visible until ready.
+        if (props.preview && silent) {
+            await preloadImageUrl(nextObjectUrl);
+        }
+
+        objectUrl = nextObjectUrl;
+        resolvedUrl.value = nextObjectUrl;
+        conversionFailed.value = false;
 
         return true;
     } catch (_error) {
+        if (silent && preserveOnFail) {
+            return false;
+        }
+
         // heic2any can't parse every HEIC variant (codec profiles, HDR, etc.).
         // The server generates JPG thumbnails server-side, so fall back to the
         // thumbnail URL before showing the "HEIC" placeholder — gives a degraded
@@ -390,7 +441,9 @@ const convertHeicToBrowserImage = async () => {
         }
         return false;
     } finally {
-        isLoading.value = false;
+        if (!silent) {
+            isLoading.value = false;
+        }
     }
 };
 
@@ -428,9 +481,30 @@ const syncUrl = async () => {
 
     // Preview mode must always use original media for quality/zoom behavior.
     if (props.preview) {
+        let hasFastPreview = false;
+
+        if (!isVideo.value) {
+            if (localPreviewUrl.value) {
+                resolvedUrl.value = localPreviewUrl.value;
+                hasFastPreview = true;
+            }
+
+            if (!hasFastPreview && localPreviewFallbackUrl.value) {
+                resolvedUrl.value = localPreviewFallbackUrl.value;
+                hasFastPreview = true;
+            }
+        }
+
         if (isHeic.value) {
-            if (heicDisplayFallbackUrl.value) {
+            if (!hasFastPreview && heicDisplayFallbackUrl.value) {
                 resolvedUrl.value = heicDisplayFallbackUrl.value;
+                hasFastPreview = true;
+            }
+
+            if (hasFastPreview) {
+                // Keep fast derivative visible, then silently upgrade to
+                // full-quality conversion from original HEIC bytes.
+                await convertHeicToBrowserImage({ silent: true, preserveOnFail: true });
             } else {
                 // Only attempt conversion when no server-side JPG thumbnail exists.
                 await convertHeicToBrowserImage();
@@ -480,6 +554,16 @@ const onVideoError = () => {
 };
 
 const onImageError = async () => {
+    if (props.preview && resolvedUrl.value === localPreviewUrl.value && localPreviewFallbackUrl.value) {
+        resolvedUrl.value = localPreviewFallbackUrl.value;
+        return;
+    }
+
+    if (props.preview && resolvedUrl.value === localPreviewFallbackUrl.value && mediaOriginalUrl.value) {
+        resolvedUrl.value = mediaOriginalUrl.value;
+        return;
+    }
+
     if (
         props.useThumbnail
         && resolvedThumbnailUrl.value
@@ -522,7 +606,7 @@ const onImageError = async () => {
 };
 
 watch(
-    () => [props.media?.id, props.media?.url, props.media?.thumbnail_url, props.media?.file_name, props.media?.mime_type, props.media?.file_type, props.media?.width, props.media?.height],
+    () => [props.media?.id, props.media?.url, props.media?.thumbnail_url, props.media?.preview_url, props.media?.preview_fallback_url, props.media?.file_name, props.media?.mime_type, props.media?.file_type, props.media?.width, props.media?.height],
     () => {
         syncUrl();
     },

@@ -1,7 +1,7 @@
 <script setup>
 import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout.vue';
 import { Head, Link, router, usePage } from '@inertiajs/vue3';
-import { ref, computed, nextTick, onMounted, onBeforeUnmount } from 'vue';
+import { ref, computed, watch, nextTick, onMounted, onBeforeUnmount } from 'vue';
 import MediaPreviewOverlay from '@/Components/MediaPreviewOverlay.vue';
 import Modal from '@/Components/Modal.vue';
 import MediaRenderer from '@/Components/MediaRenderer.vue';
@@ -49,6 +49,27 @@ const masonryRef = ref(null);
 const naturalDims = ref({}); // { [fileId]: { w, h } }
 const spanMap    = ref({}); // { [fileId]: row span count }
 
+function parseCssLength(value) {
+    const raw = String(value || '').trim();
+    if (!raw) {
+        return 0;
+    }
+
+    const remMatch = raw.match(/^([\d.]+)rem$/);
+    if (remMatch) {
+        const rootFontSize = Number(getComputedStyle(document.documentElement).fontSize || 16);
+        return Number(remMatch[1]) * rootFontSize;
+    }
+
+    const pxMatch = raw.match(/^([\d.]+)px$/);
+    if (pxMatch) {
+        return Number(pxMatch[1]);
+    }
+
+    const parsed = parseFloat(raw);
+    return Number.isFinite(parsed) ? parsed : 0;
+}
+
 function resolveMasonryColumnWidth(grid) {
     const containerW = grid?.clientWidth || grid?.offsetWidth || 0;
     let colWidth = 220;
@@ -56,7 +77,7 @@ function resolveMasonryColumnWidth(grid) {
     if (containerW > 0) {
         const styles = window.getComputedStyle(grid);
         const template = styles.gridTemplateColumns || '';
-        const colGap = parseFloat(styles.columnGap) || 16;
+        const colGap = parseCssLength(styles.columnGap) || 16;
 
         let colCount = 0;
 
@@ -119,7 +140,8 @@ function getFileSpan(file) {
         return estimated;
     }
 
-    return 22;
+    // Use a smaller default span while natural dimensions are still resolving.
+    return 12;
 }
 
 function calcSpan(fileId) {
@@ -153,7 +175,7 @@ function calcSpan(fileId) {
 
 function onFileLoad(fileId, { naturalWidth, naturalHeight }) {
     naturalDims.value[fileId] = { w: naturalWidth, h: naturalHeight };
-    nextTick(() => calcSpan(fileId));
+    nextTick(() => requestAnimationFrame(() => calcSpan(fileId)));
 }
 
 function recalcAllSpans() {
@@ -269,6 +291,10 @@ const allFilteredFiles = computed(() => {
 
 const filteredFiles = computed(() => {
     return allFilteredFiles.value;
+});
+
+watch([filteredFiles, viewMode], () => {
+    nextTick(() => requestAnimationFrame(() => recalcAllSpans()));
 });
 
 const totalFileCount = computed(() => totalMediaCount.value);
@@ -664,26 +690,23 @@ const {
 
                 <div
                     v-if="viewMode === 'grid'"
-                    ref="masonryRef"
-                    class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 items-start"
-                    style="grid-auto-rows: 10px; row-gap: 12px; column-gap: 0.5rem; grid-auto-flow: dense;"
+                    class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-4"
                 >
                     <div
                         v-for="file in filteredFiles"
                         :key="file.id"
-                        :data-file-id="file.id"
-                        :style="{ gridRowEnd: 'span ' + getFileSpan(file) }"
                         @click="openPreview(file)"
-                        class="group relative w-full rounded-2xl overflow-hidden border border-border bg-bg-elevated cursor-pointer hover:border-primary/50 transition-all shadow-sm hover:shadow-xl animate-fade-in-up"
+                        class="group relative w-full overflow-hidden border border-border bg-bg-elevated cursor-pointer hover:border-primary/50 transition-all shadow-sm hover:shadow-xl animate-fade-in-up rounded-3xl aspect-[16/9]"
                     >
-                        <div class="relative overflow-hidden rounded-2xl">
+                        <div class="absolute inset-0 overflow-hidden">
                             <MediaRenderer
                                 :media="file"
                                 :alt="file.file_name"
                                 :use-thumbnail="true"
-                                image-class="w-full h-auto block object-cover transition-transform duration-700 group-hover:scale-105"
-                                video-class="w-full h-auto block object-cover transition-transform duration-700 group-hover:scale-105"
-                                fallback-class="flex w-full items-center justify-center bg-bg-hover text-sm font-bold uppercase tracking-[0.24em] text-muted-foreground"
+                                :fill="true"
+                                image-class="object-cover transition-transform duration-700 group-hover:scale-105"
+                                video-class="object-cover transition-transform duration-700 group-hover:scale-105"
+                                fallback-class="flex w-full h-full items-center justify-center bg-bg-hover text-sm font-bold uppercase tracking-[0.24em] text-muted-foreground"
                                 @load="dims => onFileLoad(file.id, dims)"
                             />
 

@@ -335,16 +335,14 @@ class AlbumController extends Controller
         // Store cover image as cover-images/{album-segment}.{ext}
         if ($request->hasFile("cover_image")) {
             $coverFile = $request->file('cover_image');
-            $extension = strtolower((string) ($coverFile->getClientOriginalExtension() ?: $coverFile->extension()));
-            $coverPath = $albumService->getCoverImagePathForAlbum($album, $extension);
+            $coverPath = $albumService->getCoverImagePathForAlbum($album, 'jpg');
             $coverStem = $albumService->getCoverImageStemForAlbum($album);
 
             $albumService->deleteCoverImageVariants($coverStem, $coverPath);
 
-            $filePath = $storageService->uploadFileAs(
+            $filePath = $albumService->generateCoverThumbnailFromUpload(
                 $coverFile,
-                dirname($coverPath),
-                basename($coverPath),
+                $coverPath,
             );
             $album->update(['cover_image' => $filePath]);
         }
@@ -1142,8 +1140,7 @@ class AlbumController extends Controller
         // Store cover image as cover-images/{album-segment}.{ext}
         if ($hasCoverUpload) {
             $coverFile = $request->file('cover_image');
-            $extension = strtolower((string) ($coverFile->getClientOriginalExtension() ?: $coverFile->extension()));
-            $coverPath = $albumService->getPlannedCoverImagePathForAlbum($album, $data, $extension);
+            $coverPath = $albumService->getPlannedCoverImagePathForAlbum($album, $data, 'jpg');
             $coverStem = pathinfo($coverPath, PATHINFO_FILENAME);
 
             $albumService->deleteCoverImageVariants($coverStem, $coverPath);
@@ -1152,10 +1149,9 @@ class AlbumController extends Controller
                 $storageService->deleteFile($album->cover_image);
             }
 
-            $filePath = $storageService->uploadFileAs(
+            $filePath = $albumService->generateCoverThumbnailFromUpload(
                 $coverFile,
-                dirname($coverPath),
-                basename($coverPath),
+                $coverPath,
             );
             $data['cover_image'] = $filePath;
         } else {

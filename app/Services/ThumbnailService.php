@@ -41,6 +41,7 @@ class ThumbnailService
 
     private ImageManager $manager;
     private ?bool $ffmpegAvailable = null;
+    private array $lastErrors = [];
 
     public function __construct()
     {
@@ -78,6 +79,8 @@ class ThumbnailService
      */
     public function generateWithStatus(Media $media): string
     {
+        $this->clearLastError($media->id);
+
         if ($media->file_type === 'image') {
             return $this->generateImageThumbnail($media);
         }
@@ -89,6 +92,11 @@ class ThumbnailService
         return 'skipped';
     }
 
+    public function getLastErrorForMedia(int $mediaId): ?string
+    {
+        return $this->lastErrors[$mediaId] ?? null;
+    }
+
     private function generateImageThumbnail(Media $media): string
     {
         $sourcePath = null;
@@ -98,8 +106,11 @@ class ThumbnailService
             $sourcePath = $this->downloadToTemporaryFile($mediaDisk, $media->file_path);
 
             if ($sourcePath === null) {
+                $errorMessage = "Could not read source file from disk [{$mediaDisk}] path [{$media->file_path}]";
+                $this->setLastError($media->id, $errorMessage);
                 Log::warning("ThumbnailService: could not read source file.", [
                     'media_id'  => $media->id,
+                    'disk' => $mediaDisk,
                     'file_path' => $media->file_path,
                 ]);
                 return 'failed';
@@ -111,12 +122,14 @@ class ThumbnailService
             }
 
             $this->saveImageAsThumbnail($media, $sourcePath);
+            $this->clearLastError($media->id);
 
             // Free memory immediately — images can be large.
             gc_collect_cycles();
 
             return 'generated';
         } catch (\Throwable $e) {
+            $this->setLastError($media->id, $e->getMessage());
             Log::warning("ThumbnailService: failed to generate thumbnail.", [
                 'media_id' => $media->id,
                 'error'    => $e->getMessage(),
@@ -132,6 +145,10 @@ class ThumbnailService
     private function generateVideoThumbnail(Media $media): string
     {
         if (!$this->isFfmpegAvailable()) {
+            $this->setLastError(
+                $media->id,
+                'ffmpeg binary is unavailable for video thumbnail generation'
+            );
             Log::warning('ThumbnailService: ffmpeg is required for video thumbnail generation.', [
                 'media_id' => $media->id,
                 'binary' => (string) config('services.ffmpeg.binary', 'ffmpeg'),
@@ -148,6 +165,10 @@ class ThumbnailService
             $sourcePath = $this->downloadToTemporaryFile($mediaDisk, $media->file_path);
 
             if ($sourcePath === null) {
+                $this->setLastError(
+                    $media->id,
+                    "Could not read source video file from disk [{$mediaDisk}] path [{$media->file_path}]"
+                );
                 Log::warning('ThumbnailService: could not read source video file.', [
                     'media_id' => $media->id,
                     'file_path' => $media->file_path,
@@ -166,6 +187,7 @@ class ThumbnailService
             $processError = $this->extractVideoFrame($binary, $sourcePath, $framePath, $seekAt, $timeout);
 
             if ($processError !== null) {
+                $this->setLastError($media->id, "ffmpeg frame extraction failed: {$processError}");
                 Log::warning('ThumbnailService: ffmpeg frame extraction failed.', [
                     'media_id' => $media->id,
                     'mime_type' => $media->mime_type,
@@ -177,11 +199,13 @@ class ThumbnailService
 
             // Frame is already scaled by ffmpeg, so avoid another full decode in GD.
             $this->storeGeneratedThumbnailFile($media, $framePath);
+            $this->clearLastError($media->id);
 
             gc_collect_cycles();
 
             return 'generated';
         } catch (\Throwable $e) {
+            $this->setLastError($media->id, $e->getMessage());
             Log::warning('ThumbnailService: failed to generate video thumbnail.', [
                 'media_id' => $media->id,
                 'error' => $e->getMessage(),
@@ -200,6 +224,10 @@ class ThumbnailService
     private function generateLargeImageThumbnailWithFfmpeg(Media $media, ?string $existingSourcePath = null): string
     {
         if (!$this->isFfmpegAvailable()) {
+            $this->setLastError(
+                $media->id,
+                'ffmpeg binary is unavailable for HEIC/large-image fallback generation'
+            );
             Log::warning('ThumbnailService: oversized image requires ffmpeg fallback but ffmpeg is unavailable.', [
                 'media_id' => $media->id,
                 'width' => $media->width,
@@ -225,6 +253,10 @@ class ThumbnailService
             }
 
             if ($sourcePath === null) {
+                $this->setLastError(
+                    $media->id,
+                    "Could not read oversized source image from disk [{$mediaDisk}] path [{$media->file_path}]"
+                );
                 Log::warning('ThumbnailService: could not read oversized source image.', [
                     'media_id' => $media->id,
                     'file_path' => $media->file_path,
@@ -235,10 +267,12 @@ class ThumbnailService
             $framePath = $sourcePath . '_large.jpg';
             $binary = (string) config('services.ffmpeg.binary', 'ffmpeg');
             $timeout = max(30, (int) config('services.ffmpeg.timeout', 30));
+            $sourceStreamLabel = $this->resolvePreferredImageStreamLabel($binary, $sourcePath);
 
             $scaleFilter = sprintf(
-                'scale=%1$d:%1$d:force_original_aspect_ratio=decrease',
+                '[%2$s]scale=%1$d:%1$d:force_original_aspect_ratio=decrease[vthumb]',
                 self::THUMB_SIZE,
+                $sourceStreamLabel,
             );
 
             $process = new Process([
@@ -248,8 +282,10 @@ class ThumbnailService
                 'error',
                 '-i',
                 $sourcePath,
-                '-vf',
+                '-filter_complex',
                 $scaleFilter,
+                '-map',
+                '[vthumb]',
                 '-frames:v',
                 '1',
                 '-q:v',
@@ -261,10 +297,12 @@ class ThumbnailService
             $process->run();
 
             if (!$process->isSuccessful() || !file_exists($framePath) || filesize($framePath) === 0) {
+                $ffmpegError = trim($process->getErrorOutput() ?: $process->getOutput() ?: 'unknown ffmpeg error');
+                $this->setLastError($media->id, "ffmpeg HEIC/image extraction failed: {$ffmpegError}");
                 Log::warning('ThumbnailService: ffmpeg oversized-image thumbnail extraction failed.', [
                     'media_id' => $media->id,
                     'binary' => $binary,
-                    'error' => trim($process->getErrorOutput() ?: $process->getOutput()),
+                    'error' => $ffmpegError,
                 ]);
                 return 'failed';
             }
@@ -286,9 +324,11 @@ class ThumbnailService
             }
 
             $media->update(['thumbnail_path' => $thumbPath]);
+            $this->clearLastError($media->id);
 
             return 'generated';
         } catch (\Throwable $e) {
+            $this->setLastError($media->id, $e->getMessage());
             Log::warning('ThumbnailService: failed oversized-image fallback thumbnail generation.', [
                 'media_id' => $media->id,
                 'error' => $e->getMessage(),
@@ -327,7 +367,7 @@ class ThumbnailService
             }
 
             $scaleFilter = sprintf(
-                'scale=%1$d:%1$d:force_original_aspect_ratio=decrease',
+                '[0:v:0]scale=%1$d:%1$d:force_original_aspect_ratio=decrease[vthumb]',
                 self::THUMB_SIZE,
             );
 
@@ -342,8 +382,10 @@ class ThumbnailService
                 $seek,
                 '-i',
                 $sourcePath,
-                '-vf',
+                '-filter_complex',
                 $scaleFilter,
+                '-map',
+                '[vthumb]',
                 '-frames:v',
                 '1',
                 '-q:v',
@@ -474,6 +516,128 @@ class ThumbnailService
         }
 
         return $this->ffmpegAvailable;
+    }
+
+    private function resolvePreferredImageStreamLabel(string $ffmpegBinary, string $sourcePath): string
+    {
+        $streams = $this->probeVideoStreams($ffmpegBinary, $sourcePath);
+        if (empty($streams)) {
+            return '0:v:0';
+        }
+
+        $independentStreams = array_values(array_filter(
+            $streams,
+            static fn (array $stream): bool => ($stream['dependent'] ?? 1) === 0,
+        ));
+
+        $colorIndependentStreams = array_values(array_filter(
+            $independentStreams,
+            static fn (array $stream): bool => !self::isLikelyAuxiliaryHeicStream($stream),
+        ));
+
+        $colorStreams = array_values(array_filter(
+            $streams,
+            static fn (array $stream): bool => !self::isLikelyAuxiliaryHeicStream($stream),
+        ));
+
+        $candidateStreams = !empty($colorIndependentStreams)
+            ? $colorIndependentStreams
+            : (!empty($colorStreams) ? $colorStreams : (!empty($independentStreams) ? $independentStreams : $streams));
+
+        usort($candidateStreams, static function (array $a, array $b): int {
+            $areaA = ((int) ($a['width'] ?? 0)) * ((int) ($a['height'] ?? 0));
+            $areaB = ((int) ($b['width'] ?? 0)) * ((int) ($b['height'] ?? 0));
+
+            if ($areaA === $areaB) {
+                return ((int) ($a['index'] ?? 0)) <=> ((int) ($b['index'] ?? 0));
+            }
+
+            return $areaB <=> $areaA;
+        });
+
+        $bestIndex = (int) ($candidateStreams[0]['index'] ?? 0);
+        return "0:v:{$bestIndex}";
+    }
+
+    private function probeVideoStreams(string $ffmpegBinary, string $sourcePath): array
+    {
+        $ffprobeBinary = $this->resolveFfprobeBinary($ffmpegBinary);
+        $process = new Process([
+            $ffprobeBinary,
+            '-v',
+            'error',
+            '-select_streams',
+            'v',
+            '-show_entries',
+            'stream=index,width,height,disposition',
+            '-of',
+            'json',
+            $sourcePath,
+        ]);
+        $process->setTimeout(10);
+
+        try {
+            $process->run();
+            if (!$process->isSuccessful()) {
+                return [];
+            }
+
+            $decoded = json_decode($process->getOutput(), true);
+            if (!is_array($decoded) || !isset($decoded['streams']) || !is_array($decoded['streams'])) {
+                return [];
+            }
+
+            $streams = [];
+            foreach ($decoded['streams'] as $stream) {
+                if (!is_array($stream) || !array_key_exists('index', $stream)) {
+                    continue;
+                }
+
+                $disposition = is_array($stream['disposition'] ?? null) ? $stream['disposition'] : [];
+
+                $streams[] = [
+                    'index' => (int) $stream['index'],
+                    'width' => (int) ($stream['width'] ?? 0),
+                    'height' => (int) ($stream['height'] ?? 0),
+                    'dependent' => (int) ($disposition['dependent'] ?? 1),
+                    'pix_fmt' => strtolower((string) ($stream['pix_fmt'] ?? '')),
+                    'profile' => strtolower((string) ($stream['profile'] ?? '')),
+                ];
+            }
+
+            return $streams;
+        } catch (\Throwable $e) {
+            return [];
+        }
+    }
+
+    private function resolveFfprobeBinary(string $ffmpegBinary): string
+    {
+        if (preg_match('/ffmpeg\.exe$/i', $ffmpegBinary) === 1) {
+            return (string) preg_replace('/ffmpeg\.exe$/i', 'ffprobe.exe', $ffmpegBinary);
+        }
+
+        if (preg_match('/ffmpeg$/i', $ffmpegBinary) === 1) {
+            return (string) preg_replace('/ffmpeg$/i', 'ffprobe', $ffmpegBinary);
+        }
+
+        return 'ffprobe';
+    }
+
+    private static function isLikelyAuxiliaryHeicStream(array $stream): bool
+    {
+        $pixFmt = strtolower((string) ($stream['pix_fmt'] ?? ''));
+        if ($pixFmt === 'gray' || str_starts_with($pixFmt, 'gray')) {
+            return true;
+        }
+
+        $profile = strtolower((string) ($stream['profile'] ?? ''));
+        // Many HEIC auxiliary/depth streams appear as profile "Rext" + gray.
+        if ($profile === 'rext' && ($pixFmt === '' || str_contains($pixFmt, 'gray'))) {
+            return true;
+        }
+
+        return false;
     }
 
     /**
@@ -666,7 +830,17 @@ class ThumbnailService
      */
     private function downloadToTemporaryFile(string $disk, string $path): ?string
     {
-        $readStream = Storage::disk($disk)->readStream($path);
+        $normalizedPath = ltrim($path, '/');
+        $candidatePaths = array_values(array_unique([$normalizedPath, $path]));
+
+        $readStream = null;
+        foreach ($candidatePaths as $candidatePath) {
+            $readStream = Storage::disk($disk)->readStream($candidatePath);
+            if (is_resource($readStream)) {
+                break;
+            }
+        }
+
         if (!is_resource($readStream)) {
             return null;
         }
@@ -689,5 +863,15 @@ class ThumbnailService
         fclose($writeStream);
 
         return $tmpPath;
+    }
+
+    private function setLastError(int $mediaId, string $message): void
+    {
+        $this->lastErrors[$mediaId] = $message;
+    }
+
+    private function clearLastError(int $mediaId): void
+    {
+        unset($this->lastErrors[$mediaId]);
     }
 }

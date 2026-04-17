@@ -80,6 +80,27 @@ const recentMediaMasonryRef = ref(null);
 const recentMediaNaturalDims = ref({});
 const recentMediaSpanMap = ref({});
 
+function parseCssLength(value) {
+    const raw = String(value || '').trim();
+    if (!raw) {
+        return 0;
+    }
+
+    const remMatch = raw.match(/^([\d.]+)rem$/);
+    if (remMatch) {
+        const rootFontSize = Number(getComputedStyle(document.documentElement).fontSize || 16);
+        return Number(remMatch[1]) * rootFontSize;
+    }
+
+    const pxMatch = raw.match(/^([\d.]+)px$/);
+    if (pxMatch) {
+        return Number(pxMatch[1]);
+    }
+
+    const parsed = parseFloat(raw);
+    return Number.isFinite(parsed) ? parsed : 0;
+}
+
 const resolveRecentMediaColumnWidth = (grid) => {
     const containerW = grid?.clientWidth || grid?.offsetWidth || 0;
     let colWidth = 220;
@@ -87,7 +108,7 @@ const resolveRecentMediaColumnWidth = (grid) => {
     if (containerW > 0) {
         const styles = window.getComputedStyle(grid);
         const template = styles.gridTemplateColumns || '';
-        const colGap = parseFloat(styles.columnGap) || 16;
+        const colGap = parseCssLength(styles.columnGap) || 16;
 
         let colCount = 0;
 
@@ -148,7 +169,8 @@ const getRecentMediaSpan = (item) => {
         return estimated;
     }
 
-    return 22;
+    // Use a smaller default span while natural dimensions are still resolving.
+    return 12;
 };
 
 const formatSize = (bytes) => {
@@ -278,7 +300,7 @@ const rememberRecentMediaDims = (mediaId, { naturalWidth, naturalHeight }) => {
         },
     };
 
-    nextTick(() => calcRecentMediaSpan(mediaId));
+    nextTick(() => requestAnimationFrame(() => calcRecentMediaSpan(mediaId)));
 };
 
 onMounted(() => {
