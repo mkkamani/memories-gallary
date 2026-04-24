@@ -22,7 +22,7 @@ class MediaController extends Controller
         $request->validate([
             "files" => "required|array",
             "files.*" =>
-                "file|mimes:jpg,jpeg,png,gif,heic,heif,mp4,mov,avi,webm,mkv|max:204800",
+                "file|mimes:jpg,jpeg,png,gif,heic,heif,mp4,mov,avi,webm,mkv|max:512000",
             "album_id" => "nullable|exists:albums,id",
         ]);
 

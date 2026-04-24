@@ -94,6 +94,19 @@ const extension = computed(() => {
 
 const mimeType = computed(() => String(props.media?.mime_type || '').toLowerCase());
 const isVideo = computed(() => props.media?.file_type === 'video');
+const isBrowserNativeImageMime = computed(() => {
+    const mime = mimeType.value;
+    if (!mime.startsWith('image/')) {
+        return false;
+    }
+
+    // Keep HEIC/HEIF out of native set: they still require conversion.
+    if (mime.includes('heic') || mime.includes('heif')) {
+        return false;
+    }
+
+    return true;
+});
 const intrinsicWidth = computed(() => {
     const value = Number(props.media?.width);
     return Number.isFinite(value) && value > 0 ? value : null;
@@ -163,6 +176,13 @@ const isHeic = computed(() => {
     if (isVideo.value) {
         return false;
     }
+
+    // If backend says this is already a browser-native image format (jpeg/png/webp...),
+    // trust MIME over extension and skip HEIC decode path.
+    if (isBrowserNativeImageMime.value) {
+        return false;
+    }
+
     return ['heic', 'heif'].includes(extension.value)
         || mimeType.value.includes('image/heic')
         || mimeType.value.includes('image/heif');
@@ -355,6 +375,44 @@ const getHeicSourceMimeType = () => {
     return 'image/heic';
 };
 
+const parseIsoBmffHeader = (arrayBuffer) => {
+    if (!(arrayBuffer instanceof ArrayBuffer) || arrayBuffer.byteLength < 12) {
+        return { hasFtyp: false, majorBrand: '', compatibleBrands: [] };
+    }
+
+    const bytes = new Uint8Array(arrayBuffer);
+    const toAscii = (start, len) => String.fromCharCode(...bytes.slice(start, start + len));
+
+    const boxType = toAscii(4, 4);
+    if (boxType !== 'ftyp') {
+        return { hasFtyp: false, majorBrand: '', compatibleBrands: [] };
+    }
+
+    const majorBrand = toAscii(8, 4).trim().toLowerCase();
+    const compatibleBrands = [];
+    for (let i = 16; i + 4 <= bytes.length && i < 64; i += 4) {
+        const brand = toAscii(i, 4).trim().toLowerCase();
+        if (brand) {
+            compatibleBrands.push(brand);
+        }
+    }
+
+    return { hasFtyp: true, majorBrand, compatibleBrands };
+};
+
+const isLikelyHeifContainer = (header) => {
+    if (!header?.hasFtyp) {
+        return false;
+    }
+
+    const supported = new Set(['heic', 'heix', 'hevc', 'hevx', 'heim', 'heis', 'mif1', 'msf1']);
+    if (supported.has(header.majorBrand)) {
+        return true;
+    }
+
+    return (header.compatibleBrands || []).some((brand) => supported.has(brand));
+};
+
 const convertHeicToBrowserImage = async ({ silent = false, preserveOnFail = false } = {}) => {
     if (!isHeic.value || attemptedHeicConversion.value) {
         return false;
@@ -382,8 +440,26 @@ const convertHeicToBrowserImage = async ({ silent = false, preserveOnFail = fals
             throw new Error(`Proxy fetch failed: ${response.status}`);
         }
 
+        const contentType = String(response.headers.get('content-type') || '').toLowerCase();
         const rawBlob = await response.blob();
-        const heicBlob = new Blob([await rawBlob.arrayBuffer()], {
+        const rawBuffer = await rawBlob.arrayBuffer();
+        const header = parseIsoBmffHeader(rawBuffer);
+
+        if (contentType.includes('text/html') || contentType.includes('application/json')) {
+            throw new Error(`HEIC proxy returned unexpected content-type: ${contentType || 'unknown'}`);
+        }
+
+        if (!header.hasFtyp) {
+            throw new Error("Invalid HEIF bytes: missing 'ftyp' box.");
+        }
+
+        if (!isLikelyHeifContainer(header)) {
+            throw new Error(
+                `Source is ISO BMFF but not HEIC/HEIF (major brand: ${header.majorBrand || 'unknown'}).`,
+            );
+        }
+
+        const heicBlob = new Blob([rawBuffer], {
             type: getHeicSourceMimeType(),
         });
 
@@ -421,7 +497,18 @@ const convertHeicToBrowserImage = async ({ silent = false, preserveOnFail = fals
         conversionFailed.value = false;
 
         return true;
-    } catch (_error) {
+    } catch (error) {
+        // Keep a targeted console trail for records that claim HEIC but stream
+        // non-HEIC bytes from /media/{id}/raw (e.g. auth HTML, MOV bytes, bad path).
+        if (isHeic.value) {
+            console.warn('HEIC preview background decode failed', {
+                mediaId: props.media?.id,
+                fileName: props.media?.file_name,
+                mimeType: props.media?.mime_type,
+                error: error instanceof Error ? error.message : String(error),
+            });
+        }
+
         if (silent && preserveOnFail) {
             return false;
         }

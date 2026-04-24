@@ -42,8 +42,7 @@ class RegenerateAlbumThumbnails extends Command
         }
 
         $query = Media::query()
-            // ->whereIn('file_type', ['image', 'video'])
-            ->whereIn('file_type', ['image'])
+            ->whereIn('file_type', ['image', 'video'])
             ->whereRaw('LOWER(mime_type) != ?', ['image/heic'])
             ->where('thumb_sync', 0)
             ->orderBy('id');

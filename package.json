@@ -5,7 +5,8 @@
     "scripts": {
         "build": "vite build",
         "dev": "vite",
-        "watch": "vite build --watch"
+        "watch": "vite build --watch",
+        "heic:webp:local": "node scripts/convert-heic-to-webp.mjs"
     },
     "devDependencies": {
         "@inertiajs/vue3": "^2.0.0",
@@ -23,10 +24,12 @@
     },
     "dependencies": {
         "@vueuse/core": "^14.2.1",
+        "heic-convert": "^2.1.0",
         "heic2any": "^0.0.4",
         "libheif-js": "^1.19.8",
         "lodash": "^4.17.21",
         "lucide-vue-next": "^0.577.0",
+        "sharp": "^0.34.4",
         "tailwindcss-animate": "^1.0.7"
     }
 }

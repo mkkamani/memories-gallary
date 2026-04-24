@@ -96,8 +96,8 @@ const validateSelection = (files) => {
         }
 
         if (meta.kind === 'image' || meta.kind === 'video') {
-            if (file.size > 100 * 1024 * 1024) {
-                messages.push(`Media file '${file.name}' exceeds 100 MB.`);
+            if (file.size > 500 * 1024 * 1024) {
+                messages.push(`Media file '${file.name}' exceeds 500 MB.`);
             }
             mediaFiles.push(file);
             continue;

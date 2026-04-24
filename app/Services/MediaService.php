@@ -15,11 +15,17 @@ class MediaService
 {
     protected $storageService;
     protected ThumbnailService $thumbnailService;
+    protected HeicJpegConversionService $heicConversionService;
 
-    public function __construct(StorageServiceInterface $storageService, ThumbnailService $thumbnailService)
+    public function __construct(
+        StorageServiceInterface $storageService,
+        ThumbnailService $thumbnailService,
+        HeicJpegConversionService $heicConversionService
+    )
     {
         $this->storageService   = $storageService;
         $this->thumbnailService = $thumbnailService;
+        $this->heicConversionService = $heicConversionService;
     }
 
     public function upload(UploadedFile $file, User $user, ?Album $album = null)
@@ -46,10 +52,25 @@ class MediaService
 
         // Generate thumbnail; errors are logged but never bubble up.
         try {
-            $status = $this->thumbnailService->generateWithStatus($media);
+            if ($this->isHeicMime($mimeType)) {
+                // HEIC path generates thumbnail + preview derivatives (webp/avif).
+                $status = $this->heicConversionService->generateWithStatus($media);
+            } else {
+                $status = $this->thumbnailService->generateWithStatus($media);
+            }
 
             if ($status === 'generated' && $this->shouldSyncDimensionsFromThumbnail($media)) {
-                $this->thumbnailService->syncDimensionsFromThumbnail($media);
+                if ($this->isHeicMime($mimeType)) {
+                    $this->heicConversionService->syncDimensionsFromThumbnail($media);
+                } else {
+                    $this->thumbnailService->syncDimensionsFromThumbnail($media);
+                }
+            }
+
+            if ($status === 'generated') {
+                $media->update([
+                    'thumb_sync' => $this->isHeicMime($mimeType) ? 2 : 1,
+                ]);
             }
         } catch (\Throwable $e) {
             Log::warning('MediaService: thumbnail generation failed after upload.', [
@@ -119,8 +140,14 @@ class MediaService
      */
     public function purge(Media $media): bool
     {
+        $mimeType = strtolower((string) ($media->mime_type ?? ''));
         try {
-            $this->thumbnailService->delete($media);
+            if ($this->isHeicMime($mimeType)) {
+                // Also removes HEIC preview derivatives (webp/avif).
+                $this->heicConversionService->delete($media);
+            } else {
+                $this->thumbnailService->delete($media);
+            }
         } catch (\Throwable $e) {
             Log::warning('MediaService::purge – could not delete thumbnail; proceeding with media purge.', [
                 'media_id' => $media->id,
@@ -159,5 +186,12 @@ class MediaService
         }
 
         return false;
+    }
+
+    private function isHeicMime(string $mimeType): bool
+    {
+        $mimeType = strtolower($mimeType);
+
+        return str_contains($mimeType, 'heic') || str_contains($mimeType, 'heif');
     }
 }

@@ -771,9 +771,9 @@ class AlbumController extends Controller
 
         $request->validate([
             "files" => "required|array|min:1|max:100",
-            // 512 MB hard cap so ZIP uploads can pass this layer. Media files
+            // 500 MB hard cap so ZIP uploads can pass this layer. Media files
             // are further validated below with stricter per-type limits.
-            "files.*" => "required|file|max:524288",
+            "files.*" => "required|file|max:512000",
         ]);
 
         $uploadedFiles = $request->file("files", []);
@@ -823,8 +823,8 @@ class AlbumController extends Controller
             }
 
             if ($isMedia) {
-                if ($size > 104857600) {
-                    $validationMessages[] = "Media file '{$file->getClientOriginalName()}' exceeds 100 MB.";
+                if ($size > 524288000) {
+                    $validationMessages[] = "Media file '{$file->getClientOriginalName()}' exceeds 500 MB.";
                 }
                 $mediaFiles[] = $file;
                 continue;
