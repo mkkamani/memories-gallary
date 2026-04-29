@@ -14,6 +14,7 @@ use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Validation\ValidationException;
 use Inertia\Inertia;
+use App\Enums\AlbumLocation;
 
 class AlbumController extends Controller
 {
@@ -55,7 +56,7 @@ class AlbumController extends Controller
         }
 
         // Location filter
-        $userLocation = auth()->user()->location ?: "Rajkot";
+        $userLocation = auth()->user()->location ?: AlbumLocation::Rajkot->value;
         $locationFilter = $request->has("location")
             ? $request->location
             : $userLocation;
@@ -318,7 +319,7 @@ class AlbumController extends Controller
         $data = $request->validate([
             "title" => "required|string|max:255",
             "description" => "nullable|string",
-            "location" => "nullable|string|in:Rajkot,Ahmedabad",
+            "location" => "nullable|string|in:" . implode(',', AlbumLocation::values()),
             "cover_image" => "nullable|file|mimes:jpeg,jpg,png,gif|max:10240",
             // parent_id is sent programmatically when creating a sub-folder
             // from the album Show page – it is NOT shown in the Create form.
@@ -474,7 +475,7 @@ class AlbumController extends Controller
                 },
             ],
             "parent_id" => "nullable|exists:albums,id",
-            "location" => "nullable|string|in:Ahmedabad,Rajkot",
+            "location" => "nullable|string|in:" . implode(',', AlbumLocation::values()),
         ]);
 
         $uploadedFile = $request->file("zip_file");
@@ -1095,7 +1096,7 @@ class AlbumController extends Controller
             // Keep title optional here so cover-image-only updates are accepted.
             "title" => "nullable|string|max:255",
             "description" => "nullable|string",
-            "location" => "nullable|string|in:Rajkot,Ahmedabad",
+            "location" => "nullable|string|in:" . implode(',', AlbumLocation::values()),
             "cover_image" => "nullable|file|mimes:jpeg,jpg,png,gif|max:10240",
             "return_to_path" => "nullable|string|max:2048",
         ]);
@@ -1241,10 +1242,7 @@ class AlbumController extends Controller
             abort(404);
         }
 
-        $allowedLocations = [
-            'rajkot' => 'Rajkot',
-            'ahmedabad' => 'Ahmedabad',
-        ];
+        $allowedLocations = AlbumLocation::slugs();
 
         $location = null;
         $firstSegment = strtolower($segments[0]);
@@ -1254,7 +1252,7 @@ class AlbumController extends Controller
         }
 
         if ($location === null) {
-            $location = auth()->user()->location ?: 'Rajkot';
+            $location = auth()->user()->location ?: AlbumLocation::Rajkot->value;
         }
 
         if (empty($segments)) {
@@ -1376,10 +1374,9 @@ class AlbumController extends Controller
         $paginatedMedia = null;
 
         $locationFilter = null;
-        if (strtolower($location) === 'ahmedabad') {
-            $locationFilter = 'Ahmedabad';
-        } elseif (strtolower($location) === 'rajkot') {
-            $locationFilter = 'Rajkot';
+        $enum = AlbumLocation::fromSlug($location);
+        if ($enum) {
+            $locationFilter = $enum->value;
         }
 
         if ($type === "recent") {

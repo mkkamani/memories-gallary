@@ -9,6 +9,7 @@ import DangerButton from '@/Components/DangerButton.vue';
 import SecondaryButton from '@/Components/SecondaryButton.vue';
 import debounce from 'lodash/debounce';
 import { formatNumber } from '@/utils/number';
+import { ALBUM_LOCATIONS, ALBUM_LOCATION_VALUES } from '@/utils/albumLocations';
 
 const props = defineProps({
     albums: Array,
@@ -50,7 +51,7 @@ const canCreateActions = computed(() => ['admin', 'manager', 'member'].includes(
 const locationBadgeClass = (location) => {
     if (location === 'Ahmedabad') return 'bg-primary/10 text-primary';
     if (location === 'Rajkot') return 'bg-info/10 text-info';
-
+    if (location === 'Anniversaries') return 'bg-warning/10 text-warning';
     return 'bg-bg-elevated text-muted-foreground';
 };
 
@@ -240,8 +241,7 @@ const submitImport = () => {
                 <div class="flex items-center gap-3">
                     <select v-model="locationFilter" class="h-11 bg-bg-input border-border text-foreground rounded-pill shadow-sm focus:border-primary focus:ring-1 focus:ring-primary px-4 pr-10 text-sm appearance-none outline-none">
                         <option value="all">All Locations</option>
-                        <option value="Ahmedabad">Ahmedabad</option>
-                        <option value="Rajkot">Rajkot</option>
+                        <option v-for="loc in ALBUM_LOCATIONS" :key="loc.value" :value="loc.value">{{ loc.label }}</option>
                     </select>
 
                     <input v-model="search" type="text" placeholder="Search albums..." class="hidden md:block h-11 bg-bg-input border-border text-foreground rounded-pill shadow-sm focus:border-primary focus:ring-1 focus:ring-primary md:w-64 px-4 text-sm" />
@@ -630,8 +630,7 @@ const submitImport = () => {
                         <label class="block text-sm font-medium text-foreground mb-1">Default Location</label>
                         <select v-model="importForm.location" :disabled="importForm.processing" class="w-full h-10 rounded-xl border border-border bg-bg-input text-foreground text-sm px-3 focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary transition-all disabled:opacity-50">
                             <option value="">User's Default Location</option>
-                            <option value="Ahmedabad">Ahmedabad</option>
-                            <option value="Rajkot">Rajkot</option>
+                            <option v-for="loc in ALBUM_LOCATIONS" :key="loc.value" :value="loc.value">{{ loc.label }}</option>
                         </select>
                         <div v-if="importForm.errors.location" class="text-error text-xs mt-1">{{ importForm.errors.location }}</div>
                     </div>

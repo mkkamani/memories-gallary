@@ -15,9 +15,11 @@ use App\Support\MediaDimensionExtractor;
 use League\Flysystem\DirectoryAttributes;
 use League\Flysystem\FileAttributes;
 
+use App\Enums\AlbumLocation;
+
 class SyncFromR2 extends Command
 {
-    private const LOCATION_SEGMENTS = ['rajkot', 'ahmedabad'];
+    private const LOCATION_SEGMENTS = ['rajkot', 'ahmedabad', 'anniversaries']; // For path parsing only; enum used elsewhere
 
     protected $signature = 'r2:sync
         {--prefix=albums  : R2 path prefix to scan (default: albums)}
@@ -328,7 +330,7 @@ class SyncFromR2 extends Command
 
         $location = $this->inferLocationFromPath($dirPath)
             ?? $parentAlbum?->location
-            ?? ($this->user->location ?: 'Rajkot');
+            ?? ($this->user->location ?: AlbumLocation::Rajkot->value);
 
         return Album::create([
             'user_id'   => $this->user->id,
@@ -731,11 +733,7 @@ class SyncFromR2 extends Command
             return null;
         }
 
-        return match (strtolower($parts[1])) {
-            'rajkot' => 'Rajkot',
-            'ahmedabad' => 'Ahmedabad',
-            default => null,
-        };
+        return AlbumLocation::fromSlug($parts[1])?->value;
     }
 
     private function isUnderKnownLocationPath(string $path): bool

@@ -2,6 +2,7 @@
 
 namespace Database\Seeders;
 
+use App\Enums\AlbumLocation;
 use App\Models\User;
 use App\Notifications\NewUserAccountCreatedNotification;
 use Illuminate\Database\Seeder;
@@ -57,7 +58,7 @@ class AllEmployeesSeeder extends Seeder
 
             $name = trim($record['full name'] ?? '');
             $email = trim($record['email'] ?? '');
-            $location = trim($record['location'] ?? 'Rajkot');
+            $location = trim($record['location'] ?? AlbumLocation::Rajkot->value);
             $role = strtolower(trim($record['role'] ?? ''));
 
             if (! $name || ! $email) {
@@ -86,7 +87,7 @@ class AllEmployeesSeeder extends Seeder
                 'email' => $email,
                 'password' => Hash::make($plainPassword),
                 'role' => $role,
-                'location' => $location ?: 'Rajkot',
+                'location' => $location ?: AlbumLocation::Rajkot->value,
             ]);
 
             try {

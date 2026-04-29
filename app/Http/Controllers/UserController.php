@@ -10,6 +10,7 @@ use Illuminate\Support\Facades\Log;
 use Illuminate\Validation\Rules;
 use Illuminate\Foundation\Auth\Access\AuthorizesRequests;
 use Inertia\Inertia;
+use App\Enums\AlbumLocation;
 
 class UserController extends Controller
 {
@@ -78,7 +79,7 @@ class UserController extends Controller
             'name' => 'required|string|max:255',
             'email' => 'required|string|email|max:255|unique:users',
             'role' => 'required|string|in:admin,manager,member',
-            'location' => 'required|string|in:Rajkot,Ahmedabad',
+            'location' => 'required|string|in:' . implode(',', AlbumLocation::values()),
             'password_mode' => 'required|string|in:auto,manual',
         ]);
 
@@ -131,7 +132,7 @@ class UserController extends Controller
             'name' => 'required|string|max:255',
             'email' => 'required|string|email|max:255|unique:users,email,' . $user->id,
             'role' => 'required|string|in:admin,manager,member',
-            'location' => 'required|string|in:Rajkot,Ahmedabad',
+            'location' => 'required|string|in:' . implode(',', AlbumLocation::values()),
         ]);
 
         $user->update([

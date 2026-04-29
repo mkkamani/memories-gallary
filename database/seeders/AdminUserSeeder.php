@@ -2,6 +2,7 @@
 
 namespace Database\Seeders;
 
+use App\Enums\AlbumLocation;
 use App\Models\User;
 use Illuminate\Database\Seeder;
 use Illuminate\Support\Facades\Hash;
@@ -25,7 +26,7 @@ class AdminUserSeeder extends Seeder
             'email' => $email,
             'password' => Hash::make('admin123'),
             'role' => 'admin',
-            'location' => 'Rajkot',
+            'location' => AlbumLocation::Rajkot->value,
         ]);
 
         $this->command->info('Admin user created: admin@gmail.com / admin123');

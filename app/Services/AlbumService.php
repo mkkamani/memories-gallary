@@ -2,17 +2,18 @@
 
 namespace App\Services;
 
-use App\Models\User;
+use App\Enums\AlbumLocation;
+use App\Interfaces\StorageServiceInterface;
 use App\Models\Album;
 use App\Models\Media;
+use App\Models\User;
 use Illuminate\Http\UploadedFile;
-use Illuminate\Support\Str;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Storage;
-use App\Interfaces\StorageServiceInterface;
-use Intervention\Image\ImageManager;
+use Illuminate\Support\Str;
 use Intervention\Image\Drivers\Gd\Driver;
 use Intervention\Image\Encoders\JpegEncoder;
+use Intervention\Image\ImageManager;
 
 class AlbumService
 {
@@ -56,7 +57,7 @@ class AlbumService
         }
 
         if (empty($data['location'])) {
-            $data['location'] = $user->location ?: 'Rajkot';
+            $data['location'] = $user->location ?: AlbumLocation::Rajkot->value;
         }
 
         // Create the album row (r2_path is computed after we have the id)
@@ -510,7 +511,7 @@ class AlbumService
             }
         }
 
-        $locationSlug = Str::slug((string) ($album->location ?: 'Rajkot'));
+        $locationSlug = Str::slug((string) ($album->location ?: AlbumLocation::Rajkot->value));
         if ($locationSlug === '') {
             $locationSlug = 'rajkot';
         }

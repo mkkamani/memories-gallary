@@ -9,6 +9,7 @@ use Illuminate\Support\Str;
 use App\Models\User;
 use App\Models\Media;
 use App\Models\Tag;
+use App\Enums\AlbumLocation;
 
 class Album extends Model
 {
@@ -29,7 +30,7 @@ class Album extends Model
             $parent = $parent->parent;
         }
 
-        $location = (string) ($this->location ?: 'Rajkot');
+        $location = (string) ($this->location ?: AlbumLocation::Rajkot->value);
         $locationSlug = Str::slug($location);
 
         if ($locationSlug !== '') {

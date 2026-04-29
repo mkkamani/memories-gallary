@@ -170,7 +170,7 @@ const containerStyle = computed(() => {
         return { position: 'absolute', inset: '0', width: '100%', height: '100%' };
     }
     // In grid mode, do NOT set aspect-ratio. Always let the image fill the container.
-    return { width: '100%', height: '100%', minHeight: '160px' };
+    return { width: '100%', height: '100%' };
 });
 const isHeic = computed(() => {
     if (isVideo.value) {

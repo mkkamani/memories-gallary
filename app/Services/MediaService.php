@@ -2,14 +2,15 @@
 
 namespace App\Services;
 
+use App\Enums\AlbumLocation;
+use App\Interfaces\StorageServiceInterface;
 use App\Models\Album;
 use App\Models\Media;
 use App\Models\User;
-use Illuminate\Http\UploadedFile;
-use Illuminate\Support\Str;
-use Illuminate\Support\Facades\Log;
-use App\Interfaces\StorageServiceInterface;
 use App\Support\MediaDimensionExtractor;
+use Illuminate\Http\UploadedFile;
+use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Str;
 
 class MediaService
 {
@@ -90,7 +91,7 @@ class MediaService
 
         if ($album) {
             // Fallback for albums that were created before r2_path was introduced.
-            $locationSlug = Str::slug((string) ($album->location ?: 'Rajkot'));
+            $locationSlug = Str::slug((string) ($album->location ?: AlbumLocation::Rajkot->value));
             if ($locationSlug === '') {
                 $locationSlug = 'rajkot';
             }

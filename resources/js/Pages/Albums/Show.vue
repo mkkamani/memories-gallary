@@ -530,6 +530,47 @@ const {
     goToNext,
     goToPrevious,
 } = useMediaPreview(allFilteredFiles);
+
+const recentMediaMasonryRef = ref(null);
+const recentMediaSpanMap = ref({});
+const recentMediaNaturalDims = ref({});
+
+const calcRecentMediaSpan = (mediaId) => {
+    const dims = recentMediaNaturalDims.value[mediaId];
+    if (!dims || !recentMediaMasonryRef.value) {
+        return;
+    }
+
+    const span = estimateRecentMediaSpan(dims.w, dims.h, recentMediaMasonryRef.value);
+    if (!span) {
+        return;
+    }
+
+    recentMediaSpanMap.value = {
+        ...recentMediaSpanMap.value,
+        [mediaId]: span,
+    };
+};
+
+const recalcRecentMediaSpans = () => {
+    Object.keys(recentMediaNaturalDims.value).forEach((id) => calcRecentMediaSpan(Number(id)));
+};
+
+const rememberRecentMediaDims = (mediaId, { naturalWidth, naturalHeight }) => {
+    if (!naturalWidth || !naturalHeight) {
+        return;
+    }
+
+    recentMediaNaturalDims.value = {
+        ...recentMediaNaturalDims.value,
+        [mediaId]: {
+            w: naturalWidth,
+            h: naturalHeight,
+        },
+    };
+
+    nextTick(() => requestAnimationFrame(() => calcRecentMediaSpan(mediaId)));
+};
 </script>
 
 <template>
@@ -691,12 +732,14 @@ const {
                 <div
                     v-if="viewMode === 'grid'"
                     class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-4"
+                    :style="{ gridAutoRows: MASONRY_ROW_UNIT + 'px', rowGap: MASONRY_ROW_GAP + 'px' }" ref="masonryRef"
                 >
                     <div
                         v-for="file in filteredFiles"
                         :key="file.id"
                         @click="openPreview(file)"
-                        class="group relative w-full overflow-hidden border border-border bg-bg-elevated cursor-pointer hover:border-primary/50 transition-all shadow-sm hover:shadow-xl animate-fade-in-up rounded-3xl aspect-[16/9]"
+                        :style="{ gridRowEnd: 'span ' + getFileSpan(file) }"
+                        class="group relative w-full overflow-hidden border border-border bg-bg-elevated cursor-pointer hover:border-primary/50 transition-all shadow-sm hover:shadow-xl animate-fade-in-up rounded-3xl"
                     >
                         <div class="absolute inset-0 overflow-hidden">
                             <MediaRenderer
@@ -707,7 +750,7 @@ const {
                                 image-class="object-cover transition-transform duration-700 group-hover:scale-105"
                                 video-class="object-cover transition-transform duration-700 group-hover:scale-105"
                                 fallback-class="flex w-full h-full items-center justify-center bg-bg-hover text-sm font-bold uppercase tracking-[0.24em] text-muted-foreground"
-                                @load="dims => onFileLoad(file.id, dims)"
+                                @load="dims => { onFileLoad(file.id, dims); rememberRecentMediaDims(file.id, dims); }"
                             />
 
                             <div v-if="file.file_type === 'video'" class="absolute inset-0 flex items-center justify-center bg-black/10">
@@ -832,7 +875,6 @@ const {
                 <h3 class="text-xl font-bold text-foreground">{{ emptyStateText.title }}</h3>
                 <p class="text-muted-foreground mt-1 text-center">{{ emptyStateText.message }}</p>
             </div>
-
         </div>
 
         <MediaPreviewOverlay
