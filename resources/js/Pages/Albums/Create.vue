@@ -4,6 +4,10 @@ import InputError from '@/Components/InputError.vue';
 import { Head, useForm, Link } from '@inertiajs/vue3';
 import { computed, onBeforeUnmount, ref } from 'vue';
 
+const props = defineProps({
+    album: Object,
+});
+
 const form = useForm({
     title: '',
     description: '',
@@ -105,30 +109,28 @@ const submit = () => {
                     </div>
 
                     <div class="space-y-2">
-                        <label for="location" class="text-xs font-bold uppercase tracking-wider text-muted-foreground">Location</label>
-                        <div id="location" class="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                            <label class="flex items-center gap-3 rounded-xl border border-border bg-bg-elevated px-4 py-3 text-sm text-foreground shadow-inner transition cursor-pointer hover:border-primary/40">
-                                <input
-                                    type="radio"
-                                    name="location"
-                                    value="Ahmedabad"
-                                    v-model="form.location"
-                                    class="h-4 w-4 border-border text-primary focus:ring-2 focus:ring-primary/35 focus:ring-offset-0"
-                                    required
-                                />
-                                <span class="font-medium">Ahmedabad</span>
-                            </label>
+                        <label class="text-xs font-bold uppercase tracking-wider text-muted-foreground">
+                            Location
+                        </label>
 
-                            <label class="flex items-center gap-3 rounded-xl border border-border bg-bg-elevated px-4 py-3 text-sm text-foreground shadow-inner transition cursor-pointer hover:border-primary/40">
+                        <div class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3">
+                            <label
+                                v-for="location in album.locations"
+                                :key="location"
+                                class="flex items-center gap-3 rounded-xl border border-border bg-bg-elevated px-4 py-3 text-sm text-foreground shadow-inner transition cursor-pointer hover:border-primary/40"
+                            >
                                 <input
                                     type="radio"
                                     name="location"
-                                    value="Rajkot"
+                                    :value="location"
                                     v-model="form.location"
                                     class="h-4 w-4 border-border text-primary focus:ring-2 focus:ring-primary/35 focus:ring-offset-0"
                                     required
                                 />
-                                <span class="font-medium">Rajkot</span>
+
+                                <span class="font-medium">
+                                    {{ location === 'Anniversaries' ? 'Anniversary' : location }}
+                                </span>
                             </label>
                         </div>
                         <InputError :message="form.errors.location" />

@@ -74,7 +74,7 @@ const statsGridClass = computed(() => (
 // ─────────────────────────────────────────────────────────────────────────────
 
 const MASONRY_ROW_UNIT = 10;
-const MASONRY_ROW_GAP = 12;
+const MASONRY_ROW_GAP = 8;
 
 const recentMediaMasonryRef = ref(null);
 const recentMediaNaturalDims = ref({});
@@ -370,7 +370,6 @@ onBeforeUnmount(() => {
                                 </svg>
                                 <span class="text-sm font-semibold text-muted-foreground tracking-wide">Calculating...</span>
                             </div>
-                            <p class="text-[10px] text-muted-foreground mt-1">{{ formatNumber(resolvedMediaAssets) }} files in library</p>
                         </div>
                         <div class="dash-icon-box"><svg class="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7v8a2 2 0 002 2h6M8 7V5a2 2 0 012-2h4.586a1 1 0 01.707.293l4.414 4.414a1 1 0 01.293.707V15a2 2 0 01-2 2h-2M8 7H6a2 2 0 00-2 2v10a2 2 0 002 2h8a2 2 0 002-2v-2"/></svg></div>
                     </div>
@@ -549,8 +548,9 @@ onBeforeUnmount(() => {
                         <div
                             v-if="recentVisualMedia.length"
                             ref="recentMediaMasonryRef"
-                            class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5"
-                            style="grid-auto-rows: 10px; row-gap: 12px; column-gap: 0.5rem; grid-auto-flow: dense;"
+                            class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-2 sm:gap-3"
+                            style="grid-auto-rows: 10px;"
+                            :style="{ rowGap: MASONRY_ROW_GAP + 'px' }"
                         >
                             <template v-for="item in recentVisualMedia" :key="item.id">
                                 <div

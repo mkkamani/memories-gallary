@@ -253,9 +253,11 @@ class AlbumService
         $segment = basename(trim($albumPath, '/'));
 
         if ($segment === '' || $segment === '.' || $segment === '/') {
-            $safeName = preg_replace('/[^a-z0-9]+/', '_', strtolower($albumTitle));
-            $safeName = trim((string) $safeName, '_');
-            $segment = ($safeName !== '' ? $safeName : 'album') . '_' . $albumId;
+            $safeName = Str::slug($albumTitle);
+            if ($safeName === '') {
+                $safeName = 'album';
+            }
+            $segment = $safeName . '-' . $albumId;
         }
 
         return $segment;
@@ -504,13 +506,11 @@ class AlbumService
      */
     protected function computeR2Path(Album $album): string
     {
-        $safeName = preg_replace(
-            "/[^a-z0-9]+/",
-            "_",
-            strtolower($album->title),
-        );
-        $safeName = trim($safeName, "_");
-        $segment = $safeName . "_" . $album->id;
+        $safeName = Str::slug($album->title);
+        if ($safeName === '') {
+            $safeName = 'album';
+        }
+        $segment = $safeName . "-" . $album->id;
 
         if ($album->parent_id) {
             $parent = Album::find($album->parent_id);

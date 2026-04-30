@@ -303,7 +303,11 @@ class AlbumController extends Controller
 
     public function create()
     {
-        return Inertia::render("Albums/Create");
+        return Inertia::render("Albums/Create", [
+            "album" => [
+                "locations" => AlbumLocation::values(),
+            ],
+        ]);
     }
 
     // -------------------------------------------------------------------------
@@ -1076,6 +1080,7 @@ class AlbumController extends Controller
                 "description" => $album->description,
                 "location" => $album->location,
                 "cover_image" => $this->resolveCoverImageUrl($album->cover_image),
+                "locations" => AlbumLocation::values(),
             ],
         ]);
     }
