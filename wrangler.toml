@@ -1,4 +1,4 @@
-name = "cx-memories-media"
+name = "memories"
 main = "cloudflare/media-worker.mjs"
 compatibility_date = "2026-04-03"
 workers_dev = true
@@ -9,5 +9,5 @@ bucket_name = "cx-memories"
 
 [env.production]
 routes = [
-    { pattern = "cx-memories-media.cypherox.workers.dev/*", zone_name = "cypherox.workers.dev" }
+    { pattern = "memories.cypherox.workers.dev/*", zone_name = "cypherox.workers.dev" }
 ]

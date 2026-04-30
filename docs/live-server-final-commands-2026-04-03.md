@@ -77,13 +77,13 @@ php artisan tinker --execute="$m = App\Models\Media::where('file_type','image')-
 Expected `thumb_url` format:
 
 ```text
-https://cx-memories-media.cypherox.workers.dev/thumbnails/{album_id}/{media_id}.jpg
+https://memories.cypherox.workers.dev/thumbnails/{album_id}/{media_id}.jpg
 ```
 
 ### 5.2 Check thumbnail response headers from Worker
 
 ```bash
-curl -I "https://cx-memories-media.cypherox.workers.dev/thumbnails/18/1.jpg"
+curl -I "https://memories.cypherox.workers.dev/thumbnails/18/1.jpg"
 ```
 
 Expected:
@@ -93,7 +93,7 @@ Expected:
 ### 5.3 Check original image cache policy
 
 ```bash
-curl -I "https://cx-memories-media.cypherox.workers.dev/albums/ahmedabad/2019/2nd-oct-pics/IMG_20191002_122453.jpg"
+curl -I "https://memories.cypherox.workers.dev/albums/ahmedabad/2019/2nd-oct-pics/IMG_20191002_122453.jpg"
 ```
 
 Expected:

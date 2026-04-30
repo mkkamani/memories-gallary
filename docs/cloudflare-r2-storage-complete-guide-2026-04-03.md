@@ -67,7 +67,7 @@ CLOUDFLARE_R2_ENDPOINT=https://<accountid>.r2.cloudflarestorage.com
 CLOUDFLARE_R2_URL=https://<accountid>.r2.cloudflarestorage.com
 CLOUDFLARE_R2_USE_PATH_STYLE_ENDPOINT=true
 
-CDN_URL=https://cx-memories-media.cypherox.workers.dev
+CDN_URL=https://memories.cypherox.workers.dev
 
 Notes:
 - Keep R2 bucket private.
@@ -173,8 +173,8 @@ php artisan tinker --execute="$m = App\Models\Media::where('file_type','image')-
 
 E) Verify cache headers
 
-curl -I "https://cx-memories-media.cypherox.workers.dev/thumbnails/18/1.jpg"
-curl -I "https://cx-memories-media.cypherox.workers.dev/albums/ahmedabad/2019/2nd-oct-pics/IMG_20191002_122453.jpg"
+curl -I "https://memories.cypherox.workers.dev/thumbnails/18/1.jpg"
+curl -I "https://memories.cypherox.workers.dev/albums/ahmedabad/2019/2nd-oct-pics/IMG_20191002_122453.jpg"
 
 Expected:
 - thumbnail response includes max-age=31536000

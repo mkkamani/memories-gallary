@@ -3,7 +3,7 @@
 ## ✅ What's Live Right Now
 
 ### Infrastructure
-- **Worker Domain:** `https://cx-memories-media.cypherox.workers.dev`
+- **Worker Domain:** `https://memories.cypherox.workers.dev`
 - **R2 Bucket:** `cx-memories` (231.1 GB)
 - **Caching:** 1-year immutable cache at Cloudflare edge
 - **CDN Integration:** All Laravel media URLs auto-route through Worker
@@ -17,7 +17,7 @@
 ### Media URLs
 ```
 Presigned (old):  https://cabeeed813806c808ef394b36acb80d5.r2.cloudflarestorage.com/albums/...?X-Amz-Signature=...&expires=21600
-Worker CDN (new): https://cx-memories-media.cypherox.workers.dev/albums/...
+Worker CDN (new): https://memories.cypherox.workers.dev/albums/...
 ```
 
 ---
@@ -59,7 +59,7 @@ Use native HTML for viewport-aware loading:
 
 ```html
 <img 
-  src="https://cx-memories-media.cypherox.workers.dev/albums/2019/photo.jpg"
+  src="https://memories.cypherox.workers.dev/albums/2019/photo.jpg"
   alt="Photo"
   loading="lazy"
   width="800"
@@ -212,7 +212,7 @@ Update `resources/js/Components/MediaRenderer.vue`:
 ### Check URLs in DevTools
 ```
 Before: https://cabeeed813806c808c...r2.cloudflarestorage.com/...?X-Amz-Signature=...&X-Amz-Expires=21600
-After:  https://cx-memories-media.cypherox.workers.dev/albums/2019/photo.jpg
+After:  https://memories.cypherox.workers.dev/albums/2019/photo.jpg
 ```
 
 ### Verify Worker Caching
@@ -277,7 +277,7 @@ A: Yes! Cloudflare is GDPR-compliant. No data stored off-premise.
 1. Check `.env` has correct `CDN_URL` value
 2. Verify Worker deployment in Cloudflare dashboard
 3. Check R2 bucket binding exists in Worker settings
-4. Test with `curl -I https://cx-memories-media.cypherox.workers.dev/albums/...jpg`
+4. Test with `curl -I https://memories.cypherox.workers.dev/albums/...jpg`
 
 **Documentation:**
 - [Image Optimization Guide](docs/image-transformations.md)

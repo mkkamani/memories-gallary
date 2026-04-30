@@ -12,13 +12,13 @@
 - ✅ `app/Models/Media.php` - Added CDN URL helpers + transformation methods
 - ✅ `app/Services/R2StorageService.php` - Added CDN path routing
 - ✅ `config/filesystems.php` - Added `cdn_url` config
-- ✅ `.env` - Set `CDN_URL=https://cx-memories-media.cypherox.workers.dev`
+- ✅ `.env` - Set `CDN_URL=https://memories.cypherox.workers.dev`
 - ✅ `.env.example` - Added `CDN_URL=` placeholder
 
 ### Cloudflare Worker  
 - ✅ `cloudflare/media-worker.mjs` - Production Worker with R2 binding
 - ✅ `wrangler.toml` - Deployment config with MEDIA_BUCKET binding
-- ✅ **Deployed to:** `https://cx-memories-media.cypherox.workers.dev`
+- ✅ **Deployed to:** `https://memories.cypherox.workers.dev`
 
 ### Frontend (Vue)
 - ✅ `resources/js/Components/MediaRenderer.vue` - Updated comments
@@ -36,15 +36,15 @@
 ### Media URLs (Automatic)
 ```php
 // In Laravel:
-$media->url;           // → https://cx-memories-media.cypherox.workers.dev/albums/...jpg
-$media->thumbnail_url; // → https://cx-memories-media.cypherox.workers.dev/.../thumbnail.jpg
+$media->url;           // → https://memories.cypherox.workers.dev/albums/...jpg
+$media->thumbnail_url; // → https://memories.cypherox.workers.dev/.../thumbnail.jpg
 ```
 
 ### Actual Test
 ```
 $ php artisan tinker
 >>> Media::find(1)->url
-=> "https://cx-memories-media.cypherox.workers.dev/albums/ahmedabad/2019/2nd-oct-pics/IMG_20191002_122453.jpg"
+=> "https://memories.cypherox.workers.dev/albums/ahmedabad/2019/2nd-oct-pics/IMG_20191002_122453.jpg"
 ```
 
 ---
@@ -53,7 +53,7 @@ $ php artisan tinker
 
 ### Test 1: Worker Responds
 ```bash
-$ curl -I "https://cx-memories-media.cypherox.workers.dev/albums/ahmedabad/2019/2nd-oct-pics/IMG_20191002_122453.jpg"
+$ curl -I "https://memories.cypherox.workers.dev/albums/ahmedabad/2019/2nd-oct-pics/IMG_20191002_122453.jpg"
 
 HTTP/1.1 206 Partial Content
 Content-Type: image/jpeg
@@ -83,7 +83,7 @@ Configuration cache cleared successfully.
 
 $ php artisan tinker
 >>> echo Media::whereNotNull('file_path')->first()->url;
-https://cx-memories-media.cypherox.workers.dev/albums/...
+https://memories.cypherox.workers.dev/albums/...
 
 ✓ PASS
 ```
@@ -174,7 +174,7 @@ Cloudflare Dashboard → Analytics
 ### Environment Variables
 ```bash
 # .env (Active)
-CDN_URL=https://cx-memories-media.cypherox.workers.dev
+CDN_URL=https://memories.cypherox.workers.dev
 CLOUDFLARE_R2_BUCKET=cx-memories
 CLOUDFLARE_R2_ACCESS_KEY_ID=b88060f0539acca1cc45b7507200d886
 CLOUDFLARE_R2_SECRET_ACCESS_KEY=87a29dcbda397af98cca82b99080bb43fa77e9444982806c566bb21580439944
@@ -184,10 +184,10 @@ CLOUDFLARE_R2_URL=https://cabeeed813806c808ef394b36acb80d5.r2.cloudflarestorage.
 ### Config Functions
 ```php
 // config/filesystems.php
-config('filesystems.cdn_url')  // → https://cx-memories-media.cypherox.workers.dev
+config('filesystems.cdn_url')  // → https://memories.cypherox.workers.dev
 
 // app/Models/Media.php
-Media::mediaCdnUrl()           // → https://cx-memories-media.cypherox.workers.dev
+Media::mediaCdnUrl()           // → https://memories.cypherox.workers.dev
 Media::shouldUseMediaCdn()     // → true (if CDN_URL set)
 $media->mediaCdnPathUrl($path) // → Full URL for path
 ```
@@ -253,12 +253,12 @@ This is OK, using default environment automatically.
 ### Verify Status
 ```bash
 # Check Worker is live
-curl -I https://cx-memories-media.cypherox.workers.dev/albums/ahmedabad/2019/2nd-oct-pics/IMG_20191002_122453.jpg
+curl -I https://memories.cypherox.workers.dev/albums/ahmedabad/2019/2nd-oct-pics/IMG_20191002_122453.jpg
 
 # Check Laravel uses CDN
 php artisan tinker
 >>> Media::find(1)->url
-=> "https://cx-memories-media.cypherox.workers.dev/..."
+=> "https://memories.cypherox.workers.dev/..."
 
 # Check cache behavior
 curl -I [...same URL...] | grep CF-Cache-Status
