@@ -194,7 +194,7 @@ class AlbumService
         return $this->getCoverImageStemForAlbumPath($basePath, $album->id, $album->title);
     }
 
-    public function generateCoverThumbnailFromUpload(UploadedFile $file, string $coverPath): string
+    public function generateCoverThumbnailFromUpload(UploadedFile $file, string $coverPath): array
     {
         $disk = (string) config('filesystems.media_disk', 'public');
         $imageManager = new ImageManager(
@@ -204,17 +204,27 @@ class AlbumService
             strip: true,
         );
 
-        $image = $imageManager->make($file->getPathname());
-        $image->resize(self::COVER_THUMBNAIL_SIZE, self::COVER_THUMBNAIL_SIZE, function ($constraint) {
-            $constraint->aspectRatio();
-            $constraint->upsize();
-        });
+        $image = $imageManager->decodePath($file->getPathname());
+
+        // ✅ Capture original dimensions
+        $originalWidth = $image->width();
+        $originalHeight = $image->height();
+
+        // ✅ Scale down proportionally without cropping
+        // Only scale if image is larger than COVER_THUMBNAIL_SIZE
+        if ($image->width() > self::COVER_THUMBNAIL_SIZE || $image->height() > self::COVER_THUMBNAIL_SIZE) {
+            $image->scaleDown(self::COVER_THUMBNAIL_SIZE, self::COVER_THUMBNAIL_SIZE);
+        }
 
         $jpeg = $image->encode(new JpegEncoder(self::COVER_THUMBNAIL_QUALITY, progressive: true, strip: true))->toString();
         $coverPath = trim($coverPath, '/');
         Storage::disk($disk)->put($coverPath, $jpeg);
 
-        return $coverPath;
+        return [
+            'cover_path' => $coverPath,
+            'original_width' => $originalWidth,
+            'original_height' => $originalHeight,
+        ];
     }
 
     public function deleteCoverImageVariants(string $coverStem, ?string $exceptPath = null): void
@@ -485,7 +495,7 @@ class AlbumService
     /**
      * Compute the R2 storage path for an album.
      *
-        * Root album  → albums/{location}/{safe-title}_{id}
+     * Root album  → albums/{location}/{safe-title}_{id}
      * Child album → {parent_r2_path}/{safe-title}_{id}
      *
      * The parent's r2_path is used directly when available; otherwise we fall
@@ -566,9 +576,9 @@ class AlbumService
 
         while (
             Album::query()
-                ->when($ignoreId, fn($q) => $q->where('id', '!=', $ignoreId))
-                ->where('slug', $slug)
-                ->exists()
+            ->when($ignoreId, fn($q) => $q->where('id', '!=', $ignoreId))
+            ->where('slug', $slug)
+            ->exists()
         ) {
             $slug = $base . '-' . $counter;
             $counter++;

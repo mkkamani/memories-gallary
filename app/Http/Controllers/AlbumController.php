@@ -345,7 +345,7 @@ class AlbumController extends Controller
                 $coverFile,
                 $coverPath,
             );
-            $album->update(['cover_image' => $filePath]);
+            $album->update(['cover_image' => $filePath['cover_path']]);
         }
 
         if ($request->hasFile("files")) {
@@ -1154,7 +1154,7 @@ class AlbumController extends Controller
                 $coverFile,
                 $coverPath,
             );
-            $data['cover_image'] = $filePath;
+            $data['cover_image'] = $filePath['cover_path'];
         } else {
             // The frontend says "Leave empty to keep current image".
             // To ensure we don't overwrite the DB field with null, we must unset it.

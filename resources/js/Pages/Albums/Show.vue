@@ -43,7 +43,7 @@ const isPinProcessing = ref(false);
 // Span is derived from measured rendered card height when possible so
 // orientation metadata or stale DB dimensions do not leave empty holes.
 const MASONRY_ROW_UNIT = 10; // px — must match grid-auto-rows below
-const MASONRY_ROW_GAP = 12; // px — must match row-gap below
+const MASONRY_ROW_GAP = 6; // px — must match row-gap below
 
 const masonryRef = ref(null);
 const naturalDims = ref({}); // { [fileId]: { w, h } }
@@ -731,7 +731,7 @@ const rememberRecentMediaDims = (mediaId, { naturalWidth, naturalHeight }) => {
 
                 <div
                     v-if="viewMode === 'grid'"
-                    class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-4"
+                    class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-2"
                     :style="{ gridAutoRows: MASONRY_ROW_UNIT + 'px', rowGap: MASONRY_ROW_GAP + 'px' }" ref="masonryRef"
                 >
                     <div
