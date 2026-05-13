@@ -238,6 +238,8 @@ const folders = computed(() => folderItems.value);
 const files = ref([...(props.mediaData?.data || [])]);
 const nextPageUrl = ref(props.mediaData?.next_page_url || null);
 const isLoadingMore = ref(false);
+const loadMoreTriggerRef = ref(null);
+let loadMoreObserver = null;
 const totalMediaCount = ref(Number.isFinite(Number(props.mediaCounts?.all)) ? Number(props.mediaCounts.all) : Number(props.mediaData?.total || files.value.length));
 const totalPhotoCount = ref(Number.isFinite(Number(props.mediaCounts?.photos)) ? Number(props.mediaCounts.photos) : files.value.filter(f => f.file_type === 'image').length);
 const totalVideoCount = ref(Number.isFinite(Number(props.mediaCounts?.videos)) ? Number(props.mediaCounts.videos) : files.value.filter(f => f.file_type === 'video').length);
@@ -267,13 +269,40 @@ const loadMore = async () => {
     }
 };
 
-// useInfiniteScroll(
-//     window,
-//     async () => {
-//         await loadMore();
-//     },
-//     { distance: 500 }
-// );
+const stopLoadMoreObserver = () => {
+    if (loadMoreObserver) {
+        loadMoreObserver.disconnect();
+        loadMoreObserver = null;
+    }
+};
+
+const setupLoadMoreObserver = () => {
+    stopLoadMoreObserver();
+
+    if (!nextPageUrl.value || !loadMoreTriggerRef.value || typeof window === 'undefined' || !('IntersectionObserver' in window)) {
+        return;
+    }
+
+    loadMoreObserver = new IntersectionObserver(
+        (entries) => {
+            if (entries.some((entry) => entry.isIntersecting)) {
+                loadMore();
+            }
+        },
+        {
+            root: null,
+            rootMargin: '800px 0px',
+            threshold: 0.01,
+        }
+    );
+
+    loadMoreObserver.observe(loadMoreTriggerRef.value);
+};
+
+watch(nextPageUrl, async () => {
+    await nextTick();
+    setupLoadMoreObserver();
+});
 
 const filteredFolders = computed(() => {
     if (filter.value === 'Photos' || filter.value === 'Videos') return [];
@@ -369,10 +398,12 @@ onMounted(() => {
     window.addEventListener('resize', recalcAllSpans);
     seedDimsFromDb(files.value);
     nextTick(() => requestAnimationFrame(() => recalcAllSpans()));
+    setupLoadMoreObserver();
 });
 
 onBeforeUnmount(() => {
     window.removeEventListener('resize', recalcAllSpans);
+    stopLoadMoreObserver();
 });
 
 const toggleActionMenu = (e, id) => {
@@ -842,21 +873,14 @@ const rememberRecentMediaDims = (mediaId, { naturalWidth, naturalHeight }) => {
             </div>
 
 
-            <div v-if="nextPageUrl" class="py-8 flex justify-center">
-                <button
-                    @click="loadMore"
-                    :disabled="isLoadingMore"
-                    class="flex items-center gap-3 h-11 px-8 rounded-pill bg-bg-card border border-border text-sm font-bold text-foreground shadow-sm hover:bg-bg-hover hover:border-primary/40 transition-all disabled:opacity-60 disabled:cursor-not-allowed"
-                >
-                    <svg v-if="isLoadingMore" class="w-4 h-4 animate-spin text-primary" fill="none" viewBox="0 0 24 24">
+            <div v-if="nextPageUrl" ref="loadMoreTriggerRef" class="py-8 flex justify-center">
+                <div v-if="isLoadingMore" class="flex items-center gap-3 rounded-pill border border-border bg-bg-card px-6 py-3 text-sm font-bold text-foreground shadow-sm">
+                    <svg class="w-4 h-4 animate-spin text-primary" fill="none" viewBox="0 0 24 24">
                         <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"/>
                         <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"/>
                     </svg>
-                    <svg v-else class="w-4 h-4 text-muted-foreground" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/>
-                    </svg>
-                    <span>{{ isLoadingMore ? 'Loading...' : 'Load More' }}</span>
-                </button>
+                    <span>Loading more...</span>
+                </div>
             </div>
 
 
